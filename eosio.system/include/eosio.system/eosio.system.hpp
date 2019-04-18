@@ -162,6 +162,9 @@ namespace eosiosystem {
       name                proxy;     /// the proxy set by the voter, if any
       std::vector<name>   producers; /// the producers approved by this voter if no proxy set
       int64_t             staked = 0;
+      uint64_t            unpaid_voteshare = 0;
+      uint64_t            unpaid_voteshare_last_updated = 0;
+      uint64_t            last_claim_time = 0;
 
       double              unpaid_voteshare = 0;
       time_point          unpaid_voteshare_last_updated;
