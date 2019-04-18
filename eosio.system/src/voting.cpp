@@ -316,6 +316,7 @@ namespace eosiosystem {
          av.producers = producers;
          av.proxy     = proxy;
       });
+      update_voter_votepay_share(voter);
    }
 
    /**
@@ -344,6 +345,75 @@ namespace eosiosystem {
                p.is_proxy = isproxy;
             });
       }
+   }
+
+   void system_contract::voterclaim(const name owner) {
+      require_auth(owner);
+
+      eosio_assert( _gstate.total_activated_stake >= min_activated_stake,
+                    "cannot claim rewards until the chain is activated (at least 15% of all tokens participate in voting)" );
+
+      const auto& voter = _voters.get(owner.value, "voter does not exist.");
+      
+      eosio_assert(voter.unpaid_voteshare_last_updated != time_point(), "you need to vote first! unpaid_voteshare_last_updated is zero.");
+
+      auto ct = current_time_point();
+
+      eosio_assert( ct - voter.last_claim_time > microseconds(useconds_per_day), "already claimed rewards within past day" );
+
+      fill_buckets();
+      _gstate.total_unpaid_voteshare += _gstate.total_voteshare_change_rate * double((ct - _gstate.total_unpaid_voteshare_last_updated).count() / 1E6);
+      _gstate.total_unpaid_voteshare_last_updated = ct;
+      eosio_assert(_gstate.total_unpaid_voteshare > 0, "no rewards available.");
+
+      double unpaid_voteshare = voter.unpaid_voteshare + voter.unpaid_voteshare_change_rate * double((ct - voter.unpaid_voteshare_last_updated).count() / 1E6);
+
+      int64_t reward = _gstate.voters_bucket * (unpaid_voteshare / _gstate.total_unpaid_voteshare);
+      eosio_assert(reward > 0, "no rewards available.");
+
+      if(reward > _gstate.voters_bucket){
+         reward = _gstate.voters_bucket;
+      }
+
+      _gstate.voters_bucket -= reward;
+      _gstate.total_unpaid_voteshare -= unpaid_voteshare;
+      _voters.modify(voter, same_payer, [&]( auto& v ) {
+         v.unpaid_voteshare = 0;
+         v.unpaid_voteshare_last_updated = ct;
+         v.last_claim_time = ct;
+      });
+
+      INLINE_ACTION_SENDER(eosio::token, transfer)(
+            token_account, { {voters_account, active_permission}, {owner, active_permission} },
+            { voters_account, owner, asset(reward, core_symbol()), std::string("voter pay") }
+         );
+   }
+
+   void system_contract::update_voter_votepay_share(const voters_table::const_iterator& voter_itr) {
+      auto ct = current_time_point();
+      double new_unpaid_voteshare = voter_itr->unpaid_voteshare;
+      if (voter_itr->unpaid_voteshare_last_updated != time_point() && voter_itr->unpaid_voteshare_last_updated < current_time_point()) {
+         new_unpaid_voteshare += voter_itr->unpaid_voteshare_change_rate * double((ct - voter_itr->unpaid_voteshare_last_updated).count() / 1E6);
+      }
+      double new_change_rate{0};
+      if(voter_itr->producers.size() >= 16){
+         new_change_rate = stake2vote(voter_itr->staked);
+      }
+      double change_rate_delta = new_change_rate - voter_itr->unpaid_voteshare_change_rate;
+      
+      if (_gstate.total_unpaid_voteshare_last_updated != time_point() && _gstate.total_unpaid_voteshare_last_updated < current_time_point()) {
+         _gstate.total_unpaid_voteshare += _gstate.total_voteshare_change_rate * double((ct - _gstate.total_unpaid_voteshare_last_updated).count() / 1E6);
+      }
+
+      print("Calculating _gstate.total_voteshare_change_rate: ", change_rate_delta);
+      _gstate.total_voteshare_change_rate += change_rate_delta;
+      _gstate.total_unpaid_voteshare_last_updated = ct;
+
+      _voters.modify(voter_itr, same_payer, [&](auto& v) {
+         v.unpaid_voteshare = new_unpaid_voteshare;
+         v.unpaid_voteshare_last_updated = ct;
+         v.unpaid_voteshare_change_rate = new_change_rate;
+      });
    }
 
    void system_contract::propagate_weight_change( const voter_info& voter ) {
