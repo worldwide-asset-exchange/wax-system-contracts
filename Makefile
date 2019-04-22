@@ -3,7 +3,7 @@ build:
 	cd build && cmake ..
 
 .PHONY: compile
-compile:
+compile: build
 	cd build && make -j`getconf _NPROCESSORS_ONLN`
 
 .PHONY: clean
@@ -11,7 +11,7 @@ clean:
 	rm -rf build
 
 .PHONY: test
-test:
+test: compile
 	./build/tests/unit_test
 
 .PHONY:dev-docker-stop
