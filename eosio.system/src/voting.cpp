@@ -346,6 +346,40 @@ namespace eosiosystem {
       }
    }
 
+   double system_contract::clear_voter_votepay_share(const voter_info& voter) {
+      auto ct = current_time_point();
+      double unpaid_voteshare = voter.unpaid_voteshare;
+      if (voter.unpaid_voteshare_last_updated != current_time_point() && voter.producers.size() < 16) {
+         unpaid_voteshare += voter.last_vote_weight * double((ct - voter.unpaid_voteshare_last_updated).count() / 1E6);
+      }
+      _voters.modify(voter, same_payer, [&](auto& v) {
+         v.unpaid_voteshare = 0;
+         v.unpaid_voteshare_last_updated = ct;
+      });
+
+      return unpaid_voteshare;
+   }
+
+   double system_contract::update_voter_votepay_share(const voter_info& voter, double new_weight) {
+      auto ct = current_time_point();
+      double new_unpaid_voteshare = voter.unpaid_voteshare;
+      if (voter.unpaid_voteshare_last_updated != current_time_point() && voter.producers.size() < 16) {
+         new_unpaid_voteshare += voter.last_vote_weight * double((ct - voter.unpaid_voteshare_last_updated).count() / 1E6);
+      }
+      _voters.modify(voter, same_payer, [&](auto& v) {
+         v.unpaid_voteshare = new_unpaid_voteshare;
+         v.unpaid_voteshare_last_updated = ct;
+      });
+
+      if (_gstate.total_unpaid_voteshare_last_updated != current_time_point()) {
+         _gstate.total_unpaid_voteshare = _gstate.total_voteshare_change_rate * double((ct - _gstate.total_unpaid_voteshare_last_updated).count() / 1E6);
+      }
+
+      _gstate.total_voteshare_change_rate += new_weight - voter.last_vote_weight;
+      _gstate.total_unpaid_voteshare_last_updated = ct;
+      return new_unpaid_voteshare;
+   }
+
    void system_contract::propagate_weight_change( const voter_info& voter ) {
       eosio_assert( !voter.proxy || !voter.is_proxy, "account registered as a proxy is not allowed to use a proxy" );
       double new_weight = stake2vote( voter.staked );

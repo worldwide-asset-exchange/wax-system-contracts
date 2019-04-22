@@ -82,9 +82,9 @@ namespace eosiosystem {
       int64_t              pervote_bucket = 0;
       int64_t              perblock_bucket = 0;
       int64_t              voters_bucket = 0;
-      uint64_t             total_voteshare_change_rate = 0;
-      uint64_t             total_unpaid_voteshare = 0;   // Common fund to pay voters.
-      uint64_t             total_unpaid_voteshare_last_updated = 0;
+      double               total_voteshare_change_rate = 0;
+      double               total_unpaid_voteshare = 0;   // Common fund to pay voters.
+      time_point           total_unpaid_voteshare_last_updated;
       uint32_t             total_unpaid_blocks = 0; /// all blocks which have been produced but not paid
       int64_t              total_activated_stake = 0;
       time_point           thresh_activated_stake_time;
@@ -162,8 +162,8 @@ namespace eosiosystem {
       name                proxy;     /// the proxy set by the voter, if any
       std::vector<name>   producers; /// the producers approved by this voter if no proxy set
       int64_t             staked = 0;
-      uint64_t            unpaid_voteshare = 0;
-      uint64_t            unpaid_voteshare_last_updated = 0;
+      double              unpaid_voteshare = 0;
+      time_point          unpaid_voteshare_last_updated;
       uint64_t            last_claim_time = 0;
 
       /**
@@ -397,6 +397,10 @@ namespace eosiosystem {
          void update_votes( const name voter, const name proxy, const std::vector<name>& producers, bool voting );
 
          // defined in voting.cpp
+         double clear_voter_votepay_share(const voter_info& voter);
+
+         double update_voter_votepay_share(const voter_info& voter, double new_weight);
+
          void propagate_weight_change( const voter_info& voter );
 
          double update_producer_votepay_share( const producers_table2::const_iterator& prod_itr,
