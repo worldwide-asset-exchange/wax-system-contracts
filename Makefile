@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 CMAKE_CPU_SETUP := $(shell expr $(shell getconf _NPROCESSORS_ONLN) + 2)
 
 build:
