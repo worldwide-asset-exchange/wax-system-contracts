@@ -162,9 +162,11 @@ namespace eosiosystem {
       name                proxy;     /// the proxy set by the voter, if any
       std::vector<name>   producers; /// the producers approved by this voter if no proxy set
       int64_t             staked = 0;
+
       double              unpaid_voteshare = 0;
       time_point          unpaid_voteshare_last_updated;
-      uint64_t            last_claim_time = 0;
+      double              unpaid_voteshare_change_rate;
+      time_point          last_claim_time;
 
       /**
        *  Every time a vote is cast we must first "undo" the last vote weight, before casting the
@@ -194,7 +196,7 @@ namespace eosiosystem {
       };
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( voter_info, (owner)(proxy)(producers)(staked)(unpaid_voteshare)(unpaid_voteshare_last_updated)
+      EOSLIB_SERIALIZE( voter_info, (owner)(proxy)(producers)(staked)(unpaid_voteshare)(unpaid_voteshare_last_updated)(unpaid_voteshare_change_rate)
                                     (last_claim_time)(last_vote_weight)(proxied_vote_weight)(is_proxy)(flags1)(reserved2)(reserved3) )
    };
 
@@ -399,7 +401,7 @@ namespace eosiosystem {
          // defined in voting.cpp
          double clear_voter_votepay_share(const voter_info& voter);
 
-         double update_voter_votepay_share(const voter_info& voter, double new_weight);
+         void update_voter_votepay_share(const voters_table::const_iterator& voter_itr);
 
          void propagate_weight_change( const voter_info& voter );
 
