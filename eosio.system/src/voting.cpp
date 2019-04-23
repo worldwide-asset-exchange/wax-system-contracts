@@ -349,11 +349,17 @@ namespace eosiosystem {
 
    void system_contract::voterclaim(const name owner) {
       require_auth(owner);
+
+      eosio_assert( _gstate.total_activated_stake >= min_activated_stake,
+                    "cannot claim rewards until the chain is activated (at least 15% of all tokens participate in voting)" );
+
       const auto& voter = _voters.get(owner.value, "Voter does not exist.");
-      eosio_assert(voter.staked, "The voter has not staked resources.");
-      eosio_assert(voter.last_vote_weight, "Vote weight is zero.");
-      eosio_assert(voter.unpaid_voteshare_last_updated > current_time_point(), "unpaid_voteshare_last_updated shold not be zero."); // This should never happen.
-      eosio_assert(current_time_point() > voter.unpaid_voteshare_last_updated, "Reward already claimed.");
+      
+      eosio_assert(voter.unpaid_voteshare_last_updated != time_point(), "you need to vote first! unpaid_voteshare_last_updated is zero.");
+
+      auto ct = current_time_point();
+
+      eosio_assert( ct - voter.last_claim_time > microseconds(useconds_per_day), "already claimed rewards within past day" );
 
       fill_buckets();
 
