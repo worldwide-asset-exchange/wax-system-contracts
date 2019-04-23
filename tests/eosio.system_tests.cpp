@@ -1308,8 +1308,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
       BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( voter["last_claim_time"] ));
 
       auto usecs_between_fills = claim_time - initial_claim_time;
-      int32_t secs_between_fills = usecs_between_fills/1000000;
-      uint64_t new_tokens = (initial_supply.get_amount() * double(secs_between_fills) * continuous_rate) / secs_per_year;
+      uint64_t new_tokens = (initial_supply.get_amount() * double(usecs_between_fills) * continuous_rate) / usecs_per_year;
 
       BOOST_REQUIRE_EQUAL(0, initial_voters_account_balance);
       BOOST_REQUIRE_EQUAL(0, initial_voters_bucket); //no tokens were reserved yet
