@@ -1,6 +1,7 @@
 /**
  *  @file
  *  @copyright defined in eos/LICENSE.txt
+ *   
  */
 #include <eosio.system/eosio.system.hpp>
 
@@ -72,6 +73,16 @@ namespace eosiosystem {
       EOSLIB_SERIALIZE( refund_request, (owner)(request_time)(net_amount)(cpu_amount) )
    };
 
+   struct [[eosio::table, eosio::contract("eosio.system")]] locked_tokens {
+      time_point_sec  last_claimed_time;
+      eosio::asset    balance;
+
+      uint64_t primary_key()const { return balance.symbol.code().raw(); }
+
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE( locked_tokens, (last_claimed_time)(balance) )
+   };
+
    /**
     *  These tables are designed to be constructed in the scope of the relevant user, this
     *  facilitates simpler API for per-user queries
@@ -79,6 +90,7 @@ namespace eosiosystem {
    typedef eosio::multi_index< "userres"_n, user_resources >      user_resources_table;
    typedef eosio::multi_index< "delband"_n, delegated_bandwidth > del_bandwidth_table;
    typedef eosio::multi_index< "refunds"_n, refund_request >      refunds_table;
+   typedef eosio::multi_index< "fertile"_n, locked_tokens >       fertile_balance_table ;
 
 
 
@@ -435,6 +447,56 @@ namespace eosiosystem {
       }
    }
 
+   void system_contract::awardgenesis( name receiver, const asset tokens)
+   {
+     require_auth("genesis.wax"_n);
+     eosio_assert( is_account( receiver ), "receiver account does not exist");
+     eosio_assert( tokens.is_valid(), "invalid tokens" );
+     eosio_assert( tokens.amount > 0, "lock-up quantity must be positive" );
+
+     fertile_balance_table fertile_tbl( _self, receiver.value );
+     auto itr = fertile_tbl.find( receiver.value );
+     if( itr == fertile_tbl.end() ) {
+         itr = fertile_tbl.emplace( "genesis.wax"_n, [&]( auto& locked_token ){
+              locked_token.last_claimed_time = time_point_sec(0);
+              locked_token.balance           = tokens;
+         });
+     }
+     else {
+         fertile_tbl.modify( itr, "genesis.wax"_n, [&]( auto& locked_token ){
+             locked_token.balance += tokens;
+         });
+     }
+
+     asset to_net(std::floor(tokens.amount / 2.0), core_symbol());
+     asset to_cpu(std::ceil(tokens.amount / 2.0), core_symbol());
+     delegatebw( "genesis.wax"_n, receiver, to_net, to_cpu, true);
+   }
+
+//   uint64_t system_contract::get_claimable( name owner ) {
+//     fertile_balance_table fertile_tbl( _self, owner.value );
+//     auto fertile = fertile_tbl.find( owner.value );
+//     if(fertile != fertile_tbl.end()) {
+//       return 0;
+//     };
+//     // TODO: find current_interval and last_claimed_interval, maybe use current_time_point???
+//     return fertile.balance / (365*2+366) * (current_interval - last_claimed_interval);
+//   }
+//
+//   void system_contract::claimgenesis( name owner )
+//   {
+//      // if(not in the claiming period) return;
+//      require_auth(owner);
+//      uint64_t claimable = get_claimable();
+//      if(claimable > 0) {
+//        INLINE_ACTION_SENDER(eosio::token, issue)(
+//           token_account, { {_self, active_permission} },
+//           { owner, asset(claimable, core_symbol()), std::string("issue tokens to user for genesis reward") }
+//        );
+//        // TODO: update last claimed time to now
+//      }
+//   }
+
    void system_contract::delegatebw( name from, name receiver,
                                      asset stake_net_quantity,
                                      asset stake_cpu_quantity, bool transfer )
@@ -459,6 +521,30 @@ namespace eosiosystem {
                     "cannot undelegate bandwidth until the chain is activated (at least 15% of all tokens participate in voting)" );
 
       changebw( from, receiver, -unstake_net_quantity, -unstake_cpu_quantity, false);
+
+      // 1. automatically cl;aim any genesis rewards
+      //claimgenesis(receiver);
+
+      // 2.new 
+//      auto fertile = fertile_tbl.find( owner.value );
+//       eosio_assert(fertile != fertile_tbl.end());
+//
+//      if(fertile != fertile_tbl.end() && fertile.balance > 0) {
+//        del_bandwidth_table     del_tbl( _self, from.value );
+//        auto itr = del_tbl.find( receiver.value );
+//        if(itr == del_tbl.end()) {
+//          fertile.balance = 0;
+//        } else {
+//          fertile.balance = minimum(itr->net_weight.amount + itr->cpu_weight.amount, fertile.balance);
+//        }
+//      }
+// 
+//      // 2. check if the unstaked amount goes into the fertile token balance (ie we have to reduce that balance as well)
+//      auto fertile = fertile_tbl.find( owner.value );
+//      eosio_assert(fertile != fertile_tbl.end());
+//      if(fertile != fertile_tbl.end() && fertile.balance > 0) {
+//        fertile.balance -= minimum(unstake_net_quantity + unstake_cpu_quantity, fertile.balance);
+//      }
    } // undelegatebw
 
 

@@ -305,7 +305,14 @@ namespace eosiosystem {
          [[eosio::action]]
          void undelegatebw( name from, name receiver,
                             asset unstake_net_quantity, asset unstake_cpu_quantity );
-
+ 
+         /**
+          * Locks tokens on initial period for future rewards.
+          */
+         [[eosio::action]]
+         void awardgenesis( name receiver,
+                            const asset tokens);
+ 
 
          /**
           * Increases receiver's ram quota based upon current price and quantity of
