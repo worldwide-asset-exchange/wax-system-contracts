@@ -249,6 +249,13 @@ public:
       return push_transaction( trx );
    }
 
+   action_result awardgenesis( const account_name& receiver, const asset& tokens ) {
+      return push_action( 
+	         N(genesis.wax), 
+	         N(awardgenesis), 
+		 mvo()( "receiver",receiver)("tokens",tokens) );
+   }
+
    action_result buyram( const account_name& payer, account_name receiver, const asset& eosin ) {
       return push_action( payer, N(buyram), mvo()( "payer",payer)("receiver",receiver)("quant",eosin) );
    }
@@ -363,6 +370,11 @@ public:
 
    uint32_t last_block_time() const {
       return time_point_sec( control->head_block_time() ).sec_since_epoch();
+   }
+
+   asset get_locked_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
+      vector<char> data = get_row_by_account( config::system_account_name, act, N(fertile), balance_symbol.to_symbol_code().value );
+      return data.empty() ? asset(0, balance_symbol) : abi_ser.binary_to_variant("locked_tokens", data, abi_serializer_max_time)["balance"].as<asset>();
    }
 
    asset get_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {

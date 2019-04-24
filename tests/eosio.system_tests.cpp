@@ -3627,4 +3627,48 @@ BOOST_FIXTURE_TEST_CASE( buy_pin_sell_ram, eosio_system_tester ) try {
 
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE( award_genesis, eosio_system_tester ) try {
+
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> accounts = {N(genesis.wax), N(user11111111), N(user22222222), N(user33333333) };
+   for (const auto& a: accounts) {
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
+   }
+   
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   const asset locked_tokens_user1{core_sym::from_string("2.0000")};
+   const asset locked_tokens_user2{core_sym::from_string("1.0000")};
+   const asset locked_tokens_user3{core_sym::from_string("73.0000")};
+
+   auto r1 = awardgenesis( N(user11111111), locked_tokens_user1);
+   auto r2 = awardgenesis( N(user22222222), locked_tokens_user2);
+   auto r3 = awardgenesis( N(user33333333), locked_tokens_user3);
+
+   // Check all actions succeed 
+   BOOST_REQUIRE_EQUAL( success(), r1 );
+   BOOST_REQUIRE_EQUAL( success(), r2 );
+   BOOST_REQUIRE_EQUAL( success(), r3 );
+
+   // Check the right tokens (amount and symbol) where locked
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("2.0000"), get_locked_balance( N(user11111111) ) );
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("1.0000"), get_locked_balance( N(user22222222) ) );
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("73.0000"), get_locked_balance( N(user33333333) ) );
+   
+   // Check new staked resources match
+   auto user1_resources   = get_total_stake( "user11111111" );
+   auto user2_resources   = get_total_stake( "user22222222" );
+   auto user3_resources   = get_total_stake( "user33333333" );
+
+   auto total_staked_u1 = user1_resources["net_weight"].as<asset>() + user1_resources["cpu_weight"].as<asset>();
+   auto total_staked_u2 = user2_resources["net_weight"].as<asset>() + user2_resources["cpu_weight"].as<asset>();
+   auto total_staked_u3 = user3_resources["net_weight"].as<asset>() + user3_resources["cpu_weight"].as<asset>();
+
+   BOOST_REQUIRE_EQUAL( net + cpu + locked_tokens_user1, total_staked_u1 );
+   BOOST_REQUIRE_EQUAL( net + cpu + locked_tokens_user2, total_staked_u2 );
+   BOOST_REQUIRE_EQUAL( net + cpu + locked_tokens_user3, total_staked_u3 );
+
+} FC_LOG_AND_RETHROW()
 BOOST_AUTO_TEST_SUITE_END()
