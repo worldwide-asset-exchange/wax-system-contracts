@@ -3670,5 +3670,170 @@ BOOST_FIXTURE_TEST_CASE( award_genesis, eosio_system_tester ) try {
    BOOST_REQUIRE_EQUAL( net + cpu + locked_tokens_user2, total_staked_u2 );
    BOOST_REQUIRE_EQUAL( net + cpu + locked_tokens_user3, total_staked_u3 );
 
+
 } FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( claim_genesis_no_rewards_yet, eosio_system_tester ) try {
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> accounts = {N(genesis.wax), N(user11111111), N(user22222222), N(user33333333) };
+   for (const auto& a: accounts) {
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
+   }
+   
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   const asset locked_tokens_user1{core_sym::from_string("2.0000")};
+   const asset locked_tokens_user2{core_sym::from_string("1.0000")};
+   const asset locked_tokens_user3{core_sym::from_string("73.0000")};
+
+   // Lock fertile tokens to users
+   awardgenesis( N(user11111111), locked_tokens_user1);
+   awardgenesis( N(user22222222), locked_tokens_user2);
+   awardgenesis( N(user33333333), locked_tokens_user3);
+
+   // Wait 1 day and claim period reward tokens
+   const int64_t useconds_23_hours = 23 * 3600 * int64_t(1000000);
+   produce_block( fc::microseconds(useconds_23_hours) );
+   
+   // Check all claim actions fail because time period is 0us
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("at least one day since locking is required"), claimgenesis( N(user11111111) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("at least one day since locking is required"), claimgenesis( N(user22222222) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("at least one day since locking is required"), claimgenesis( N(user22222222) ) );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( claim_genesis_1_day_rewards, eosio_system_tester ) try {
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> accounts = {N(genesis.wax), N(user11111111), N(user22222222), N(user33333333) };
+   for (const auto& a: accounts) {
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
+   }
+   
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   const asset locked_tokens_user1{core_sym::from_string("2.0000")};
+   const asset locked_tokens_user2{core_sym::from_string("1.0000")};
+   const asset locked_tokens_user3{core_sym::from_string("73.0000")};
+
+   // Lock fertile tokens to users
+   awardgenesis( N(user11111111), locked_tokens_user1);
+   awardgenesis( N(user22222222), locked_tokens_user2);
+   awardgenesis( N(user33333333), locked_tokens_user3);
+
+   // Wait 1 day and claim period reward tokens
+   const int64_t useconds_per_day = 24 * 3600 * int64_t(1000000);
+   produce_block( fc::microseconds(useconds_per_day) );
+
+   // Send rewarded tokens back to users
+   claimgenesis( N(user11111111) );
+   claimgenesis( N(user22222222) );
+   claimgenesis( N(user33333333) );
+
+   // Get users' balances
+   const asset user1_balance = get_balance(N(user11111111));
+   const asset user2_balance = get_balance(N(user22222222));
+   const asset user3_balance = get_balance(N(user33333333));
+
+   // "genesis.wax" locked 2.0000 tokens to user11111111
+   // after 1 day, user11111111 claims the corresponding inflation for this one-day period. 
+   // So, we have:
+   // initial_staked: 2.0000 TST
+   // inflation period: 1 day (24*3600*1000000 microseconds) = 86400000000 us (8.64e+10)
+   // 3 years lock period: 9.46944e+13 microseconds 
+   // period percentage of 3 years: (8.64e10) / (9.46944e+13) = (1 day / 1096 days) = 0.00091240875
+   // expected received tokens for user11111111: (2.0000 TST) * (1 day / 1096 days) = 0.00182481751
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("0.0018"), user1_balance );
+   
+   // "genesis.wax" locked 1.0000 token to user22222222
+   // after 1 day, user22222222 claims the corresponding inflation for this one-day period. 
+   // So, we have:
+   // initial_staked: 1.0000 TST
+   // inflation period: 1 day (24*3600*1000000 microseconds) = 86400000000 us (8.64e+10)
+   // 3 years lock period: 9.46944e+13 microseconds 
+   // period percentage of 3 years: (8.64e10) / (9.46944e+13) = (1 day / 1096 days) = 0.00091240875
+   // expected received tokens for user22222222: (1.0000 TST) * (1 day / 1096 days) = 0.00091240875
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("0.0009"), user2_balance );
+   
+   // "genesis.wax" locked 73.0000 tokens to user33333333
+   // after 1 day, user33333333 claims the corresponding inflation for this one-day period. 
+   // So, we have:
+   // initial_staked: 73.0000 TST
+   // inflation period: 1 day (24*3600*1000000 microseconds) = 86400000000 us (8.64e+10)
+   // 3 years lock period: 9.46944e+13 microseconds 
+   // period percentage of 3 years: (8.64e10) / (9.46944e+13) = (1 day / 1096 days) = 0.00091240875
+   // expected received tokens for user33333333: (73.0000 TST) * (1 day / 1096 days) = 0.06660583941
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("0.0666"), user3_balance );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( claim_genesis_3_years_reward, eosio_system_tester ) try {
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111), N(user22222222), N(user33333333) };
+   for (const auto& a: accounts) {
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
+   }
+   
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   const asset locked_tokens_user1{core_sym::from_string("2.0000")};
+   const asset locked_tokens_user2{core_sym::from_string("1.0000")};
+   const asset locked_tokens_user3{core_sym::from_string("73.0000")};
+
+   // Lock fertile tokens to users
+   awardgenesis( N(user11111111), locked_tokens_user1);
+   awardgenesis( N(user22222222), locked_tokens_user2);
+   awardgenesis( N(user33333333), locked_tokens_user3);
+
+   // Wait 1 day and claim period reward tokens
+   const double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
+   produce_block( fc::microseconds(3*usecs_per_year + 2*1000000ll) );
+
+   // Send rewarded tokens back to users
+   claimgenesis( N(user11111111) );
+   claimgenesis( N(user22222222) );
+   claimgenesis( N(user33333333) );
+
+   // Get users' balances
+   const asset user1_balance = get_balance(N(user11111111));
+   const asset user2_balance = get_balance(N(user22222222));
+   const asset user3_balance = get_balance(N(user33333333));
+
+   // "genesis.wax" locked 2.0000 tokens to user11111111
+   // after 3 years, she gets back the same amount she was locked
+   // So, we have: 
+   // initial_staked: 2.0000 TST
+   // inflation period: 3 years
+   // 3 years lock period: 9.46944e+13 microseconds 
+   // period percentage of 3 years: (9.46944e+13) / (9.46944e+13) = (1096 day / 1096 days) = 1.00000000000
+   // expected received tokens for user11111111: (2.0000 TST) * (1096 days / 1096 days) = 2.0000
+   BOOST_REQUIRE_EQUAL( locked_tokens_user1, user1_balance );
+   
+   // "genesis.wax" locked 1.0000 tokens to user22222222
+   // after 3 years, she gets back the same amount she was locked
+   // So, we have: 
+   // initial_staked: 1.0000 TST
+   // inflation period: 3 years
+   // 3 years lock period: 9.46944e+13 microseconds 
+   // period percentage of 3 years: (9.46944e+13) / (9.46944e+13) = (1096 day / 1096 days) = 1.00000000000
+   // expected received tokens for user22222222: (1.0000 TST) * (1096 days / 1096 days) = 1.0000
+   BOOST_REQUIRE_EQUAL( locked_tokens_user2, user2_balance );
+   
+   // "genesis.wax" locked 73.0000 tokens to user33333333
+   // after 3 years, she gets back the same amount she was locked
+   // So, we have: 
+   // initial_staked: 73.0000 TST
+   // inflation period: 3 years
+   // 3 years lock period: 9.46944e+13 microseconds 
+   // period percentage of 3 years: (9.46944e+13) / (9.46944e+13) = (1096 day / 1096 days) = 1.00000000000
+   // expected received tokens for user33333333: (73.0000 TST) * (1096 days / 1096 days) = 73.0000
+   BOOST_REQUIRE_EQUAL( locked_tokens_user3, user3_balance );
+
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()

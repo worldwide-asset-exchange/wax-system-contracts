@@ -308,6 +308,11 @@ namespace eosiosystem {
          void awardgenesis( name receiver,
                             const asset tokens);
  
+         /**
+          * Pays all awarded tokens for period since last claim
+          */
+         [[eosio::action]]
+         void claimgenesis( name claimer);
 
          /**
           * Increases receiver's ram quota based upon current price and quantity of

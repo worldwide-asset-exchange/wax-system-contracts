@@ -74,13 +74,13 @@ namespace eosiosystem {
    };
 
    struct [[eosio::table, eosio::contract("eosio.system")]] locked_tokens {
-      time_point_sec  last_claimed_time;
+      time_point      last_claim_time;
       eosio::asset    balance;
 
       uint64_t primary_key()const { return balance.symbol.code().raw(); }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( locked_tokens, (last_claimed_time)(balance) )
+      EOSLIB_SERIALIZE( locked_tokens, (last_claim_time)(balance) )
    };
 
    /**
@@ -458,7 +458,7 @@ namespace eosiosystem {
      auto itr = fertile_tbl.find( receiver.value );
      if( itr == fertile_tbl.end() ) {
          itr = fertile_tbl.emplace( "genesis.wax"_n, [&]( auto& locked_token ){
-              locked_token.last_claimed_time = time_point_sec(0);
+              locked_token.last_claim_time   = current_time_point(); // time_point() -> epoch
               locked_token.balance           = tokens;
          });
      }
@@ -471,6 +471,39 @@ namespace eosiosystem {
      asset to_net(std::floor(tokens.amount / 2.0), core_symbol());
      asset to_cpu(std::ceil(tokens.amount / 2.0), core_symbol());
      delegatebw( "genesis.wax"_n, receiver, to_net, to_cpu, true);
+   }
+
+   void system_contract::claimgenesis( name claimer )
+   {
+      // if(not in the claiming period) return;
+      require_auth(claimer);
+
+      fertile_balance_table fertile_tbl( _self, claimer.value );
+
+      // Accounting for 2020 being a leap year
+      const uint32_t days_in_three_years    = (2*365 + 366);
+
+      const auto& claimer_balance = fertile_tbl.get( core_symbol().code().raw(), "no balance object found" );
+      eosio_assert( claimer_balance.balance.amount >= 0, "not enough locked tokens" );
+
+      const auto initial_staked = claimer_balance.balance.amount;
+      const auto ct = current_time_point();
+
+      auto elapsed_usec = ct - claimer_balance.last_claim_time;
+      eosio_assert( elapsed_usec > microseconds(useconds_per_day), "at least one day since locking is required" );
+
+      auto elapsed_days = elapsed_usec.count() / useconds_per_day;
+      auto inflation_last_period = initial_staked * elapsed_days * ( 1 / static_cast<double>(days_in_three_years) );
+      asset payable_inflation ( inflation_last_period, core_symbol() );
+
+      fertile_tbl.modify( claimer_balance, get_self(), [&]( auto& cb ) { 
+         cb.last_claim_time = ct;         
+      });
+
+      INLINE_ACTION_SENDER(eosio::token, transfer)(
+         token_account, { {"genesis.wax"_n, "active"_n} },
+         { "genesis.wax"_n, eosio::name(claimer), payable_inflation, std::string("claimgenesis") }
+      );
    }
 
 //   uint64_t system_contract::get_claimable( name owner ) {
