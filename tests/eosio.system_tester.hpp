@@ -256,6 +256,13 @@ public:
 		 mvo()( "receiver",receiver)("tokens",tokens) );
    }
 
+   action_result claimgenesis( const account_name& claimer ) {
+      return push_action( 
+	         claimer, 
+	         N(claimgenesis), 
+		 mvo()( "claimer",claimer) );
+   }
+
    action_result buyram( const account_name& payer, account_name receiver, const asset& eosin ) {
       return push_action( payer, N(buyram), mvo()( "payer",payer)("receiver",receiver)("quant",eosin) );
    }
