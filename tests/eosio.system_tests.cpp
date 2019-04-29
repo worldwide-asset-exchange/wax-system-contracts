@@ -4083,6 +4083,8 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_no_rewards_yet, eosio_system_tester ) try
    awardgenesis( N(user22222222), locked_tokens_user2);
    awardgenesis( N(user33333333), locked_tokens_user3);
 
+
+
    // Wait 1 day and claim period reward tokens
    const int64_t useconds_23_hours = 23 * 3600 * int64_t(1000000);
    produce_block( fc::microseconds(useconds_23_hours) );
@@ -4180,9 +4182,8 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_3_years_reward, eosio_system_tester ) try
    awardgenesis( N(user22222222), locked_tokens_user2);
    awardgenesis( N(user33333333), locked_tokens_user3);
 
-   // Wait 1 day and claim period reward tokens
-   const double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
-   produce_block( fc::microseconds(3*usecs_per_year + 2*1000000ll) );
+   // Wait 3 years (1096 days) and claim whole period reward tokens
+   produce_block( fc::days(1096) );
 
    // Send rewarded tokens back to users
    claimgenesis( N(user11111111) );
@@ -4223,6 +4224,38 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_3_years_reward, eosio_system_tester ) try
    // period percentage of 3 years: (9.46944e+13) / (9.46944e+13) = (1096 day / 1096 days) = 1.00000000000
    // expected received tokens for user33333333: (73.0000 TST) * (1096 days / 1096 days) = 73.0000
    BOOST_REQUIRE_EQUAL( locked_tokens_user3, user3_balance );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( claim_more_than_once_a_day, eosio_system_tester ) try {
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111) };
+   for (const auto& a: accounts) {
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
+   }
+   
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   // tokens to lock for user11111111
+   const asset locked_tokens_user1{core_sym::from_string("2.0000")};
+
+   // Lock fertile tokens to users
+   awardgenesis( N(user11111111), locked_tokens_user1 );
+
+   // claiming tokens once an hour within 1 day since lock-up
+   for(auto i=1; i <= 23 ; ++i) {
+     produce_block( fc::hours(1) );
+     BOOST_REQUIRE_EQUAL( wasm_assert_msg("at least one day since locking is required"), claimgenesis( N(user11111111) ) );
+   }
+
+   // complete wait-period of 1 day and claim rewards
+   produce_block( fc::hours(1) );
+   claimgenesis( N(user11111111) );
+
+   const asset user1_balance = get_balance(N(user11111111));
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("0.0018"), user1_balance );
 
 } FC_LOG_AND_RETHROW()
 

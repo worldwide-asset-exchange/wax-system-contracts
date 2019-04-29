@@ -26,6 +26,7 @@ namespace eosiosystem {
    using eosio::print;
    using eosio::permission_level;
    using eosio::time_point_sec;
+   using eosio::time_point;
    using std::map;
    using std::pair;
 
@@ -450,6 +451,16 @@ namespace eosiosystem {
    void system_contract::awardgenesis( name receiver, const asset tokens)
    {
      require_auth("genesis.wax"_n);
+
+     // Current time_point EXPLICITLY converted into time_point_sec
+     const time_point ct = current_time_point();
+     time_point_sec tp_now_seconds(ct);
+
+     // August 31th, 2019 Time: 00:00:00 UTC (swap end period in seconds since epoch: 1567220400 )
+     const uint32_t seconds_since_epoch_swap_end  = 1567220400;
+     time_point_sec tp_swap_end( seconds_since_epoch_swap_end );
+
+     // eosio_assert( tp_now_seconds < tp_swap_end , "swap period is over");
      eosio_assert( is_account( receiver ), "receiver account does not exist");
      eosio_assert( tokens.is_valid(), "invalid tokens" );
      eosio_assert( tokens.amount > 0, "lock-up quantity must be positive" );
@@ -481,7 +492,7 @@ namespace eosiosystem {
       fertile_balance_table fertile_tbl( _self, claimer.value );
 
       // Accounting for 2020 being a leap year
-      const uint32_t days_in_three_years    = (2*365 + 366);
+      const uint32_t days_in_three_years = (2*365 + 366);
 
       const auto& claimer_balance = fertile_tbl.get( core_symbol().code().raw(), "no balance object found" );
       eosio_assert( claimer_balance.balance.amount >= 0, "not enough locked tokens" );

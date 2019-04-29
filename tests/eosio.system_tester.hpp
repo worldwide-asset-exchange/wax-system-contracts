@@ -258,7 +258,7 @@ public:
 
    action_result claimgenesis( const account_name& claimer ) {
       return push_action( 
-	         claimer, 
+	         claimer,
 	         N(claimgenesis), 
 		 mvo()( "claimer",claimer) );
    }
