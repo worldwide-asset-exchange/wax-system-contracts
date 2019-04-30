@@ -81,6 +81,10 @@ namespace eosiosystem {
       time_point           last_pervote_bucket_fill;
       int64_t              pervote_bucket = 0;
       int64_t              perblock_bucket = 0;
+      int64_t              voters_bucket = 0;
+      double               total_voteshare_change_rate = 0;
+      double               total_unpaid_voteshare = 0;   // Common fund to pay voters.
+      time_point           total_unpaid_voteshare_last_updated;
       uint32_t             total_unpaid_blocks = 0; /// all blocks which have been produced but not paid
       int64_t              total_activated_stake = 0;
       time_point           thresh_activated_stake_time;
@@ -92,7 +96,9 @@ namespace eosiosystem {
       EOSLIB_SERIALIZE_DERIVED( eosio_global_state, eosio::blockchain_parameters,
                                 (max_ram_size)(total_ram_bytes_reserved)(total_ram_stake)
                                 (last_producer_schedule_update)(last_pervote_bucket_fill)
-                                (pervote_bucket)(perblock_bucket)(total_unpaid_blocks)(total_activated_stake)(thresh_activated_stake_time)
+                                (pervote_bucket)(perblock_bucket)(voters_bucket)(total_voteshare_change_rate)
+                                (total_unpaid_voteshare)(total_unpaid_voteshare_last_updated)
+                                (total_unpaid_blocks)(total_activated_stake)(thresh_activated_stake_time)
                                 (last_producer_schedule_size)(total_producer_vote_weight)(last_name_close) )
    };
 
@@ -157,6 +163,11 @@ namespace eosiosystem {
       std::vector<name>   producers; /// the producers approved by this voter if no proxy set
       int64_t             staked = 0;
 
+      double              unpaid_voteshare = 0;
+      time_point          unpaid_voteshare_last_updated;
+      double              unpaid_voteshare_change_rate;
+      time_point          last_claim_time;
+
       /**
        *  Every time a vote is cast we must first "undo" the last vote weight, before casting the
        *  new vote weight.  Vote weight is calculated as:
@@ -185,7 +196,8 @@ namespace eosiosystem {
       };
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( voter_info, (owner)(proxy)(producers)(staked)(last_vote_weight)(proxied_vote_weight)(is_proxy)(flags1)(reserved2)(reserved3) )
+      EOSLIB_SERIALIZE( voter_info, (owner)(proxy)(producers)(staked)(unpaid_voteshare)(unpaid_voteshare_last_updated)(unpaid_voteshare_change_rate)
+                                    (last_claim_time)(last_vote_weight)(proxied_vote_weight)(is_proxy)(flags1)(reserved2)(reserved3) )
    };
 
    typedef eosio::multi_index< "voters"_n, voter_info >  voters_table;
@@ -226,6 +238,7 @@ namespace eosiosystem {
          static constexpr eosio::name vpay_account{"eosio.vpay"_n};
          static constexpr eosio::name names_account{"eosio.names"_n};
          static constexpr eosio::name saving_account{"eosio.saving"_n};
+         static constexpr eosio::name voters_account{"eosio.voters"_n};
          static constexpr symbol ramcore_symbol = symbol(symbol_code("RAMCORE"), 4);
          static constexpr symbol ram_symbol     = symbol(symbol_code("RAM"), 0);
 
@@ -337,6 +350,9 @@ namespace eosiosystem {
 
          // functions defined in producer_pay.cpp
          [[eosio::action]]
+         void voterclaim(const name owner);
+
+         [[eosio::action]]
          void claimrewards( const name owner );
 
          [[eosio::action]]
@@ -355,6 +371,8 @@ namespace eosiosystem {
          void bidrefund( name bidder, name newname );
 
       private:
+         void fill_buckets();
+
          // Implementation details:
 
          static symbol get_core_symbol( const rammarket& rm ) {
@@ -381,6 +399,10 @@ namespace eosiosystem {
          void update_votes( const name voter, const name proxy, const std::vector<name>& producers, bool voting );
 
          // defined in voting.cpp
+         double clear_voter_votepay_share(const voter_info& voter);
+
+         void update_voter_votepay_share(const voters_table::const_iterator& voter_itr);
+
          void propagate_weight_change( const voter_info& voter );
 
          double update_producer_votepay_share( const producers_table2::const_iterator& prod_itr,
