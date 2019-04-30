@@ -168,11 +168,6 @@ namespace eosiosystem {
       double              unpaid_voteshare_change_rate;
       time_point          last_claim_time;
 
-      double              unpaid_voteshare = 0;
-      time_point          unpaid_voteshare_last_updated;
-      double              unpaid_voteshare_change_rate;
-      time_point          last_claim_time;
-
       /**
        *  Every time a vote is cast we must first "undo" the last vote weight, before casting the
        *  new vote weight.  Vote weight is calculated as:
