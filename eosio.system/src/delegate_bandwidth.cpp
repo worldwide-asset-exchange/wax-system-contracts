@@ -517,30 +517,6 @@ namespace eosiosystem {
       );
    }
 
-//   uint64_t system_contract::get_claimable( name owner ) {
-//     fertile_balance_table fertile_tbl( _self, owner.value );
-//     auto fertile = fertile_tbl.find( owner.value );
-//     if(fertile != fertile_tbl.end()) {
-//       return 0;
-//     };
-//     // TODO: find current_interval and last_claimed_interval, maybe use current_time_point???
-//     return fertile.balance / (365*2+366) * (current_interval - last_claimed_interval);
-//   }
-//
-//   void system_contract::claimgenesis( name owner )
-//   {
-//      // if(not in the claiming period) return;
-//      require_auth(owner);
-//      uint64_t claimable = get_claimable();
-//      if(claimable > 0) {
-//        INLINE_ACTION_SENDER(eosio::token, issue)(
-//           token_account, { {_self, active_permission} },
-//           { owner, asset(claimable, core_symbol()), std::string("issue tokens to user for genesis reward") }
-//        );
-//        // TODO: update last claimed time to now
-//      }
-//   }
-
    void system_contract::delegatebw( name from, name receiver,
                                      asset stake_net_quantity,
                                      asset stake_cpu_quantity, bool transfer )
@@ -566,31 +542,27 @@ namespace eosiosystem {
 
       changebw( from, receiver, -unstake_net_quantity, -unstake_cpu_quantity, false);
 
-      // 1. automatically cl;aim any genesis rewards
-      //claimgenesis(receiver);
+      // Check if the unstaked amount goes into the fertile token balance (ie we have to reduce that balance as well)
+      fertile_balance_table fertile_tbl( _self, receiver.value );
+      auto fertile_itr = fertile_tbl.find( receiver.value );
 
-      // 2.new 
-//      auto fertile = fertile_tbl.find( owner.value );
-//       eosio_assert(fertile != fertile_tbl.end());
-//
-//      if(fertile != fertile_tbl.end() && fertile.balance > 0) {
-//        del_bandwidth_table     del_tbl( _self, from.value );
-//        auto itr = del_tbl.find( receiver.value );
-//        if(itr == del_tbl.end()) {
-//          fertile.balance = 0;
-//        } else {
-//          fertile.balance = minimum(itr->net_weight.amount + itr->cpu_weight.amount, fertile.balance);
-//        }
-//      }
-// 
-//      // 2. check if the unstaked amount goes into the fertile token balance (ie we have to reduce that balance as well)
-//      auto fertile = fertile_tbl.find( owner.value );
-//      eosio_assert(fertile != fertile_tbl.end());
-//      if(fertile != fertile_tbl.end() && fertile.balance > 0) {
-//        fertile.balance -= minimum(unstake_net_quantity + unstake_cpu_quantity, fertile.balance);
-//      }
+      if(fertile_itr != fertile_tbl.end()) {
+        user_resources_table   user_res_tbl( _self, from.value );
+        auto user_res_itr = user_res_tbl.find( receiver.value );
+        fertile_tbl.modify( fertile_itr, from, [&]( auto& fertile ){
+          if(user_res_itr == user_res_tbl.end()) {
+            fertile.balance = zero_asset;
+          } else {
+            fertile.balance = std::min<asset>(user_res_itr->net_weight + user_res_itr->cpu_weight, fertile.balance);
+          }
+        });
+        // Automatically claim any genesis rewards
+        claimgenesis(receiver);
+        if(fertile_itr->balance == zero_asset) {
+          fertile_tbl.erase( fertile_itr );
+        }
+      }
    } // undelegatebw
-
 
    void system_contract::refund( const name owner ) {
       require_auth( owner );

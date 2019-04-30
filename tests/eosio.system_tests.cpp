@@ -4083,13 +4083,11 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_no_rewards_yet, eosio_system_tester ) try
    awardgenesis( N(user22222222), locked_tokens_user2);
    awardgenesis( N(user33333333), locked_tokens_user3);
 
-
-
-   // Wait 1 day and claim period reward tokens
+   // Wait 23 hours
    const int64_t useconds_23_hours = 23 * 3600 * int64_t(1000000);
    produce_block( fc::microseconds(useconds_23_hours) );
    
-   // Check all claim actions fail because time period is 0us
+   // All claim actions fail because time period elapsed since locking is less than 1 day
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("at least one day since locking is required"), claimgenesis( N(user11111111) ) );
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("at least one day since locking is required"), claimgenesis( N(user22222222) ) );
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("at least one day since locking is required"), claimgenesis( N(user22222222) ) );
@@ -4259,4 +4257,94 @@ BOOST_FIXTURE_TEST_CASE( claim_more_than_once_a_day, eosio_system_tester ) try {
 
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE( claim_half_period_twice, eosio_system_tester ) try {
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111) };
+   for (const auto& a: accounts) {
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
+   }
+   
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   // tokens to lock for user11111111
+   const asset locked_tokens_user1{core_sym::from_string("2.0000")};
+   asset user1_balance;
+
+   // Lock fertile tokens to user11111111
+   awardgenesis( N(user11111111), locked_tokens_user1 );
+
+   // Wait initial 1.5 years (1096/2 days) and claim first half period reward tokens
+   produce_block( fc::days(548) );
+   claimgenesis( N(user11111111) );
+   user1_balance = get_balance(N(user11111111));
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("1.0000"), user1_balance );
+
+   // Wait last 1.5 years (1096/2 days) and claim second half period reward tokens
+   produce_block( fc::days(548) );
+   claimgenesis( N(user11111111) );
+   user1_balance = get_balance(N(user11111111));
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("2.0000"), user1_balance );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( claim_once_a_day_during_3_years, eosio_system_tester ) try {
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111) };
+   for (const auto& a: accounts) {
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
+   }
+   
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   // tokens to lock for user11111111
+   const asset locked_tokens_user1{core_sym::from_string("2.0000")};
+
+   // Lock fertile tokens to user11111111
+   awardgenesis( N(user11111111), locked_tokens_user1 );
+
+   // Check acc is incrementally equal 
+   asset acc = core_sym::from_string("0.0000");
+   for(auto i=1; i <= 1096 ; ++i) {
+     produce_block( fc::days(1) );
+     acc += core_sym::from_string("0.0018");
+     claimgenesis( N(user11111111) );
+     BOOST_REQUIRE_EQUAL( acc, get_balance(N(user11111111)) );
+   }
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( unstake_without_decreasing_fertile_balance, eosio_system_tester ) try {
+   cross_15_percent_threshold();
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111) };
+   for (const auto& a: accounts) {
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
+   }
+   
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   // tokens to lock for user11111111
+   const asset locked_tokens_user1{core_sym::from_string("2.0000")};
+
+   // Lock fertile tokens to user11111111
+   awardgenesis( N(user11111111), locked_tokens_user1 );
+
+   // unstake half the locked amount immediately after locking (no rewarded tokens will be payed)
+   BOOST_REQUIRE_EQUAL( success(), unstake( N(user11111111), N(user11111111), core_sym::from_string("1.0000"), core_sym::from_string("1.0000") ) );
+    
+   // after 2 days and 23 hours founds should not be available yet
+   produce_block( fc::hours(3*24 - 1) );
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("0.0000"), get_balance( N(user11111111) ) );
+
+   // completing 3 days wait, founds should be payed back
+   produce_block( fc::hours(1) );
+   BOOST_REQUIRE_EQUAL( locked_tokens_user1, get_balance( N(user11111111) ) );
+
+} FC_LOG_AND_RETHROW()
 BOOST_AUTO_TEST_SUITE_END()
