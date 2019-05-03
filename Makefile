@@ -1,7 +1,9 @@
 CMAKE_CPU_SETUP := $(shell expr $(shell getconf _NPROCESSORS_ONLN) + 2)
 
 DOCKER_CONTAINER=contracts-development
-DOCKER_COMMON=-v `pwd`:/opt/contracts --name $(DOCKER_CONTAINER) -w /opt/contracts waxteam/dev:v1.6.1
+
+DOCKER_COMMON=--user $(shell id -u):$(shell id -g) -v `pwd`:/opt/contracts \
+              --name $(DOCKER_CONTAINER) -w /opt/contracts waxteam/dev:v1.6.1
 
 build:
 	mkdir -p build
