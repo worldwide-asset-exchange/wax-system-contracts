@@ -162,25 +162,6 @@ namespace eosiosystem {
                                     true // reset votepay_share to zero after updating
                                  );
 
-      int64_t producer_per_vote_pay = 0;
-      if( _gstate2.revision > 0 ) {
-         double total_votepay_share = update_total_votepay_share( ct );
-         if( total_votepay_share > 0 && !crossed_threshold ) {
-            producer_per_vote_pay = int64_t((new_votepay_share * _gstate.pervote_bucket) / total_votepay_share);
-            if( producer_per_vote_pay > _gstate.pervote_bucket )
-               producer_per_vote_pay = _gstate.pervote_bucket;
-         }
-      } else {
-         if( _gstate.total_producer_vote_weight > 0 ) {
-            producer_per_vote_pay = int64_t((_gstate.pervote_bucket * prod.total_votes) / _gstate.total_producer_vote_weight);
-         }
-      }
-
-      if( producer_per_vote_pay < min_pervote_daily_pay ) {
-         producer_per_vote_pay = 0;
-      }
-
-      _gstate.pervote_bucket      -= producer_per_vote_pay;
       _gstate.perblock_bucket     -= producer_per_block_pay;
       _gstate.total_unpaid_blocks -= prod.unpaid_blocks;
 
@@ -195,12 +176,6 @@ namespace eosiosystem {
          INLINE_ACTION_SENDER(eosio::token, transfer)(
             token_account, { {bpay_account, active_permission}, {owner, active_permission} },
             { bpay_account, owner, asset(producer_per_block_pay, core_symbol()), std::string("producer block pay") }
-         );
-      }
-      if( producer_per_vote_pay > 0 ) {
-         INLINE_ACTION_SENDER(eosio::token, transfer)(
-            token_account, { {vpay_account, active_permission}, {owner, active_permission} },
-            { vpay_account, owner, asset(producer_per_vote_pay, core_symbol()), std::string("producer vote pay") }
          );
       }
    }

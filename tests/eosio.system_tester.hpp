@@ -36,7 +36,7 @@ public:
       produce_blocks( 2 );
 
       create_accounts({ N(eosio.token), N(eosio.ram), N(eosio.ramfee), N(eosio.stake),
-               N(eosio.bpay), N(eosio.vpay), N(eosio.voters), N(eosio.saving), N(eosio.names) });
+               N(eosio.bpay), N(eosio.voters), N(eosio.saving), N(eosio.names) });
 
 
       produce_blocks( 100 );
@@ -416,7 +416,7 @@ public:
 
    double stake2votes( asset stake ) {
       auto now = control->pending_block_time().time_since_epoch().count() / 1000000;
-      return stake.get_amount() * pow(2, int64_t((now - (config::block_timestamp_epoch / 1000)) / (86400 * 7))/ double(52) ); // 52 week periods (i.e. ~years)
+      return stake.get_amount() * pow(2, int64_t((now - (config::block_timestamp_epoch / 1000)) / (86400 * 7))/ double(13) );
    }
 
    double stake2votes( const string& s ) {
