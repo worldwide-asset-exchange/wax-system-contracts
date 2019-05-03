@@ -1,5 +1,8 @@
 CMAKE_CPU_SETUP := $(shell expr $(shell getconf _NPROCESSORS_ONLN) + 2)
 
+DOCKER_CONTAINER=contracts-development
+DOCKER_COMMON=-v `pwd`:/opt/contracts --name $(DOCKER_CONTAINER) -w /opt/contracts waxteam/dev:v1.6.1
+
 build:
 	mkdir -p build
 	cd build && cmake ..
@@ -18,8 +21,17 @@ test: compile
 
 .PHONY:dev-docker-stop
 dev-docker-stop:
-	-docker rm -f contracts-development
+	-docker rm -f $(DOCKER_CONTAINER)
 
 .PHONY:dev-docker-start
 dev-docker-start: dev-docker-stop
-	docker run -it -v `pwd`:/opt/contracts --name contracts-development -w /opt/contracts waxteam/dev:v1.6.1 bash
+	docker run -it $(DOCKER_COMMON) bash
+
+# Useful for wax-docker project
+.PHONY:dev-docker-all
+dev-docker-all: dev-docker-stop
+	docker run $(DOCKER_COMMON) bash -c "\
+	   rm -rf build && \
+           cmake . -B./build -GNinja && \
+           cmake --build ./build && \
+           build/tests/unit_test --show_progress"
