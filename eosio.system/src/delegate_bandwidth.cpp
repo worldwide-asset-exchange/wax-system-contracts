@@ -1,6 +1,7 @@
 /**
  *  @file
  *  @copyright defined in eos/LICENSE.txt
+ *
  */
 #include <eosio.system/eosio.system.hpp>
 
@@ -25,6 +26,7 @@ namespace eosiosystem {
    using eosio::print;
    using eosio::permission_level;
    using eosio::time_point_sec;
+   using eosio::time_point;
    using std::map;
    using std::pair;
 
@@ -72,6 +74,17 @@ namespace eosiosystem {
       EOSLIB_SERIALIZE( refund_request, (owner)(request_time)(net_amount)(cpu_amount) )
    };
 
+   struct [[eosio::table, eosio::contract("eosio.system")]] genesis_tokens {
+      time_point      first_award_time;
+      time_point      last_claim_time;
+      eosio::asset    balance;
+
+      uint64_t primary_key()const { return balance.symbol.code().raw(); }
+
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE( genesis_tokens,(first_award_time)(last_claim_time)(balance) )
+   };
+
    /**
     *  These tables are designed to be constructed in the scope of the relevant user, this
     *  facilitates simpler API for per-user queries
@@ -79,6 +92,7 @@ namespace eosiosystem {
    typedef eosio::multi_index< "userres"_n, user_resources >      user_resources_table;
    typedef eosio::multi_index< "delband"_n, delegated_bandwidth > del_bandwidth_table;
    typedef eosio::multi_index< "refunds"_n, refund_request >      refunds_table;
+   typedef eosio::multi_index< "genesis"_n, genesis_tokens >      genesis_balance_table ;
 
 
 
@@ -435,6 +449,107 @@ namespace eosiosystem {
       }
    }
 
+   void system_contract::awardgenesis( name receiver, const asset tokens)
+   {
+     require_auth(genesis_account);
+
+     const time_point ct = current_time_point();
+
+     eosio_assert( is_account( receiver ), "receiver account does not exist");
+     eosio_assert( tokens.is_valid(), "invalid tokens" );
+     eosio_assert( tokens.amount > 0, "award quantity must be positive" );
+
+     genesis_balance_table genesis_tbl( _self, receiver.value );
+     auto itr = genesis_tbl.find( core_symbol().code().raw() );
+     if( itr == genesis_tbl.end() ) {
+         itr = genesis_tbl.emplace( genesis_account, [&]( auto& genesis_token ){
+              genesis_token.first_award_time  = ct; // time_point() -> epoch
+              genesis_token.last_claim_time   = ct; // time_point() -> epoch
+              genesis_token.balance           = tokens;
+         });
+     }
+     else {
+         genesis_tbl.modify( itr, genesis_account, [&]( auto& genesis_token ){
+             genesis_token.balance += tokens;
+         });
+     }
+
+     asset to_net(std::floor(tokens.amount / 2.0), core_symbol());
+     asset to_cpu(std::ceil(tokens.amount / 2.0), core_symbol());
+     delegatebw( genesis_account, receiver, to_net, to_cpu, true);
+   }
+
+   void system_contract::claimgenesis( name claimer )
+   {
+      genesis_balance_table genesis_tbl( _self, claimer.value );
+
+      // Accounting for 2020 being a leap year
+      const uint32_t days_in_three_years = (2*365 + 366);
+
+      const auto& claimer_balance = genesis_tbl.get( core_symbol().code().raw(), "no balance object found" );
+
+      const auto ct = std::min(current_time_point(), claimer_balance.first_award_time + days(days_in_three_years));
+
+      const auto elapsed_usec = ct - claimer_balance.last_claim_time;
+      const auto elapsed_days = elapsed_usec.count() / useconds_per_day;
+      eosio_assert( elapsed_days > 0, "at least one day since award is required" );
+
+      const auto rewards_last_period = claimer_balance.balance.amount * elapsed_days * ( 1 / static_cast<double>(days_in_three_years) );
+      const asset payable_rewards ( rewards_last_period, core_symbol() );
+
+      genesis_tbl.modify( claimer_balance, get_self(), [&]( auto& cb ) {
+         cb.last_claim_time += days(elapsed_days);
+      });
+
+      INLINE_ACTION_SENDER(eosio::token, transfer)(
+         token_account, { {genesis_account, "active"_n} },
+         { genesis_account, eosio::name(claimer), payable_rewards, std::string("claimgenesis") }
+      );
+   }
+
+   void system_contract::change_genesis( name owner ) {
+     // Unstaked amount could be greater than TOKENS DELEGATED TO SELF
+     // If this is the case, GENESIS BALANCE should be reduced by the DIFFERENCE:
+     // DIFF = AMOUNT_BEING_UNSTAKED - TOKENS_DELEGATED_TO_SELF
+     // NEW_GENESIS_BALANCE = PREVIOUS_GENESIS_BALANCE - DIFF
+     // be aware that if AMOUNT_BEING_UNSTAKED > TOKENS_DELEGATED_TO_SELF,
+     // the call to changebw() just above will fail due to unsufficient tokens
+
+     // Since changebw succedded, receiver had enough delegated_to_self_tokens,
+     // and now we should check if receiver also has a genesis balance which might
+     // be decreased by DIFF (above defined)
+     // Let's check receiver HAS a genesis balance
+     asset zero_asset( 0, core_symbol() );
+     genesis_balance_table genesis_tbl( _self, owner.value );
+     auto genesis_itr = genesis_tbl.find( core_symbol().code().raw() );
+
+     // If receiver HAS a genesis balance, either she consumed them all or there's a remaining amount
+     if(genesis_itr != genesis_tbl.end()) {
+
+       // Automatically claim any genesis rewards
+       claimgenesis(owner);
+
+       del_bandwidth_table del_bw_tbl( _self, owner.value );
+       auto del_bw_itr = del_bw_tbl.find( owner.value );
+       genesis_tbl.modify( genesis_itr, owner, [&]( auto& genesis ){
+         if(del_bw_itr == del_bw_tbl.end()) {
+           genesis.balance = zero_asset; // receiver consumed all her tokens an row was erased
+         } else {
+           // receiver consumed shorter amount than available delegated_to_self_tokens
+           // if remaining amount is greater or equal than genesis balance
+           // -> genesis balance should stay unchanged
+           // else (remaining amount is less than genesis balance )
+           // -> genesis balance is now decresed to new_delegated_to_self_tokens amount
+           genesis.balance = std::min<asset>(del_bw_itr->net_weight + del_bw_itr->cpu_weight, genesis.balance);
+         }
+       });
+
+       if(genesis_itr->balance == zero_asset) {
+         genesis_tbl.erase( genesis_itr );
+       }
+     }
+   }
+
    void system_contract::delegatebw( name from, name receiver,
                                      asset stake_net_quantity,
                                      asset stake_cpu_quantity, bool transfer )
@@ -459,8 +574,10 @@ namespace eosiosystem {
                     "cannot undelegate bandwidth until the chain is activated (at least 15% of all tokens participate in voting)" );
 
       changebw( from, receiver, -unstake_net_quantity, -unstake_cpu_quantity, false);
-   } // undelegatebw
 
+      // deal with genesis balance
+      change_genesis(receiver);
+   } // undelegatebw
 
    void system_contract::refund( const name owner ) {
       require_auth( owner );

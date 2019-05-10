@@ -238,6 +238,7 @@ namespace eosiosystem {
          static constexpr eosio::name names_account{"eosio.names"_n};
          static constexpr eosio::name saving_account{"eosio.saving"_n};
          static constexpr eosio::name voters_account{"eosio.voters"_n};
+         static constexpr eosio::name genesis_account{"genesis.wax"_n};
          static constexpr symbol ramcore_symbol = symbol(symbol_code("RAMCORE"), 4);
          static constexpr symbol ram_symbol     = symbol(symbol_code("RAM"), 0);
 
@@ -299,7 +300,19 @@ namespace eosiosystem {
          [[eosio::action]]
          void undelegatebw( name from, name receiver,
                             asset unstake_net_quantity, asset unstake_cpu_quantity );
-
+ 
+         /**
+          * Locks tokens on initial period for future rewards.
+          */
+         [[eosio::action]]
+         void awardgenesis( name receiver,
+                            const asset tokens);
+ 
+         /**
+          * Pays all awarded tokens for period since last claim
+          */
+         [[eosio::action]]
+         void claimgenesis( name claimer);
 
          /**
           * Increases receiver's ram quota based upon current price and quantity of
@@ -392,6 +405,8 @@ namespace eosiosystem {
          //defined in delegate_bandwidth.cpp
          void changebw( name from, name receiver,
                         asset stake_net_quantity, asset stake_cpu_quantity, bool transfer );
+
+         void change_genesis( name unstaker );
 
          //defined in voting.hpp
          void update_elected_producers( block_timestamp timestamp );

@@ -26,3 +26,6 @@ After build:
 * The unit tests executable is placed in the _build/tests_ and is named __unit_test__.
 * The contracts are built into a _bin/\<contract name\>_ folder in their respective directories.
 * Finally, simply use __cleos__ to _set contract_ by pointing to the previously mentioned directory.
+
+Misc:
+* Run a single test: `make compile && ./build/tests/unit_test --log_level=all --run_test=eosio_system_tests/claim_once_a_day_during_3_years`
