@@ -4545,7 +4545,6 @@ BOOST_FIXTURE_TEST_CASE( genesis_then_transfer_finally_claim, eosio_system_teste
 
    // Transfer which puts liquid tokens into user11111111 account
    transfer( N(eosio), N(user11111111), liquid_tokens_user1, N(eosio) );
-   transfer( N(eosio), N(user22222222), liquid_tokens_user1, N(eosio) );
 
    // Lock genesis tokens to user11111111
    awardgenesis( N(user11111111), genesis_tokens_user1 );
