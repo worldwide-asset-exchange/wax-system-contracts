@@ -4524,4 +4524,49 @@ BOOST_FIXTURE_TEST_CASE( unstake_decreasing_genesis_balance, eosio_system_tester
 
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE( genesis_then_transfer_finally_claim, eosio_system_tester ) try {
+   cross_15_percent_threshold();
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111), N(user22222222) };
+   for (const auto& a: accounts) {
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
+   }
+
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   // tokens to lock for user11111111
+   const asset locked_4_net = {core_sym::from_string("1.0000")};
+   const asset locked_4_cpu = {core_sym::from_string("1.0000")};
+   const asset genesis_tokens_user1  = locked_4_net + locked_4_cpu;
+   const asset liquid_tokens_user1   = {core_sym::from_string("10.0000")};
+   const asset tokens_user1_to_user2 = {core_sym::from_string("5.0000")};
+
+   // Transfer which puts liquid tokens into user11111111 account
+   transfer( N(eosio), N(user11111111), liquid_tokens_user1, N(eosio) );
+   transfer( N(eosio), N(user22222222), liquid_tokens_user1, N(eosio) );
+
+   // Lock genesis tokens to user11111111
+   awardgenesis( N(user11111111), genesis_tokens_user1 );
+
+   // Then, send some liquid tokens from user11111111 to user22222222
+   transfer( N(user11111111), N(user22222222), tokens_user1_to_user2, N(user11111111) );
+
+   // Before claiming, check user11111111 genesis_balance keeps the same as awarded
+   BOOST_REQUIRE_EQUAL( genesis_tokens_user1, get_genesis_balance( N(user11111111) ) );
+   produce_blocks(1);
+
+   // After 3 years, user11111111 claims full period rewards
+   // So, check liquid balance equals: 
+   // REWARDS_FULL_PERIOD + REMAINING_LIQUID_TOKENS
+   produce_block(fc::days(2*365 + 366));
+   claimgenesis( N(user11111111) );
+   BOOST_REQUIRE_EQUAL( liquid_tokens_user1     // Non-Genesis Tokens
+                        - tokens_user1_to_user2 // Transfered u1 -> u2
+			+ genesis_tokens_user1, // Rewards full period
+                        get_balance(N(user11111111)) );
+
+} FC_LOG_AND_RETHROW()  
+
 BOOST_AUTO_TEST_SUITE_END()
