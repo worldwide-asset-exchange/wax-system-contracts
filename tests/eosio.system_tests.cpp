@@ -4638,6 +4638,16 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self, eosio_system_te
    // this means, user1 genesis balance stays untouched
    BOOST_REQUIRE_EQUAL( genesis_tokens_user1, get_genesis_balance( N(user11111111) ) );
 
+   // Complete full period for claiming rewards
+   produce_block( fc::days(2*365 + 366) );
+   claimgenesis( N(user11111111) );
+
+   // so, user1's balance is now full period rewards
+   // plus already unstaked liquid tokens
+   BOOST_REQUIRE_EQUAL(  genesis_tokens_user1 // -> full period equals initial genesis balance
+		       + net_to_stake_user1 
+		       + cpu_to_stake_user1, get_balance(N(user11111111)) ); 
+
 } FC_LOG_AND_RETHROW()  
 
 BOOST_AUTO_TEST_SUITE_END()
