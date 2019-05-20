@@ -1188,6 +1188,81 @@ BOOST_FIXTURE_TEST_CASE( proxy_actions_affect_producers, eosio_system_tester, * 
 
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(voterproxy_claims, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
+   cross_15_percent_threshold();
+
+   // Voter proxies its votes and claims rewards (happy path)
+   {
+      BOOST_REQUIRE_EQUAL(success(), push_action( N(alice1111111), N(regproxy), mvo()("proxy", "alice1111111")("isproxy", true)));
+      REQUIRE_MATCHING_OBJECT(proxy("alice1111111"), get_voter_info("alice1111111"));
+      
+      issue( "alice1111111", core_sym::from_string("1000.0000"),  config::system_account_name );
+      issue( "bob111111111", core_sym::from_string("1000.0000"),  config::system_account_name );
+      const asset bob_initial_balance = get_balance(N(bob111111111));
+
+      //bob111111111 chooses alice1111111 as a proxy
+      BOOST_REQUIRE_EQUAL( success(), stake( "bob111111111", core_sym::from_string("100.0002"), core_sym::from_string("50.0001") ) );
+      BOOST_REQUIRE_EQUAL( success(), vote( N(bob111111111), vector<account_name>(), "alice1111111" ) );
+      BOOST_TEST_REQUIRE( stake2votes(core_sym::from_string("150.0003")) == get_voter_info( "alice1111111" )["proxied_vote_weight"].as_double() );
+
+      produce_block(fc::hours(24));
+
+      BOOST_REQUIRE_EQUAL(success(), push_action(N(bob111111111), N(voterclaim), mvo()("owner", "bob111111111")));
+
+      const asset bob_balance = get_balance(N(bob111111111));
+
+      BOOST_REQUIRE(bob_balance > bob_initial_balance);
+   }
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(voterproxy_rate, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
+   cross_15_percent_threshold();
+
+   std::vector<account_name> producer_names;
+   {
+      producer_names.reserve('z' - 'a' + 1);
+      {
+         const std::string root("producer");
+         for ( char c = 'a'; c <= 'z'; ++c ) {
+            producer_names.emplace_back(root + std::string(1, c));
+         }
+      }
+      setup_producer_accounts(producer_names);
+      for (const auto& p: producer_names) {
+         BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+         produce_blocks(1);
+         ilog( "------ get pro----------" );
+         wdump((p));
+         BOOST_TEST(0 == get_producer_info(p)["total_votes"].as<double>());
+      }
+   }
+
+   produce_block(fc::hours(1));
+
+   // Valid updating vote-rate
+   {
+      issue( "alice1111111", core_sym::from_string("1000.0000"),  config::system_account_name );
+      BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111", core_sym::from_string("100.0002"), core_sym::from_string("50.0001") ) );
+      BOOST_REQUIRE_EQUAL(success(), vote(N(alice1111111), vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
+
+      produce_block(fc::hours(1));
+
+      BOOST_REQUIRE_EQUAL(success(), push_action( N(producera), N(regproxy), mvo()("proxy", "producera")("isproxy", true)));
+      REQUIRE_MATCHING_OBJECT(proxy("producera"), get_voter_info("producera"));
+      BOOST_REQUIRE_EQUAL( success(), vote( N(alice1111111), vector<account_name>(), "producera" ) );
+
+      auto initial_change_rate = get_voter_info("alice1111111" )["unpaid_voteshare_change_rate"].as_double();
+
+      produce_block(fc::hours(24*7*13));
+
+      BOOST_REQUIRE_EQUAL( success(), vote( N(alice1111111), vector<account_name>(), "producera" ) );
+      auto current_change_rate = get_voter_info("alice1111111" )["unpaid_voteshare_change_rate"].as_double();
+      BOOST_REQUIRE_EQUAL(initial_change_rate * 2, current_change_rate);
+   }
+   
+} FC_LOG_AND_RETHROW()
+
 BOOST_FIXTURE_TEST_CASE(voter_pay_gstate_consistency, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
    // invariant: the global state total_unpaid_voteshare and total_voteshare_change_rate values should match the sum of all voters
 

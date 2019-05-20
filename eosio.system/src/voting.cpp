@@ -354,7 +354,7 @@ namespace eosiosystem {
                     "cannot claim rewards until the chain is activated (at least 15% of all tokens participate in voting)" );
 
       const auto& voter = _voters.get(owner.value, "voter does not exist.");
-      
+
       eosio_assert(voter.unpaid_voteshare_last_updated != time_point(), "you need to vote first! unpaid_voteshare_last_updated is zero.");
 
       auto ct = current_time_point();
@@ -371,7 +371,7 @@ namespace eosiosystem {
       int64_t reward = _gstate.voters_bucket * (unpaid_voteshare / _gstate.total_unpaid_voteshare);
       eosio_assert(reward > 0, "no rewards available.");
 
-      if(reward > _gstate.voters_bucket){
+      if (reward > _gstate.voters_bucket) {
          reward = _gstate.voters_bucket;
       }
 
@@ -396,7 +396,7 @@ namespace eosiosystem {
          new_unpaid_voteshare += voter_itr->unpaid_voteshare_change_rate * double((ct - voter_itr->unpaid_voteshare_last_updated).count() / 1E6);
       }
       double new_change_rate{0};
-      if(voter_itr->producers.size() >= 16){
+      if(voter_itr->producers.size() >= 16 || voter_itr->proxy){
          new_change_rate = stake2vote(voter_itr->staked);
       }
       double change_rate_delta = new_change_rate - voter_itr->unpaid_voteshare_change_rate;
