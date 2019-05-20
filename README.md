@@ -28,4 +28,4 @@ After build:
 * Finally, simply use __cleos__ to _set contract_ by pointing to the previously mentioned directory.
 
 Misc:
-* Run a single test: `make compile && ./build/tests/unit_test --log_level=all --run_test=eosio_system_tests/claim_once_a_day_during_3_years`
+* Run a single test: `make compile && ./build/tests/unit_test --log_level=all --run_test=eosio_system_tests/genesis_plus_delegate_extra_bw_to_self`

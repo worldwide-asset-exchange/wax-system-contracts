@@ -300,14 +300,14 @@ namespace eosiosystem {
          [[eosio::action]]
          void undelegatebw( name from, name receiver,
                             asset unstake_net_quantity, asset unstake_cpu_quantity );
- 
+
          /**
           * Locks tokens on initial period for future rewards.
           */
          [[eosio::action]]
          void awardgenesis( name receiver,
                             const asset tokens);
- 
+
          /**
           * Pays all awarded tokens for period since last claim
           */

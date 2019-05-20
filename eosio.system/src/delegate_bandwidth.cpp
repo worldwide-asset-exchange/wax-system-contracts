@@ -501,6 +501,7 @@ namespace eosiosystem {
          cb.last_claim_time += days(elapsed_days);
       });
 
+
       INLINE_ACTION_SENDER(eosio::token, transfer)(
          token_account, { {genesis_account, "active"_n} },
          { genesis_account, eosio::name(claimer), payable_rewards, std::string("claimgenesis") }
@@ -529,9 +530,12 @@ namespace eosiosystem {
        // Automatically claim any genesis rewards
        claimgenesis(owner);
 
+       genesis_balance_table genesis_tbl2( _self, owner.value );
+       auto genesis_itr2 = genesis_tbl2.find( core_symbol().code().raw() );
+
        del_bandwidth_table del_bw_tbl( _self, owner.value );
        auto del_bw_itr = del_bw_tbl.find( owner.value );
-       genesis_tbl.modify( genesis_itr, owner, [&]( auto& genesis ){
+       genesis_tbl2.modify( genesis_itr2, owner, [&]( auto& genesis ){
          if(del_bw_itr == del_bw_tbl.end()) {
            genesis.balance = zero_asset; // receiver consumed all her tokens an row was erased
          } else {
@@ -544,8 +548,8 @@ namespace eosiosystem {
          }
        });
 
-       if(genesis_itr->balance == zero_asset) {
-         genesis_tbl.erase( genesis_itr );
+       if(genesis_itr2->balance == zero_asset) {
+         genesis_tbl2.erase( genesis_itr2 );
        }
      }
    }
