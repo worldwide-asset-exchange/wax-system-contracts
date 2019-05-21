@@ -4722,4 +4722,81 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self_no_unstake, eosi
 
 } FC_LOG_AND_RETHROW()
 
+
+BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_someone_else, eosio_system_tester ) try {
+   cross_15_percent_threshold();
+   const auto three_years = 2*365 + 366;
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111), N(user22222222) };
+   for (const auto& a: accounts) {
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
+   }
+
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   // Placeholder for 0 tokens
+   const asset zero_asset = {core_sym::from_string("0.0000")};
+
+   // tokens to GENESIS-LOCK for user11111111
+   const asset locked_4_net = {core_sym::from_string("2.7400")};
+   const asset locked_4_cpu = {core_sym::from_string("2.7400")};
+   const asset half_locked_4_net = {core_sym::from_string("1.3700")};
+   const asset half_locked_4_cpu = {core_sym::from_string("1.3700")};
+   const asset genesis_tokens_user1 = locked_4_net + locked_4_cpu;
+
+   // liquid tokens to (be transfered to) user11111111
+   const asset net_to_stake_user2 = {core_sym::from_string("5.0000")};
+   const asset cpu_to_stake_user2 = {core_sym::from_string("5.0000")};
+   const asset liquid_tokens_user1 = net_to_stake_user2 + cpu_to_stake_user2;
+
+   // check user1's liquid tokens are zero before receiving any tokens
+   BOOST_REQUIRE_EQUAL(zero_asset, get_balance(N(user11111111)) );
+
+   // Transfer which puts liquid tokens into user11111111 account
+   transfer( N(eosio), N(user11111111), liquid_tokens_user1, N(eosio) );
+   BOOST_REQUIRE_EQUAL(liquid_tokens_user1, get_balance(N(user11111111)) );
+
+   // user1 stakes all her liquid tokens to user2 (delegates extra bw to her friend)
+   BOOST_REQUIRE_EQUAL( success(), stake( N(user11111111), N(user22222222), net_to_stake_user2, cpu_to_stake_user2 ));
+
+   // in Between liquid tokens stake/unstake user1 locks genesis tokens
+   awardgenesis( N(user11111111), genesis_tokens_user1 );
+
+   // check liquid tokens are zero after staking them all
+   BOOST_REQUIRE_EQUAL(zero_asset, get_balance(N(user11111111)) );
+
+   // check total staked is now initially delegated-to-without-transfer
+   // plus all liquid tokens which were staked
+   // plus awardgenesis'ed tokens
+   auto total = get_total_stake( N(user11111111) );
+   BOOST_REQUIRE_EQUAL( net + locked_4_net, total["net_weight"].as<asset>());
+   BOOST_REQUIRE_EQUAL( cpu + locked_4_cpu, total["cpu_weight"].as<asset>());
+
+   // unstake half previously staked tokens after half the award interval (1.5 years)
+   produce_block( fc::days(three_years / 2) );
+   BOOST_REQUIRE_EQUAL( success(), unstake( N(user11111111), N(user11111111), half_locked_4_net, half_locked_4_cpu ));
+
+   // rewards for 1.5 year period should be liquid
+   BOOST_REQUIRE_EQUAL( half_locked_4_net + half_locked_4_cpu, get_balance(N(user11111111)) );
+
+   // after 3 days refund takes place
+   // so, user1's balance is only liquid tokens
+   produce_block( fc::days(3) );
+   BOOST_REQUIRE_EQUAL( locked_4_net + locked_4_cpu, get_balance(N(user11111111)) );
+
+   // while remaining half of awardgenesis'ed remain staked because
+   BOOST_REQUIRE_EQUAL( half_locked_4_net + half_locked_4_cpu, get_genesis_balance( N(user11111111) ) );
+
+   // Complete full period for claiming rewards
+   produce_block( fc::days(three_years) );
+   claimgenesis( N(user11111111) );
+
+   // so, user1's balance is now full period rewards
+   // plus already unstaked liquid tokens
+   BOOST_REQUIRE_EQUAL( locked_4_net + locked_4_cpu + half_locked_4_net, get_balance(N(user11111111)));
+
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()
