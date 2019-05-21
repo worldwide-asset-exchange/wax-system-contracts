@@ -18,6 +18,7 @@
 
 #include <cmath>
 #include <map>
+#include <algorithm>
 
 namespace eosiosystem {
    using eosio::asset;
@@ -479,32 +480,41 @@ namespace eosiosystem {
      delegatebw( genesis_account, receiver, to_net, to_cpu, true);
    }
 
+
+   uint32_t system_contract::get_elapsed_days(const time_point & first_award_time, const time_point & last_claim_time) {
+      const auto ct = std::min(current_time_point(), first_award_time + days(days_in_three_years));
+      const microseconds elapsed_usec = ct - last_claim_time;
+      const auto elapsed_days = elapsed_usec.count() / useconds_per_day;
+      return elapsed_days;
+   }
+
    void system_contract::claimgenesis( name claimer )
    {
+
       genesis_balance_table genesis_tbl( _self, claimer.value );
 
-      // Accounting for 2020 being a leap year
-      const uint32_t days_in_three_years = (2*365 + 366);
+      const auto& claimer_balance = genesis_tbl.get( core_symbol().code().raw(), "no genesis balance object found" );
 
-      const auto& claimer_balance = genesis_tbl.get( core_symbol().code().raw(), "no balance object found" );
-
-      const auto ct = std::min(current_time_point(), claimer_balance.first_award_time + days(days_in_three_years));
-
-      const auto elapsed_usec = ct - claimer_balance.last_claim_time;
-      const auto elapsed_days = elapsed_usec.count() / useconds_per_day;
+      const auto elapsed_days = get_elapsed_days(claimer_balance.first_award_time, claimer_balance.last_claim_time);
       eosio_assert( elapsed_days > 0, "at least one day since award is required" );
-
-      const auto rewards_last_period = claimer_balance.balance.amount * elapsed_days * ( 1 / static_cast<double>(days_in_three_years) );
-      const asset payable_rewards ( rewards_last_period, core_symbol() );
 
       genesis_tbl.modify( claimer_balance, get_self(), [&]( auto& cb ) {
          cb.last_claim_time += days(elapsed_days);
       });
+ 
+      // Deal with paying
+      const auto rewards_last_period = claimer_balance.balance.amount * elapsed_days * ( 1 / static_cast<double>(days_in_three_years) );
+      const asset payable_rewards ( rewards_last_period, core_symbol() );
 
       INLINE_ACTION_SENDER(eosio::token, transfer)(
          token_account, { {genesis_account, "active"_n} },
          { genesis_account, eosio::name(claimer), payable_rewards, std::string("claimgenesis") }
       );
+   }
+
+   bool system_contract::has_genesis_balance( name owner ) {
+       genesis_balance_table genesis_tbl( _self, owner.value );
+       return genesis_tbl.find( core_symbol().code().raw() ) != genesis_tbl.end();
    }
 
    void system_contract::change_genesis( name owner ) {
@@ -518,34 +528,35 @@ namespace eosiosystem {
      // Since changebw succedded, receiver had enough delegated_to_self_tokens,
      // and now we should check if receiver also has a genesis balance which might
      // be decreased by DIFF (above defined)
+
      // Let's check receiver HAS a genesis balance
-     asset zero_asset( 0, core_symbol() );
-     genesis_balance_table genesis_tbl( _self, owner.value );
-     auto genesis_itr = genesis_tbl.find( core_symbol().code().raw() );
+     if( has_genesis_balance(owner) ) {
 
-     // If receiver HAS a genesis balance, either she consumed them all or there's a remaining amount
-     if(genesis_itr != genesis_tbl.end()) {
-
-       // Automatically claim any genesis rewards
        claimgenesis(owner);
+
+       genesis_balance_table genesis_tbl( _self, owner.value );
+       const auto & owner_genesis = genesis_tbl.get( core_symbol().code().raw(), "no balance object found");
+
+       const asset zero_asset( 0, core_symbol() );
 
        del_bandwidth_table del_bw_tbl( _self, owner.value );
        auto del_bw_itr = del_bw_tbl.find( owner.value );
-       genesis_tbl.modify( genesis_itr, owner, [&]( auto& genesis ){
+       genesis_tbl.modify( owner_genesis, owner, [&]( auto& genesis ){
+
          if(del_bw_itr == del_bw_tbl.end()) {
-           genesis.balance = zero_asset; // receiver consumed all her tokens an row was erased
+           genesis.balance = zero_asset; // receiver consumed all her tokens an row will be erased
          } else {
            // receiver consumed shorter amount than available delegated_to_self_tokens
            // if remaining amount is greater or equal than genesis balance
            // -> genesis balance should stay unchanged
            // else (remaining amount is less than genesis balance )
-           // -> genesis balance is now decresed to new_delegated_to_self_tokens amount
+           // -> genesis balance is now decreased to new_delegated_to_self_tokens amount
            genesis.balance = std::min<asset>(del_bw_itr->net_weight + del_bw_itr->cpu_weight, genesis.balance);
          }
        });
 
-       if(genesis_itr->balance == zero_asset) {
-         genesis_tbl.erase( genesis_itr );
+       if( owner_genesis.balance == zero_asset ){
+           genesis_tbl.erase(owner_genesis);
        }
      }
    }

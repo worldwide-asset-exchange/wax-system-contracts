@@ -15,6 +15,7 @@ namespace eosiosystem {
    const uint32_t blocks_per_hour       = 2 * 3600;
    const int64_t  useconds_per_day      = 24 * 3600 * int64_t(1000000);
    const int64_t  useconds_per_year     = seconds_per_year*1000000ll;
+   const uint32_t days_in_three_years   = 2*365 + 366; // 2020 leap year
 
    void system_contract::onblock( ignore<block_header> ) {
       using namespace eosio;

@@ -407,6 +407,9 @@ namespace eosiosystem {
                         asset stake_net_quantity, asset stake_cpu_quantity, bool transfer );
 
          void change_genesis( name unstaker );
+         bool has_genesis_balance( name owner );
+
+         uint32_t get_elapsed_days(const time_point & first_award_time, const time_point & last_claim_time);
 
          //defined in voting.hpp
          void update_elected_producers( block_timestamp timestamp );
