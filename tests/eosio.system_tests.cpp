@@ -4584,10 +4584,10 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self, eosio_system_te
    const asset zero_asset = {core_sym::from_string("0.0000")};
 
    // tokens to GENESIS-LOCK for user11111111
-   const asset locked_4_net = {core_sym::from_string("1.0000")};
-   const asset locked_4_cpu = {core_sym::from_string("1.0000")};
+   const asset locked_4_net = {core_sym::from_string("2.7400")};
+   const asset locked_4_cpu = {core_sym::from_string("2.7400")};
    const asset genesis_tokens_user1 = locked_4_net + locked_4_cpu;
-   const asset one_day_genesis_rewards = {core_sym::from_string("0.0018")};
+   const asset one_day_genesis_rewards = {core_sym::from_string("0.0050")};
 
    // liquid tokens to (be transfered to) user11111111
    const asset net_to_stake_user1 = {core_sym::from_string("5.0000")};
@@ -4620,16 +4620,16 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self, eosio_system_te
    // unstake all previously staked tokens
    // must wait 1 day since awardgenesis call
    // otherwise claimgenesis inside undelegatebw fails
-   produce_block( fc::days(2) );
+   produce_block( fc::days(1) );
    BOOST_REQUIRE_EQUAL( success(), unstake( N(user11111111), N(user11111111), net_to_stake_user1, cpu_to_stake_user1 ));
 
    // rewards for 1 day period should be liquid
-   BOOST_REQUIRE_EQUAL( one_day_genesis_rewards + one_day_genesis_rewards, get_balance(N(user11111111)) );
+   BOOST_REQUIRE_EQUAL( one_day_genesis_rewards, get_balance(N(user11111111)) );
 
    // after 3 days refund takes place
    // so, user1's balance is only liquid tokens
    produce_block( fc::days(3) );
-   BOOST_REQUIRE_EQUAL(  one_day_genesis_rewards + one_day_genesis_rewards
+   BOOST_REQUIRE_EQUAL(  one_day_genesis_rewards
 		       + net_to_stake_user1
 		       + cpu_to_stake_user1, get_balance(N(user11111111)) );
 
@@ -4646,11 +4646,11 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self, eosio_system_te
    // plus already unstaked liquid tokens
    BOOST_REQUIRE_EQUAL(  genesis_tokens_user1 // -> full period equals initial genesis balance
 		       + net_to_stake_user1
-		       + cpu_to_stake_user1, get_balance(N(user11111111)) );
+		       + cpu_to_stake_user1, get_balance(N(user11111111)));
 
 } FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self2, eosio_system_tester ) try {
+BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self_no_unstake, eosio_system_tester ) try {
    cross_15_percent_threshold();
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
@@ -4666,10 +4666,10 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self2, eosio_system_t
    const asset zero_asset = {core_sym::from_string("0.0000")};
 
    // tokens to GENESIS-LOCK for user11111111
-   const asset locked_4_net = {core_sym::from_string("1.0000")};
-   const asset locked_4_cpu = {core_sym::from_string("1.0000")};
+   const asset locked_4_net = {core_sym::from_string("2.7400")};
+   const asset locked_4_cpu = {core_sym::from_string("2.7400")};
    const asset genesis_tokens_user1 = locked_4_net + locked_4_cpu;
-   const asset one_day_genesis_rewards = {core_sym::from_string("0.0018")};
+   const asset one_day_genesis_rewards = {core_sym::from_string("0.0050")};
 
    // liquid tokens to (be transfered to) user11111111
    const asset net_to_stake_user1 = {core_sym::from_string("5.0000")};
@@ -4702,22 +4702,13 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self2, eosio_system_t
    // unstake all previously staked tokens
    // must wait 1 day since awardgenesis call
    // otherwise claimgenesis inside undelegatebw fails
-   produce_block( fc::days(2) );
+   produce_block( fc::days(1) );
    BOOST_REQUIRE_EQUAL( success(), claimgenesis( N(user11111111) ) );
 
    // rewards for 1 day period should be liquid
-   BOOST_REQUIRE_EQUAL( one_day_genesis_rewards + one_day_genesis_rewards, get_balance(N(user11111111)) );
+   BOOST_REQUIRE_EQUAL( one_day_genesis_rewards, get_balance(N(user11111111)) );
 
-   // after 3 days refund takes place
-   // so, user1's balance is only liquid tokens
-   // produce_block( fc::days(3) );
-   // BOOST_REQUIRE_EQUAL(  one_day_genesis_rewards + one_day_genesis_rewards
-		//        + net_to_stake_user1
-		//        + cpu_to_stake_user1, get_balance(N(user11111111)) );
-
-   // while awardgenesis'ed remain staked because
-   // amount being unstaked is <= staked_liquid_tokens
-   // this means, user1 genesis balance stays untouched
+   // user1 genesis balance stays untouched
    BOOST_REQUIRE_EQUAL( genesis_tokens_user1, get_genesis_balance( N(user11111111) ) );
 
    // Complete full period for claiming rewards

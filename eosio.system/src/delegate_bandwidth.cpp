@@ -508,6 +508,11 @@ namespace eosiosystem {
       );
    }
 
+   bool system_contract::has_genesis_balance( name owner ) {
+     genesis_balance_table genesis_tbl( _self, owner.value );
+     return genesis_tbl.find( core_symbol().code().raw() ) != genesis_tbl.end();
+   }
+
    void system_contract::change_genesis( name owner ) {
      // Unstaked amount could be greater than TOKENS DELEGATED TO SELF
      // If this is the case, GENESIS BALANCE should be reduced by the DIFFERENCE:
@@ -520,22 +525,21 @@ namespace eosiosystem {
      // and now we should check if receiver also has a genesis balance which might
      // be decreased by DIFF (above defined)
      // Let's check receiver HAS a genesis balance
-     asset zero_asset( 0, core_symbol() );
-     genesis_balance_table genesis_tbl( _self, owner.value );
-     auto genesis_itr = genesis_tbl.find( core_symbol().code().raw() );
 
      // If receiver HAS a genesis balance, either she consumed them all or there's a remaining amount
-     if(genesis_itr != genesis_tbl.end()) {
+     if( has_genesis_balance(owner) ) {
 
        // Automatically claim any genesis rewards
        claimgenesis(owner);
 
-       genesis_balance_table genesis_tbl2( _self, owner.value );
-       auto genesis_itr2 = genesis_tbl2.find( core_symbol().code().raw() );
+       genesis_balance_table genesis_tbl( _self, owner.value );
+       const auto& owner_genesis = genesis_tbl.get( core_symbol().code().raw(), "no balance object found" );
+
+       const asset zero_asset( 0, core_symbol() );
 
        del_bandwidth_table del_bw_tbl( _self, owner.value );
        auto del_bw_itr = del_bw_tbl.find( owner.value );
-       genesis_tbl2.modify( genesis_itr2, owner, [&]( auto& genesis ){
+       genesis_tbl.modify( owner_genesis, owner, [&]( auto& genesis ){
          if(del_bw_itr == del_bw_tbl.end()) {
            genesis.balance = zero_asset; // receiver consumed all her tokens an row was erased
          } else {
@@ -548,8 +552,8 @@ namespace eosiosystem {
          }
        });
 
-       if(genesis_itr2->balance == zero_asset) {
-         genesis_tbl2.erase( genesis_itr2 );
+       if(owner_genesis.balance == zero_asset) {
+         genesis_tbl.erase( owner_genesis );
        }
      }
    }
