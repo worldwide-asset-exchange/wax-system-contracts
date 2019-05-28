@@ -306,7 +306,7 @@ namespace eosiosystem {
           */
          [[eosio::action]]
          void awardgenesis( name receiver,
-                            const asset tokens);
+                            const asset tokens, uint64_t nonce );
  
          /**
           * Pays all awarded tokens for period since last claim

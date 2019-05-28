@@ -249,11 +249,11 @@ public:
       return push_transaction( trx );
    }
 
-   action_result awardgenesis( const account_name& receiver, const asset& tokens ) {
+   action_result awardgenesis( const account_name& receiver, const asset& tokens, uint64_t nonce ) {
       return push_action(
 	         N(genesis.wax),
 	         N(awardgenesis),
-		 mvo()( "receiver",receiver)("tokens",tokens) );
+		 mvo()( "receiver",receiver)("tokens",tokens)("nonce",nonce) );
    }
 
    action_result claimgenesis( const account_name& claimer ) {

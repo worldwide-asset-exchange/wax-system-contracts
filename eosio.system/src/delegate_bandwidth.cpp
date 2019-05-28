@@ -75,6 +75,17 @@ namespace eosiosystem {
       EOSLIB_SERIALIZE( refund_request, (owner)(request_time)(net_amount)(cpu_amount) )
    };
 
+   struct [[eosio::table, eosio::contract("eosio.system")]] genesis_nonce {
+      uint64_t       nonce;
+      eosio::asset   awarded;
+      name           receiver;
+
+      uint64_t primary_key() const { return nonce; }
+
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE(genesis_nonce, (nonce)(awarded)(receiver))
+   };
+
    struct [[eosio::table, eosio::contract("eosio.system")]] genesis_tokens {
       time_point      first_award_time;
       time_point      last_claim_time;
@@ -93,7 +104,8 @@ namespace eosiosystem {
    typedef eosio::multi_index< "userres"_n, user_resources >      user_resources_table;
    typedef eosio::multi_index< "delband"_n, delegated_bandwidth > del_bandwidth_table;
    typedef eosio::multi_index< "refunds"_n, refund_request >      refunds_table;
-   typedef eosio::multi_index< "genesis"_n, genesis_tokens >      genesis_balance_table ;
+   typedef eosio::multi_index< "genesis"_n, genesis_tokens >      genesis_balance_table;
+   typedef eosio::multi_index< "genonce"_n, genesis_nonce >       genesis_nonce_table;
 
 
 
@@ -450,9 +462,18 @@ namespace eosiosystem {
       }
    }
 
-   void system_contract::awardgenesis( name receiver, const asset tokens)
+   void system_contract::awardgenesis( name receiver, const asset tokens, uint64_t nonce )
    {
      require_auth(genesis_account);
+
+     genesis_nonce_table genesis_nonce_tbl(_self, _self.value);
+     auto it = genesis_nonce_tbl.find(nonce);
+     eosio_assert(it == genesis_nonce_tbl.end(), "Duplicated call: nonce already exists.");
+     genesis_nonce_tbl.emplace(genesis_account, [&]( auto& genesis_nonce ){
+        genesis_nonce.nonce = nonce;
+        genesis_nonce.awarded = tokens;
+        genesis_nonce.receiver = receiver;
+     });
 
      const time_point ct = current_time_point();
 

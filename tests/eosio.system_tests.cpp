@@ -4081,8 +4081,29 @@ BOOST_FIXTURE_TEST_CASE( buy_pin_sell_ram, eosio_system_tester ) try {
 
 } FC_LOG_AND_RETHROW()
 
+
+BOOST_FIXTURE_TEST_CASE( claim_genesis_duplicated_nonce, eosio_system_tester ) try {
+   const uint64_t nonce = 1;
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> accounts = {N(genesis.wax), N(user11111111), N(user22222222) };
+   for (const auto& a: accounts) {
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
+   }
+
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
+   const asset genesis_tokens_user2{core_sym::from_string("1.0000")};
+
+   BOOST_REQUIRE_EQUAL(success(), awardgenesis( N(user11111111), genesis_tokens_user1, nonce));
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("Duplicated call: nonce already exists."), awardgenesis( N(user22222222), genesis_tokens_user2, nonce));
+} FC_LOG_AND_RETHROW()
+
 BOOST_FIXTURE_TEST_CASE( award_genesis, eosio_system_tester ) try {
 
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = {N(genesis.wax), N(user11111111), N(user22222222), N(user33333333) };
@@ -4097,9 +4118,9 @@ BOOST_FIXTURE_TEST_CASE( award_genesis, eosio_system_tester ) try {
    const asset genesis_tokens_user2{core_sym::from_string("1.0000")};
    const asset genesis_tokens_user3{core_sym::from_string("73.0000")};
 
-   auto r1 = awardgenesis( N(user11111111), genesis_tokens_user1);
-   auto r2 = awardgenesis( N(user22222222), genesis_tokens_user2);
-   auto r3 = awardgenesis( N(user33333333), genesis_tokens_user3);
+   auto r1 = awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1);
+   auto r2 = awardgenesis( N(user22222222), genesis_tokens_user2, nonce + 2);
+   auto r3 = awardgenesis( N(user33333333), genesis_tokens_user3, nonce + 3);
 
    // Check all actions succeed
    BOOST_REQUIRE_EQUAL( success(), r1 );
@@ -4128,6 +4149,7 @@ BOOST_FIXTURE_TEST_CASE( award_genesis, eosio_system_tester ) try {
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( claim_genesis_too_late, eosio_system_tester ) try {
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = {N(genesis.wax), N(user11111111), N(user22222222) };
@@ -4142,8 +4164,8 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_too_late, eosio_system_tester ) try {
    const asset genesis_tokens_user2{core_sym::from_string("1.0000")};
 
    // Lock genesis tokens to users
-   awardgenesis( N(user11111111), genesis_tokens_user1);
-   awardgenesis( N(user22222222), genesis_tokens_user2);
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1);
+   awardgenesis( N(user22222222), genesis_tokens_user2, nonce + 2);
 
    // user11111111 claims full period rewards 1 year after period end
    produce_block(fc::days(3*365 + 366));
@@ -4153,6 +4175,7 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_too_late, eosio_system_tester ) try {
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( claim_genesis_no_rewards_yet, eosio_system_tester ) try {
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = {N(genesis.wax), N(user11111111), N(user22222222), N(user33333333) };
@@ -4168,9 +4191,9 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_no_rewards_yet, eosio_system_tester ) try
    const asset genesis_tokens_user3{core_sym::from_string("73.0000")};
 
    // Lock genesis tokens to users
-   awardgenesis( N(user11111111), genesis_tokens_user1);
-   awardgenesis( N(user22222222), genesis_tokens_user2);
-   awardgenesis( N(user33333333), genesis_tokens_user3);
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1);
+   awardgenesis( N(user22222222), genesis_tokens_user2, nonce + 2);
+   awardgenesis( N(user33333333), genesis_tokens_user3, nonce + 3);
 
    // Wait 23h 55m hours
    produce_block(fc::seconds(23 * 3600 + 55 * 60));
@@ -4183,6 +4206,7 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_no_rewards_yet, eosio_system_tester ) try
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( claim_genesis_1_day_rewards, eosio_system_tester ) try {
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = {N(genesis.wax), N(user11111111), N(user22222222), N(user33333333) };
@@ -4198,9 +4222,9 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_1_day_rewards, eosio_system_tester ) try 
    const asset genesis_tokens_user3{core_sym::from_string("73.0000")};
 
    // Lock genesis tokens to users
-   awardgenesis( N(user11111111), genesis_tokens_user1);
-   awardgenesis( N(user22222222), genesis_tokens_user2);
-   awardgenesis( N(user33333333), genesis_tokens_user3);
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1);
+   awardgenesis( N(user22222222), genesis_tokens_user2, nonce + 2);
+   awardgenesis( N(user33333333), genesis_tokens_user3, nonce + 3);
 
    // Wait 1 day and claim period reward tokens
    const int64_t useconds_per_day = 24 * 3600 * int64_t(1000000);
@@ -4249,6 +4273,7 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_1_day_rewards, eosio_system_tester ) try 
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( claim_genesis_3_years_reward, eosio_system_tester ) try {
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111), N(user22222222), N(user33333333) };
@@ -4264,9 +4289,9 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_3_years_reward, eosio_system_tester ) try
    const asset genesis_tokens_user3{core_sym::from_string("73.0000")};
 
    // Lock genesis tokens to users
-   awardgenesis( N(user11111111), genesis_tokens_user1);
-   awardgenesis( N(user22222222), genesis_tokens_user2);
-   awardgenesis( N(user33333333), genesis_tokens_user3);
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1);
+   awardgenesis( N(user22222222), genesis_tokens_user2, nonce + 2);
+   awardgenesis( N(user33333333), genesis_tokens_user3, nonce + 3);
 
    // Wait 3 years (1096 days) and claim whole period reward tokens
    produce_block( fc::days(1096) );
@@ -4314,6 +4339,7 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_3_years_reward, eosio_system_tester ) try
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( claim_more_than_once_a_day, eosio_system_tester ) try {
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111) };
@@ -4328,7 +4354,7 @@ BOOST_FIXTURE_TEST_CASE( claim_more_than_once_a_day, eosio_system_tester ) try {
    const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
 
    // Lock genesis tokens to users
-   awardgenesis( N(user11111111), genesis_tokens_user1 );
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
 
    // claiming tokens once an hour within 1 day since lock-up
    for(auto i=1; i <= 23 ; ++i) {
@@ -4346,6 +4372,7 @@ BOOST_FIXTURE_TEST_CASE( claim_more_than_once_a_day, eosio_system_tester ) try {
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( claim_half_period_twice, eosio_system_tester ) try {
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111) };
@@ -4361,7 +4388,7 @@ BOOST_FIXTURE_TEST_CASE( claim_half_period_twice, eosio_system_tester ) try {
    asset user1_balance;
 
    // Lock genesis tokens to user11111111
-   awardgenesis( N(user11111111), genesis_tokens_user1 );
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
 
    // Wait initial 1.5 years (1096/2 days) and claim first half period reward tokens
    produce_block( fc::days(548) );
@@ -4378,6 +4405,7 @@ BOOST_FIXTURE_TEST_CASE( claim_half_period_twice, eosio_system_tester ) try {
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( claim_once_a_day_during_3_years, eosio_system_tester ) try {
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111) };
@@ -4392,7 +4420,7 @@ BOOST_FIXTURE_TEST_CASE( claim_once_a_day_during_3_years, eosio_system_tester ) 
    const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
 
    // Lock genesis tokens to user11111111
-   awardgenesis( N(user11111111), genesis_tokens_user1 );
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
 
    // Check acc is incrementally equal
    asset acc = core_sym::from_string("0.0000");
@@ -4412,6 +4440,7 @@ BOOST_FIXTURE_TEST_CASE( claim_once_a_day_during_3_years, eosio_system_tester ) 
 
 BOOST_FIXTURE_TEST_CASE( unstake_all_genesis_balance_after_1_day, eosio_system_tester ) try {
    cross_15_percent_threshold();
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111) };
@@ -4429,7 +4458,7 @@ BOOST_FIXTURE_TEST_CASE( unstake_all_genesis_balance_after_1_day, eosio_system_t
    const asset rewards_1_day_user1{core_sym::from_string("0.0018")};
 
    // Lock genesis tokens to user11111111
-   awardgenesis( N(user11111111), genesis_tokens_user1 );
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
 
    // unstake locked amount one day after locking
    produce_block( fc::hours(24) );
@@ -4448,6 +4477,7 @@ BOOST_FIXTURE_TEST_CASE( unstake_all_genesis_balance_after_1_day, eosio_system_t
 
 BOOST_FIXTURE_TEST_CASE( unstake_without_decreasing_genesis_balance, eosio_system_tester ) try {
    cross_15_percent_threshold();
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111) };
@@ -4465,7 +4495,7 @@ BOOST_FIXTURE_TEST_CASE( unstake_without_decreasing_genesis_balance, eosio_syste
    const asset rewards_1_day_user1{core_sym::from_string("0.0018")};
 
    // Lock genesis tokens to user11111111
-   awardgenesis( N(user11111111), genesis_tokens_user1 );
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
 
    // tokens to stake besides genesis balance
    const asset net_tokens_user1{core_sym::from_string("10.0000")};
@@ -4493,6 +4523,7 @@ BOOST_FIXTURE_TEST_CASE( unstake_without_decreasing_genesis_balance, eosio_syste
 
 BOOST_FIXTURE_TEST_CASE( unstake_withing_1_day_since_locking, eosio_system_tester ) try {
    cross_15_percent_threshold();
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111) };
@@ -4507,7 +4538,7 @@ BOOST_FIXTURE_TEST_CASE( unstake_withing_1_day_since_locking, eosio_system_teste
    const asset genesis_tokens_user1{core_sym::from_string("5.0000")};
 
    // Lock genesis tokens to user11111111
-   awardgenesis( N(user11111111), genesis_tokens_user1 );
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
 
    // tokens to stake besides genesis balance
    const asset net_tokens_user1{core_sym::from_string("0.5000")};
@@ -4533,6 +4564,7 @@ BOOST_FIXTURE_TEST_CASE( unstake_withing_1_day_since_locking, eosio_system_teste
 
 BOOST_FIXTURE_TEST_CASE( unstake_decreasing_genesis_balance, eosio_system_tester ) try {
    cross_15_percent_threshold();
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111) };
@@ -4552,7 +4584,7 @@ BOOST_FIXTURE_TEST_CASE( unstake_decreasing_genesis_balance, eosio_system_tester
    const asset rewards_1_day_user1{core_sym::from_string("0.0018")};
 
    // Lock genesis tokens to user11111111
-   awardgenesis( N(user11111111), genesis_tokens_user1 );
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
 
    // tokens to stake besides genesis balance
    const asset net_tokens_user1{core_sym::from_string("10.0000")};
@@ -4601,6 +4633,7 @@ BOOST_FIXTURE_TEST_CASE( unstake_decreasing_genesis_balance, eosio_system_tester
 
 BOOST_FIXTURE_TEST_CASE( genesis_then_transfer_finally_claim, eosio_system_tester ) try {
    cross_15_percent_threshold();
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111), N(user22222222) };
@@ -4622,7 +4655,7 @@ BOOST_FIXTURE_TEST_CASE( genesis_then_transfer_finally_claim, eosio_system_teste
    transfer( N(eosio), N(user11111111), liquid_tokens_user1, N(eosio) );
 
    // Lock genesis tokens to user11111111
-   awardgenesis( N(user11111111), genesis_tokens_user1 );
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
 
    // Then, send some liquid tokens from user11111111 to user22222222
    transfer( N(user11111111), N(user22222222), tokens_user1_to_user2, N(user11111111) );
@@ -4645,6 +4678,7 @@ BOOST_FIXTURE_TEST_CASE( genesis_then_transfer_finally_claim, eosio_system_teste
 
 BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self, eosio_system_tester ) try {
    cross_15_percent_threshold();
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111), N(user22222222) };
@@ -4680,7 +4714,7 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self, eosio_system_te
    BOOST_REQUIRE_EQUAL( success(), stake( N(user11111111), N(user11111111), net_to_stake_user1, cpu_to_stake_user1 ));
 
    // in Between liquid tokens stake/unstake user1 locks genesis tokens
-   awardgenesis( N(user11111111), genesis_tokens_user1 );
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
 
    // check liquid tokens are zero after staking them all
    BOOST_REQUIRE_EQUAL(zero_asset, get_balance(N(user11111111)) );
@@ -4727,6 +4761,7 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self, eosio_system_te
 
 BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self_no_unstake, eosio_system_tester ) try {
    cross_15_percent_threshold();
+   const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
    const std::vector<account_name> accounts = { N(genesis.wax), N(user11111111), N(user22222222) };
@@ -4762,7 +4797,7 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self_no_unstake, eosi
    BOOST_REQUIRE_EQUAL( success(), stake( N(user11111111), N(user11111111), net_to_stake_user1, cpu_to_stake_user1 ));
 
    // in Between liquid tokens stake/unstake user1 locks genesis tokens
-   awardgenesis( N(user11111111), genesis_tokens_user1 );
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
 
    // check liquid tokens are zero after staking them all
    BOOST_REQUIRE_EQUAL(zero_asset, get_balance(N(user11111111)) );
@@ -4800,6 +4835,7 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self_no_unstake, eosi
 
 BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_someone_else, eosio_system_tester ) try {
    cross_15_percent_threshold();
+   const uint64_t nonce = 1;
    const auto three_years = 2*365 + 366;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
@@ -4837,7 +4873,7 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_someone_else, eosio_s
    BOOST_REQUIRE_EQUAL( success(), stake( N(user11111111), N(user22222222), net_to_stake_user2, cpu_to_stake_user2 ));
 
    // in Between liquid tokens stake/unstake user1 locks genesis tokens
-   awardgenesis( N(user11111111), genesis_tokens_user1 );
+   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
 
    // check liquid tokens are zero after staking them all
    BOOST_REQUIRE_EQUAL(zero_asset, get_balance(N(user11111111)) );
