@@ -360,12 +360,19 @@ namespace eosiosystem {
          [[eosio::action]]
          void setparams( const eosio::blockchain_parameters& params );
 
-         // functions defined in producer_pay.cpp
          [[eosio::action]]
          void voterclaim(const name owner);
 
          [[eosio::action]]
+         void claimgbmvote(const name owner);
+
+         // functions defined in producer_pay.cpp
+
+         [[eosio::action]]
          void claimrewards( const name owner );
+
+         [[eosio::action]]
+         void claimgbmprod( const name owner );
 
          [[eosio::action]]
          void setpriv( name account, uint8_t is_priv );
@@ -383,7 +390,15 @@ namespace eosiosystem {
          void bidrefund( name bidder, name newname );
 
       private:
+         void claim_producer_rewards( const name owner, bool as_gbm );
+
+         void send_genesis_token( name from, name receiver, const asset tokens);
+
+         int64_t collect_voter_reward(const name owner);
+
          void fill_buckets();
+
+         int64_t get_unclaimed_gbm_balance( name claimer );
 
          // Implementation details:
 
@@ -408,8 +423,6 @@ namespace eosiosystem {
 
          void change_genesis( name unstaker );
          bool has_genesis_balance( name owner );
-
-         uint32_t get_elapsed_days(const time_point & first_award_time, const time_point & last_claim_time);
 
          //defined in voting.hpp
          void update_elected_producers( block_timestamp timestamp );
