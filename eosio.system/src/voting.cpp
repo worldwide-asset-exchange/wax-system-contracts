@@ -409,7 +409,7 @@ namespace eosiosystem {
       }
       double new_change_rate{0};
       if(voter_itr->producers.size() >= 16 || voter_itr->proxy){
-         new_change_rate = stake2vote(voter_itr->staked);
+         new_change_rate = voter_itr->last_vote_weight - voter_itr->proxied_vote_weight;
       }
       double change_rate_delta = new_change_rate - voter_itr->unpaid_voteshare_change_rate;
       

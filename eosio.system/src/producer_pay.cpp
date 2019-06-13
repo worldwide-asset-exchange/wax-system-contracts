@@ -88,10 +88,9 @@ namespace eosiosystem {
          auto new_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
          // needs to be 1/2 Savings, 1/6 Producers, 1/6 Voters, 1/6 Genesis Block Member
          auto to_voters        = new_tokens / 6;
-         auto to_per_block_pay = new_tokens / 6;
-         auto to_gbm           = new_tokens / 6;
+         auto to_per_block_pay = to_voters;
+         auto to_gbm           = to_voters;
          auto to_savings       = new_tokens - (to_voters + to_per_block_pay + to_gbm);
-         auto to_per_vote_pay  = 0;
 
          INLINE_ACTION_SENDER(eosio::token, issue)(
             token_account, { {_self, active_permission} },
@@ -118,8 +117,6 @@ namespace eosiosystem {
             { _self, genesis_account, asset(to_gbm, core_symbol()), "fund gbm bucket" }
          );
 
-         // Do I need to add a GBM buck to the global state?
-         _gstate.pervote_bucket     += to_per_vote_pay;
          _gstate.perblock_bucket    += to_per_block_pay;
          _gstate.voters_bucket      += to_voters;
          _gstate.last_pervote_bucket_fill = ct;

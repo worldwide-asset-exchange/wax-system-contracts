@@ -553,7 +553,7 @@ namespace eosiosystem {
       if( claimer_balance.balance == zero_asset){
          genesis_tbl.erase(claimer_balance);
       }else{
-         genesis_tbl.modify( claimer_balance, get_self(), [&]( auto& cb ) {
+         genesis_tbl.modify( claimer_balance, claimer, [&]( auto& cb ) {
             // current time point truncated to days
             cb.last_claim_time   = ct;
             cb.last_updated      = ct;
@@ -573,7 +573,8 @@ namespace eosiosystem {
    bool system_contract::has_genesis_balance( name owner )
    {
        genesis_balance_table genesis_tbl( _self, owner.value );
-       return genesis_tbl.find( core_symbol().code().raw() ) != genesis_tbl.end();
+       const auto & owner_genesis = genesis_tbl.find( core_symbol().code().raw() );
+       return owner_genesis != genesis_tbl.end() && owner_genesis->balance.amount > 0;
    }
 
    void system_contract::change_genesis( name owner )
