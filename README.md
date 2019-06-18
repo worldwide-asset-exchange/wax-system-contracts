@@ -1,4 +1,4 @@
-# eosio.contracts
+# eosio.contracts [![Build Status](https://travis-ci.org/worldwide-asset-exchange/wax-eos-contracts.svg?branch=develop)](https://travis-ci.org/worldwide-asset-exchange/wax-eos-contracts)
 
 ## Version : 1.5.2
 
