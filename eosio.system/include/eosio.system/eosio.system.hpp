@@ -392,7 +392,7 @@ namespace eosiosystem {
       private:
          void claim_producer_rewards( const name owner, bool as_gbm );
 
-         void send_genesis_token( name from, name receiver, const asset tokens);
+         void send_genesis_token( name from, name receiver, const asset tokens, bool add_backward_rewards = false);
 
          int64_t collect_voter_reward(const name owner);
 

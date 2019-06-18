@@ -3524,15 +3524,13 @@ BOOST_FIXTURE_TEST_CASE(genesis_rewards, eosio_system_tester) try {
    genesis_tokens_user1 = core_sym::from_string("40.0000");
    awardgenesis(N(user11111111), genesis_tokens_user1, nonce);
 
-   prev_balance = get_balance(N(user11111111));
-
    // Wait 1 day and claim period reward tokens
    produce_block( fc::days(1) );
    claimgenesis(N(user11111111));
 
-   // 60 / 1096 = 0.0547
-   rewards_1_day = core_sym::from_string("0.0547");
-   BOOST_REQUIRE_EQUAL(get_balance(N(user11111111)), prev_balance + rewards_1_day);
+   // 60 * 2 / 1096 = 0.1094 (including backward rewards)
+   asset rewards_2nd_day = core_sym::from_string("0.1094");
+   BOOST_REQUIRE_EQUAL(get_balance(N(user11111111)), prev_balance + rewards_2nd_day);
 
    BOOST_REQUIRE_EQUAL(success(), unstake(N(user11111111), N(user11111111), core_sym::from_string("20.0000"), core_sym::from_string("20.0000")));
    prev_balance = get_balance(N(user11111111));
@@ -3544,6 +3542,32 @@ BOOST_FIXTURE_TEST_CASE(genesis_rewards, eosio_system_tester) try {
    // 20 / 1096 = 0.0182
    rewards_1_day = core_sym::from_string("0.0182");
    BOOST_REQUIRE_EQUAL(get_balance(N(user11111111)), prev_balance + rewards_1_day);
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(backward_rewards, eosio_system_tester) try {
+   cross_15_percent_threshold();
+
+   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("200000000.0000"), N(eosio) );
+
+   uint64_t nonce = 1;
+   asset genesis_tokens_user1{core_sym::from_string("100000000.0000")};   
+
+   produce_blocks(1);
+   produce_block( fc::days(30) ); // Wait until August 30th
+
+   awardgenesis(N(user11111111), genesis_tokens_user1, nonce);
+
+   produce_block( fc::days(1067) ); // Waits until 1 day passing the end of the reward period.
+
+   claimgenesis(N(user11111111));
+   asset balance = get_balance(N(user11111111));
+
+   //The rewards should be equal to the awarded tokens during the swap even if the swap was made after July 1st
+   BOOST_REQUIRE(core_sym::from_string("100000000.0000") - balance <=  core_sym::from_string("0.0001"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( vote_both_proxy_and_producers, eosio_system_tester ) try {
