@@ -475,17 +475,23 @@ namespace eosiosystem {
         genesis_nonce.receiver = receiver;
      });
 
-     send_genesis_token( genesis_account, receiver, tokens);
+     send_genesis_token( genesis_account, receiver, tokens, true);
    }
 
 
-   void system_contract::send_genesis_token( name from, name receiver, const asset tokens){
+   void system_contract::send_genesis_token( name from, name receiver, const asset tokens, bool add_backward_rewards ){
       const time_point ct = std::max(current_time_point(), gbm_initial_time);
 
       eosio_assert( is_account( receiver ), "receiver account does not exist");
       eosio_assert( tokens.is_valid(), "invalid tokens" );
       eosio_assert( tokens.amount > 0, "award quantity must be positive" );
       eosio_assert( tokens.symbol == core_symbol(), "only system tokens allowed" );
+
+      asset backward_rewards = asset(0, core_symbol());
+      if (add_backward_rewards && current_time_point() > gbm_initial_time) {
+         const int64_t elapsed_useconds = (current_time_point() - gbm_initial_time).count();
+         backward_rewards = asset(static_cast<int64_t>(tokens.amount * (elapsed_useconds / double(useconds_in_gbm_period))), core_symbol());
+      }
 
       genesis_balance_table genesis_tbl( _self, receiver.value );
       auto itr = genesis_tbl.find( core_symbol().code().raw() );
@@ -495,14 +501,14 @@ namespace eosiosystem {
                genesis_token.last_updated      = ct;
                genesis_token.last_claim_time   = ct;
                genesis_token.balance           = tokens;
-               genesis_token.unclaimed_balance = asset(0, core_symbol());;
+               genesis_token.unclaimed_balance = backward_rewards;
          });
       }
       else {
          const auto unclaimed_balance = get_unclaimed_gbm_balance(receiver);
          genesis_tbl.modify( itr, genesis_account, [&]( auto& genesis_token ){
                genesis_token.balance += tokens;
-               genesis_token.unclaimed_balance = asset(unclaimed_balance, core_symbol());
+               genesis_token.unclaimed_balance = asset(unclaimed_balance, core_symbol()) + backward_rewards;
                genesis_token.last_updated = ct;
          });
       }
