@@ -1,0 +1,11 @@
+# Changelog
+
+## Pending (wax-1.5.2-X.Y.Z)
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
+
+BUG FIXES:
