@@ -6,7 +6,7 @@ namespace eosiosystem {
 
    const int64_t  min_pervote_daily_pay = 100'0000;
    const int64_t  min_activated_stake   = 150'000'000'0000;
-   const double   continuous_rate       = 0.04879;          // 5% annual rate
+   const double   continuous_rate       = 0.0582689;        // 6% annual rate
    const double   perblock_rate         = 0.0025;           // 0.25%
    const double   standby_rate          = 0.0075;           // 0.75%
    const uint32_t blocks_per_year       = 52*7*24*2*3600;   // half seconds per year
@@ -15,7 +15,11 @@ namespace eosiosystem {
    const uint32_t blocks_per_hour       = 2 * 3600;
    const int64_t  useconds_per_day      = 24 * 3600 * int64_t(1000000);
    const int64_t  useconds_per_year     = seconds_per_year*1000000ll;
-   const uint32_t days_in_three_years   = 2*365 + 366; // 2020 leap year
+   const uint64_t useconds_in_gbm_period   = 1096 * useconds_per_day; // from July 1st 2019 to July 1st 2022
+
+   const time_point gbm_initial_time(eosio::seconds(1561939200));// July 1st 2019 00:00:00
+   const time_point gbm_final_time = gbm_initial_time + eosio::microseconds(useconds_in_gbm_period);// July 1st 2022 00:00:00
+   
 
    void system_contract::onblock( ignore<block_header> ) {
       using namespace eosio;
@@ -82,11 +86,11 @@ namespace eosiosystem {
 
       if( usecs_since_last_fill > 0 && _gstate.last_pervote_bucket_fill > time_point() ) {
          auto new_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
-         // needs to be 60% Savings, 20% Producers, 20% Voters
-         auto to_voters        = new_tokens / 5;
-         auto to_per_block_pay = new_tokens / 5;
-         auto to_savings       = new_tokens - (to_voters + to_per_block_pay);
-         auto to_per_vote_pay  = 0;
+         // needs to be 1/2 Savings, 1/6 Producers, 1/6 Voters, 1/6 Genesis Block Member
+         auto to_voters        = new_tokens / 6;
+         auto to_per_block_pay = to_voters;
+         auto to_gbm           = to_voters;
+         auto to_savings       = new_tokens - (to_voters + to_per_block_pay + to_gbm);
 
          INLINE_ACTION_SENDER(eosio::token, issue)(
             token_account, { {_self, active_permission} },
@@ -108,14 +112,18 @@ namespace eosiosystem {
             { _self, bpay_account, asset(to_per_block_pay, core_symbol()), "fund per-block bucket" }
          );
 
-         _gstate.pervote_bucket     += to_per_vote_pay;
+         INLINE_ACTION_SENDER(eosio::token, transfer)(
+            token_account, { {_self, active_permission} },
+            { _self, genesis_account, asset(to_gbm, core_symbol()), "fund gbm bucket" }
+         );
+
          _gstate.perblock_bucket    += to_per_block_pay;
          _gstate.voters_bucket      += to_voters;
          _gstate.last_pervote_bucket_fill = ct;
       }
    }
 
-   void system_contract::claimrewards( const name owner ) {
+   void system_contract::claim_producer_rewards( const name owner, bool as_gbm ) {
       require_auth( owner );
 
       const auto& prod = _producers.get( owner.value );
@@ -174,11 +182,23 @@ namespace eosiosystem {
       });
 
       if( producer_per_block_pay > 0 ) {
-         INLINE_ACTION_SENDER(eosio::token, transfer)(
-            token_account, { {bpay_account, active_permission}, {owner, active_permission} },
-            { bpay_account, owner, asset(producer_per_block_pay, core_symbol()), std::string("producer block pay") }
-         );
+         if(as_gbm){
+            send_genesis_token( bpay_account, owner, asset(producer_per_block_pay, core_symbol()));
+         }else {
+            INLINE_ACTION_SENDER(eosio::token, transfer)(
+               token_account, { {bpay_account, active_permission}, {owner, active_permission} },
+               { bpay_account, owner, asset(producer_per_block_pay, core_symbol()), std::string("producer block pay") }
+            );
+         }
       }
+   }
+
+   void system_contract::claimrewards( const name owner ) {
+      claim_producer_rewards(owner, false);
+   }
+
+   void system_contract::claimgbmprod( const name owner ) {
+      claim_producer_rewards(owner, true);
    }
 
 } //namespace eosiosystem

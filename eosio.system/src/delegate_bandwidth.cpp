@@ -15,7 +15,6 @@
 
 #include <eosio.token/eosio.token.hpp>
 
-
 #include <cmath>
 #include <map>
 #include <algorithm>
@@ -87,14 +86,15 @@ namespace eosiosystem {
    };
 
    struct [[eosio::table, eosio::contract("eosio.system")]] genesis_tokens {
-      time_point      first_award_time;
-      time_point      last_claim_time;
       eosio::asset    balance;
+      eosio::asset    unclaimed_balance;
+      time_point      last_claim_time;
+      time_point      last_updated;
 
       uint64_t primary_key()const { return balance.symbol.code().raw(); }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( genesis_tokens,(first_award_time)(last_claim_time)(balance) )
+      EOSLIB_SERIALIZE( genesis_tokens,(balance)(unclaimed_balance)(last_claim_time)(last_updated) )
    };
 
    /**
@@ -475,70 +475,116 @@ namespace eosiosystem {
         genesis_nonce.receiver = receiver;
      });
 
-     const time_point ct = current_time_point();
-
-     eosio_assert( is_account( receiver ), "receiver account does not exist");
-     eosio_assert( tokens.is_valid(), "invalid tokens" );
-     eosio_assert( tokens.amount > 0, "award quantity must be positive" );
-
-     genesis_balance_table genesis_tbl( _self, receiver.value );
-     auto itr = genesis_tbl.find( core_symbol().code().raw() );
-     if( itr == genesis_tbl.end() ) {
-         itr = genesis_tbl.emplace( genesis_account, [&]( auto& genesis_token ){
-              genesis_token.first_award_time  = ct; // time_point() -> epoch
-              genesis_token.last_claim_time   = ct; // time_point() -> epoch
-              genesis_token.balance           = tokens;
-         });
-     }
-     else {
-         genesis_tbl.modify( itr, genesis_account, [&]( auto& genesis_token ){
-             genesis_token.balance += tokens;
-         });
-     }
-
-     asset to_net(std::floor(tokens.amount / 2.0), core_symbol());
-     asset to_cpu(std::ceil(tokens.amount / 2.0), core_symbol());
-     delegatebw( genesis_account, receiver, to_net, to_cpu, true);
+     send_genesis_token( genesis_account, receiver, tokens, true);
    }
 
 
-   uint32_t system_contract::get_elapsed_days(const time_point & first_award_time, const time_point & last_claim_time) {
-      const auto ct = std::min(current_time_point(), first_award_time + days(days_in_three_years));
-      const microseconds elapsed_usec = ct - last_claim_time;
-      const auto elapsed_days = elapsed_usec.count() / useconds_per_day;
-      return elapsed_days;
+   void system_contract::send_genesis_token( name from, name receiver, const asset tokens, bool add_backward_rewards ){
+      const time_point ct = std::max(current_time_point(), gbm_initial_time);
+
+      eosio_assert( is_account( receiver ), "receiver account does not exist");
+      eosio_assert( tokens.is_valid(), "invalid tokens" );
+      eosio_assert( tokens.amount > 0, "award quantity must be positive" );
+      eosio_assert( tokens.symbol == core_symbol(), "only system tokens allowed" );
+
+      asset backward_rewards = asset(0, core_symbol());
+      if (add_backward_rewards && current_time_point() > gbm_initial_time) {
+         const int64_t elapsed_useconds = (current_time_point() - gbm_initial_time).count();
+         backward_rewards = asset(static_cast<int64_t>(tokens.amount * (elapsed_useconds / double(useconds_in_gbm_period))), core_symbol());
+      }
+
+      genesis_balance_table genesis_tbl( _self, receiver.value );
+      auto itr = genesis_tbl.find( core_symbol().code().raw() );
+
+      if( itr == genesis_tbl.end() ) {
+         itr = genesis_tbl.emplace( genesis_account, [&]( auto& genesis_token ){
+               genesis_token.last_updated      = ct;
+               genesis_token.last_claim_time   = ct;
+               genesis_token.balance           = tokens;
+               genesis_token.unclaimed_balance = backward_rewards;
+         });
+      }
+      else {
+         const auto unclaimed_balance = get_unclaimed_gbm_balance(receiver);
+         genesis_tbl.modify( itr, genesis_account, [&]( auto& genesis_token ){
+               genesis_token.balance += tokens;
+               genesis_token.unclaimed_balance = asset(unclaimed_balance, core_symbol()) + backward_rewards;
+               genesis_token.last_updated = ct;
+         });
+      }
+
+      auto net_amount = tokens.amount / 2;
+      asset to_net(net_amount, core_symbol());
+      asset to_cpu(tokens.amount - net_amount, core_symbol());
+
+      INLINE_ACTION_SENDER(system_contract, delegatebw)(
+            _self, { {from, active_permission}, {receiver, active_permission} },
+            { from, receiver, to_net, to_cpu, true }
+         );
+   }
+
+   int64_t system_contract::get_unclaimed_gbm_balance( name claimer )
+   {
+      if (current_time_point() <= gbm_initial_time) {
+         return 0;
+      }
+      genesis_balance_table genesis_tbl( _self, claimer.value );
+      const auto& genesis_tbl_row = genesis_tbl.get( core_symbol().code().raw(), "no genesis balance object found" );
+      const auto claim_time = std::min(current_time_point(), gbm_final_time);
+
+      if (claim_time <= genesis_tbl_row.last_updated) {
+         return 0;
+      }
+
+      const int64_t elapsed_useconds = (claim_time - genesis_tbl_row.last_updated).count();
+      const int64_t unclaimed_balance = static_cast<int64_t>(genesis_tbl_row.balance.amount * (elapsed_useconds / double(useconds_in_gbm_period)))  + genesis_tbl_row.unclaimed_balance.amount;
+      return unclaimed_balance;
    }
 
    void system_contract::claimgenesis( name claimer )
    {
+      require_auth(claimer);
+      const auto ct = current_time_point();
 
       genesis_balance_table genesis_tbl( _self, claimer.value );
 
       const auto& claimer_balance = genesis_tbl.get( core_symbol().code().raw(), "no genesis balance object found" );
+      eosio_assert( ct - claimer_balance.last_claim_time > microseconds(useconds_per_day) , "already claimed rewards within past day" );
 
-      const auto elapsed_days = get_elapsed_days(claimer_balance.first_award_time, claimer_balance.last_claim_time);
-      eosio_assert( elapsed_days > 0, "at least one day since award is required" );
+      const auto unclaimed_balance = get_unclaimed_gbm_balance(claimer);
+      eosio_assert( unclaimed_balance > 0, "nothing to claim" );
 
-      genesis_tbl.modify( claimer_balance, get_self(), [&]( auto& cb ) {
-         cb.last_claim_time += days(elapsed_days);
-      });
+      const asset zero_asset( 0, core_symbol() );
+
+      if( claimer_balance.balance == zero_asset){
+         genesis_tbl.erase(claimer_balance);
+      }else{
+         genesis_tbl.modify( claimer_balance, claimer, [&]( auto& cb ) {
+            // current time point truncated to days
+            cb.last_claim_time   = ct;
+            cb.last_updated      = ct;
+            cb.unclaimed_balance = zero_asset;
+         });
+      }
  
       // Deal with paying
-      const auto rewards_last_period = claimer_balance.balance.amount * elapsed_days * ( 1 / static_cast<double>(days_in_three_years) );
-      const asset payable_rewards ( rewards_last_period, core_symbol() );
+      const asset payable_rewards ( unclaimed_balance, core_symbol() );
 
       INLINE_ACTION_SENDER(eosio::token, transfer)(
          token_account, { {genesis_account, "active"_n} },
-         { genesis_account, eosio::name(claimer), payable_rewards, std::string("claimgenesis") }
+         { genesis_account, claimer, payable_rewards, std::string("claimgenesis") }
       );
    }
 
-   bool system_contract::has_genesis_balance( name owner ) {
+   bool system_contract::has_genesis_balance( name owner )
+   {
        genesis_balance_table genesis_tbl( _self, owner.value );
-       return genesis_tbl.find( core_symbol().code().raw() ) != genesis_tbl.end();
+       const auto & owner_genesis = genesis_tbl.find( core_symbol().code().raw() );
+       return owner_genesis != genesis_tbl.end() && owner_genesis->balance.amount > 0;
    }
 
-   void system_contract::change_genesis( name owner ) {
+   void system_contract::change_genesis( name owner )
+   {
      // Unstaked amount could be greater than TOKENS DELEGATED TO SELF
      // If this is the case, GENESIS BALANCE should be reduced by the DIFFERENCE:
      // DIFF = AMOUNT_BEING_UNSTAKED - TOKENS_DELEGATED_TO_SELF
@@ -553,30 +599,31 @@ namespace eosiosystem {
      // Let's check receiver HAS a genesis balance
      if( has_genesis_balance(owner) ) {
 
-       claimgenesis(owner);
-
        genesis_balance_table genesis_tbl( _self, owner.value );
        const auto & owner_genesis = genesis_tbl.get( core_symbol().code().raw(), "no balance object found");
+
+       const auto unclaimed_balance = get_unclaimed_gbm_balance(owner);
 
        const asset zero_asset( 0, core_symbol() );
 
        del_bandwidth_table del_bw_tbl( _self, owner.value );
        auto del_bw_itr = del_bw_tbl.find( owner.value );
        genesis_tbl.modify( owner_genesis, owner, [&]( auto& genesis ){
-
+         genesis.unclaimed_balance = asset(unclaimed_balance, core_symbol());
+         genesis.last_updated    = current_time_point();
          if(del_bw_itr == del_bw_tbl.end()) {
-           genesis.balance = zero_asset; // receiver consumed all her tokens an row will be erased
+            genesis.balance = zero_asset; // receiver consumed all her tokens an row will be erased
          } else {
-           // receiver consumed shorter amount than available delegated_to_self_tokens
-           // if remaining amount is greater or equal than genesis balance
-           // -> genesis balance should stay unchanged
-           // else (remaining amount is less than genesis balance )
-           // -> genesis balance is now decreased to new_delegated_to_self_tokens amount
-           genesis.balance = std::min<asset>(del_bw_itr->net_weight + del_bw_itr->cpu_weight, genesis.balance);
+            // receiver consumed shorter amount than available delegated_to_self_tokens
+            // if remaining amount is greater or equal than genesis balance
+            // -> genesis balance should stay unchanged
+            // else (remaining amount is less than genesis balance )
+            // -> genesis balance is now decreased to new_delegated_to_self_tokens amount
+            genesis.balance = std::min<asset>(del_bw_itr->net_weight + del_bw_itr->cpu_weight, genesis.balance);
          }
        });
 
-       if( owner_genesis.balance == zero_asset ){
+       if( owner_genesis.balance == zero_asset && owner_genesis.unclaimed_balance == zero_asset){
            genesis_tbl.erase(owner_genesis);
        }
      }

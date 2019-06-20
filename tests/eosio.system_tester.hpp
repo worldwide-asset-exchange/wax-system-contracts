@@ -36,7 +36,7 @@ public:
       produce_blocks( 2 );
 
       create_accounts({ N(eosio.token), N(eosio.ram), N(eosio.ramfee), N(eosio.stake),
-               N(eosio.bpay), N(eosio.voters), N(eosio.saving), N(eosio.names) });
+               N(eosio.bpay), N(eosio.voters), N(eosio.saving), N(eosio.names), N(genesis.wax) });
 
 
       produce_blocks( 100 );
@@ -95,7 +95,18 @@ public:
       full
    };
 
-   eosio_system_tester( setup_level l = setup_level::full ) {
+   static controller::config default_config() {
+      controller::config vcfg = validating_tester::default_config();
+
+      vcfg.genesis.initial_timestamp = fc::time_point::from_iso_string("2019-06-30T00:00:00.000");
+
+      return vcfg;
+   }
+
+   eosio_system_tester( setup_level l = setup_level::full )
+      :   TESTER(eosio_system_tester::default_config())
+   {
+
       if( l == setup_level::none ) return;
 
       basic_setup();
@@ -119,7 +130,6 @@ public:
       deploy_contract();
       remaining_setup();
    }
-
 
    void create_accounts_with_resources( vector<account_name> accounts, account_name creator = config::system_account_name ) {
       for( auto a : accounts ) {
@@ -402,6 +412,11 @@ public:
    fc::variant get_voter_info( const account_name& act ) {
       vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(voters), act );
       return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "voter_info", data, abi_serializer_max_time );
+   }
+
+   fc::variant get_genesis( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
+      vector<char> data = get_row_by_account( config::system_account_name, act, N(genesis), balance_symbol.to_symbol_code().value );
+      return data.empty() ? fc::variant() : abi_ser.binary_to_variant("genesis_tokens", data, abi_serializer_max_time);
    }
 
    fc::variant get_producer_info( const account_name& act ) {

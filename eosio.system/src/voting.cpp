@@ -348,6 +348,21 @@ namespace eosiosystem {
    }
 
    void system_contract::voterclaim(const name owner) {
+      int64_t reward = collect_voter_reward(owner);
+
+      INLINE_ACTION_SENDER(eosio::token, transfer)(
+            token_account, { {voters_account, active_permission}, {owner, active_permission} },
+            { voters_account, owner, asset(reward, core_symbol()), std::string("voter pay") }
+         );
+   }
+
+   void system_contract::claimgbmvote(const name owner) {
+      int64_t reward = collect_voter_reward(owner);
+
+      send_genesis_token( voters_account, owner, asset(reward, core_symbol()));
+   }
+
+   int64_t system_contract::collect_voter_reward(const name owner) {
       require_auth(owner);
 
       eosio_assert( _gstate.total_activated_stake >= min_activated_stake,
@@ -383,10 +398,7 @@ namespace eosiosystem {
          v.last_claim_time = ct;
       });
 
-      INLINE_ACTION_SENDER(eosio::token, transfer)(
-            token_account, { {voters_account, active_permission}, {owner, active_permission} },
-            { voters_account, owner, asset(reward, core_symbol()), std::string("voter pay") }
-         );
+      return reward;
    }
 
    void system_contract::update_voter_votepay_share(const voters_table::const_iterator& voter_itr) {
@@ -397,7 +409,7 @@ namespace eosiosystem {
       }
       double new_change_rate{0};
       if(voter_itr->producers.size() >= 16 || voter_itr->proxy){
-         new_change_rate = stake2vote(voter_itr->staked);
+         new_change_rate = voter_itr->last_vote_weight - voter_itr->proxied_vote_weight;
       }
       double change_rate_delta = new_change_rate - voter_itr->unpaid_voteshare_change_rate;
       

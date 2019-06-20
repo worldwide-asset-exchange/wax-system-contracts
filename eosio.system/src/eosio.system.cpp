@@ -456,7 +456,7 @@ EOSIO_DISPATCH( eosiosystem::system_contract,
      // delegate_bandwidth.cpp
      (buyrambytes)(buyram)(sellram)(delegatebw)(undelegatebw)(refund)(awardgenesis)(claimgenesis)
      // voting.cpp
-     (regproducer)(unregprod)(voteproducer)(regproxy)(voterclaim)
+     (regproducer)(unregprod)(voteproducer)(regproxy)(voterclaim)(claimgbmvote)
      // producer_pay.cpp
-     (onblock)(claimrewards)
+     (onblock)(claimrewards)(claimgbmprod)
 )
