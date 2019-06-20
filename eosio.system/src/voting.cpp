@@ -282,7 +282,6 @@ namespace eosiosystem {
                   p.total_votes = 0;
                }
                _gstate.total_producer_vote_weight += pd.second.first;
-               //eosio_assert( p.total_votes >= 0, "something bad happened" );
             });
             auto prod2 = _producers2.find( pd.first.value );
             if( prod2 != _producers2.end() ) {
@@ -407,7 +406,7 @@ namespace eosiosystem {
       if (voter_itr->unpaid_voteshare_last_updated != time_point() && voter_itr->unpaid_voteshare_last_updated < current_time_point()) {
          new_unpaid_voteshare += voter_itr->unpaid_voteshare_change_rate * double((ct - voter_itr->unpaid_voteshare_last_updated).count() / 1E6);
       }
-      double new_change_rate{0};
+      double new_change_rate = 0;
       if(voter_itr->producers.size() >= 16 || voter_itr->proxy){
          new_change_rate = voter_itr->last_vote_weight - voter_itr->proxied_vote_weight;
       }

@@ -104,6 +104,7 @@ namespace eosiosystem {
    typedef eosio::multi_index< "userres"_n, user_resources >      user_resources_table;
    typedef eosio::multi_index< "delband"_n, delegated_bandwidth > del_bandwidth_table;
    typedef eosio::multi_index< "refunds"_n, refund_request >      refunds_table;
+   
    typedef eosio::multi_index< "genesis"_n, genesis_tokens >      genesis_balance_table;
    typedef eosio::multi_index< "genonce"_n, genesis_nonce >       genesis_nonce_table;
 
@@ -480,7 +481,7 @@ namespace eosiosystem {
 
 
    void system_contract::send_genesis_token( name from, name receiver, const asset tokens, bool add_backward_rewards ){
-      const time_point ct = std::max(current_time_point(), gbm_initial_time);
+      const time_point max_time_point = std::max(current_time_point(), gbm_initial_time);
 
       eosio_assert( is_account( receiver ), "receiver account does not exist");
       eosio_assert( tokens.is_valid(), "invalid tokens" );
@@ -498,8 +499,8 @@ namespace eosiosystem {
 
       if( itr == genesis_tbl.end() ) {
          itr = genesis_tbl.emplace( genesis_account, [&]( auto& genesis_token ){
-               genesis_token.last_updated      = ct;
-               genesis_token.last_claim_time   = ct;
+               genesis_token.last_updated      = max_time_point;
+               genesis_token.last_claim_time   = max_time_point;
                genesis_token.balance           = tokens;
                genesis_token.unclaimed_balance = backward_rewards;
          });
@@ -509,7 +510,7 @@ namespace eosiosystem {
          genesis_tbl.modify( itr, genesis_account, [&]( auto& genesis_token ){
                genesis_token.balance += tokens;
                genesis_token.unclaimed_balance = asset(unclaimed_balance, core_symbol()) + backward_rewards;
-               genesis_token.last_updated = ct;
+               genesis_token.last_updated = max_time_point;
          });
       }
 
@@ -576,13 +577,6 @@ namespace eosiosystem {
       );
    }
 
-   bool system_contract::has_genesis_balance( name owner )
-   {
-       genesis_balance_table genesis_tbl( _self, owner.value );
-       const auto & owner_genesis = genesis_tbl.find( core_symbol().code().raw() );
-       return owner_genesis != genesis_tbl.end() && owner_genesis->balance.amount > 0;
-   }
-
    void system_contract::change_genesis( name owner )
    {
      // Unstaked amount could be greater than TOKENS DELEGATED TO SELF
@@ -596,36 +590,37 @@ namespace eosiosystem {
      // and now we should check if receiver also has a genesis balance which might
      // be decreased by DIFF (above defined)
 
-     // Let's check receiver HAS a genesis balance
-     if( has_genesis_balance(owner) ) {
+     genesis_balance_table genesis_tbl( _self, owner.value );
+     const auto & owner_genesis_ref = genesis_tbl.find( core_symbol().code().raw() );
+     if (owner_genesis_ref == genesis_tbl.end() || owner_genesis_ref->balance.amount <= 0) {
+        return;
+     }
 
-       genesis_balance_table genesis_tbl( _self, owner.value );
-       const auto & owner_genesis = genesis_tbl.get( core_symbol().code().raw(), "no balance object found");
+     const auto & owner_genesis = genesis_tbl.get( core_symbol().code().raw(), "no balance object found");
 
-       const auto unclaimed_balance = get_unclaimed_gbm_balance(owner);
+     const auto unclaimed_balance = get_unclaimed_gbm_balance(owner);
 
-       const asset zero_asset( 0, core_symbol() );
+     const asset zero_asset( 0, core_symbol() );
 
-       del_bandwidth_table del_bw_tbl( _self, owner.value );
-       auto del_bw_itr = del_bw_tbl.find( owner.value );
-       genesis_tbl.modify( owner_genesis, owner, [&]( auto& genesis ){
-         genesis.unclaimed_balance = asset(unclaimed_balance, core_symbol());
-         genesis.last_updated    = current_time_point();
-         if(del_bw_itr == del_bw_tbl.end()) {
-            genesis.balance = zero_asset; // receiver consumed all her tokens an row will be erased
-         } else {
-            // receiver consumed shorter amount than available delegated_to_self_tokens
-            // if remaining amount is greater or equal than genesis balance
-            // -> genesis balance should stay unchanged
-            // else (remaining amount is less than genesis balance )
-            // -> genesis balance is now decreased to new_delegated_to_self_tokens amount
-            genesis.balance = std::min<asset>(del_bw_itr->net_weight + del_bw_itr->cpu_weight, genesis.balance);
-         }
-       });
-
-       if( owner_genesis.balance == zero_asset && owner_genesis.unclaimed_balance == zero_asset){
-           genesis_tbl.erase(owner_genesis);
+     del_bandwidth_table del_bw_tbl( _self, owner.value );
+     auto del_bw_itr = del_bw_tbl.find( owner.value );
+     genesis_tbl.modify( owner_genesis, owner, [&]( auto& genesis ){
+       genesis.unclaimed_balance = asset(unclaimed_balance, core_symbol());
+       genesis.last_updated    = current_time_point();
+       if(del_bw_itr == del_bw_tbl.end()) {
+          genesis.balance = zero_asset; // receiver consumed all her tokens an row will be erased
+       } else {
+          // receiver consumed shorter amount than available delegated_to_self_tokens
+          // if remaining amount is greater or equal than genesis balance
+          // -> genesis balance should stay unchanged
+          // else (remaining amount is less than genesis balance )
+          // -> genesis balance is now decreased to new_delegated_to_self_tokens amount
+          genesis.balance = std::min<asset>(del_bw_itr->net_weight + del_bw_itr->cpu_weight, genesis.balance);
        }
+     });
+
+     if ( owner_genesis.balance == zero_asset && owner_genesis.unclaimed_balance == zero_asset){
+        genesis_tbl.erase(owner_genesis);
      }
    }
 

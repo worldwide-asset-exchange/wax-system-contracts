@@ -7,5 +7,6 @@ BREAKING CHANGES:
 FEATURES:
 
 IMPROVEMENTS:
+[KEW-1250] Minor fixes and refactors.
 
 BUG FIXES:

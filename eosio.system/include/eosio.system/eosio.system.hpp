@@ -422,8 +422,7 @@ namespace eosiosystem {
                         asset stake_net_quantity, asset stake_cpu_quantity, bool transfer );
 
          void change_genesis( name unstaker );
-         bool has_genesis_balance( name owner );
-
+         
          //defined in voting.hpp
          void update_elected_producers( block_timestamp timestamp );
          void update_votes( const name voter, const name proxy, const std::vector<name>& producers, bool voting );
