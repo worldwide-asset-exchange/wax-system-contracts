@@ -1,5 +1,6 @@
 # Changelog
 
+
 ## Pending (wax-1.5.2-X.Y.Z)
 
 BREAKING CHANGES:
@@ -7,6 +8,17 @@ BREAKING CHANGES:
 FEATURES:
 
 IMPROVEMENTS:
+
+BUG FIXES:
+
+## wax-1.5.2-1.1.1
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
+- [KEW-1348] README updated
 
 BUG FIXES:
 
