@@ -478,6 +478,61 @@ namespace eosiosystem {
      send_genesis_token( genesis_account, receiver, tokens, true);
    }
 
+   void system_contract::delgenesis( uint64_t nonce )
+   {
+      require_auth(genesis_account);
+
+      genesis_nonce_table genesis_nonce_tbl(_self, _self.value);
+      auto it = genesis_nonce_tbl.find(nonce);
+      eosio_assert(it != genesis_nonce_tbl.end(), "Nonce does not exists.");
+      asset tokens = it->awarded;
+      name receiver = it->receiver;
+      genesis_nonce_tbl.erase(it);
+     
+      const asset zero_asset( 0, core_symbol() );
+
+      del_bandwidth_table del_bw_tbl( _self, receiver.value );
+      auto del_bw_itr = del_bw_tbl.find( receiver.value );
+      
+      if( del_bw_itr != del_bw_tbl.end() ) {
+         auto from_net = std::min(del_bw_itr->net_weight, tokens);
+         auto from_cpu = std::min(del_bw_itr->cpu_weight, tokens - from_net);
+         
+         if(from_net != zero_asset || from_cpu != zero_asset) {
+            INLINE_ACTION_SENDER(system_contract, undelegatebw)(
+            _self, { {receiver, active_permission} },
+            { receiver, receiver, from_net, from_cpu });
+         }
+      }
+
+      INLINE_ACTION_SENDER( system_contract, removerefund)(
+            _self, { {_self, active_permission} },
+            { receiver, tokens });
+   }
+
+   void system_contract::removerefund( const name account, const asset tokens )
+   {
+      require_auth(_self);
+
+      const asset zero_asset( 0, core_symbol() );
+      refunds_table refunds_tbl( _self, account.value );
+      auto& req = refunds_tbl.get( account.value, "no refund found");
+      eosio_assert(req.net_amount + req.cpu_amount >= tokens, "account does not have enough staked tokens");
+
+      if(req.net_amount + req.cpu_amount == tokens){
+         refunds_tbl.erase(req);
+         return;
+      }
+
+      refunds_tbl.modify( req, same_payer, [&]( auto& r ) {
+         if(req.net_amount >= tokens) {
+            r.net_amount -= tokens;
+         }else{
+            r.cpu_amount -= tokens - req.net_amount;
+            r.net_amount = zero_asset;
+         }
+      });
+   }
 
    void system_contract::send_genesis_token( name from, name receiver, const asset tokens, bool add_backward_rewards ){
       const time_point ct = std::max(current_time_point(), gbm_initial_time);

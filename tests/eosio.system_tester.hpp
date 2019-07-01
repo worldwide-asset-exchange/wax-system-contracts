@@ -266,6 +266,13 @@ public:
 		 mvo()( "receiver",receiver)("tokens",tokens)("nonce",nonce) );
    }
 
+   action_result delgenesis( uint64_t nonce ) {
+      return push_action(
+	         N(genesis.wax),
+	         N(delgenesis),
+		 mvo()("nonce",nonce) );
+   }
+
    action_result claimgenesis( const account_name& claimer ) {
       return push_action(
 	         claimer,
