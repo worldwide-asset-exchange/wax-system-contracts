@@ -1,4 +1,4 @@
-# wax-system-contracts [![Build Status](https://travis-ci.org/worldwide-asset-exchange/wax-eos-contracts.svg?branch=develop)](https://travis-ci.org/worldwide-asset-exchange/wax-eos-contracts)
+# wax-system-contracts [![Build Status](https://travis-ci.org/worldwide-asset-exchange/wax-system-contracts.svg?branch=develop)](https://travis-ci.org/worldwide-asset-exchange/wax-system-contracts)
 
 ## The WAX System Contracts
 
