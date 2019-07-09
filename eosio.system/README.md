@@ -1,16 +1,15 @@
 eosio.system
 ----------
-
-This contract enables users to stake tokens, and then configure and vote on producers and worker proposals. 
+This contract enables users to stake WAX Tokens, and then configure and vote on WAX Guilds (block producers) and worker proposals. 
 
 Users can also proxy their voting influence to other users.
 
 The state of this contract is read to determine the 21 active block producers. 
 
 Actions:
-The naming convention is codeaccount::actionname followed by a list of paramters.
+The naming convention is codeaccount::actionname followed by a list of parameters.
 
-Indicates that a particular account wishes to become a producer
+Indicates that a particular account wishes to become a block producer.
 ## eosio.system::cfgproducer    account config
    - **account** the producer account to update
    - updates the configuration settings for a particular producer, these
