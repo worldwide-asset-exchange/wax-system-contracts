@@ -162,7 +162,8 @@ namespace eosiosystem {
 
       int64_t producer_per_block_pay = 0;
       if( _gstate.total_unpaid_blocks > 0 ) {
-         producer_per_block_pay = (_gstate.perblock_bucket * prod.unpaid_blocks) / _gstate.total_unpaid_blocks;
+         producer_per_block_pay = (static_cast<double>(_gstate.perblock_bucket) * prod.unpaid_blocks) / _gstate.total_unpaid_blocks;
+         eosio_assert( producer_per_block_pay >= 0, "producer per block pay must be greater or equal to 0" );
       }
 
       double new_votepay_share = update_producer_votepay_share( prod2,
