@@ -11,6 +11,17 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+## wax-1.5.2-1.1.2
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
+
+BUG FIXES:
+- [KEW-1405] Fix for prod per block pay
+
 ## wax-1.5.2-1.1.1
 
 BREAKING CHANGES:
