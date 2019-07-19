@@ -307,7 +307,19 @@ namespace eosiosystem {
          [[eosio::action]]
          void awardgenesis( name receiver,
                             const asset tokens, uint64_t nonce );
+         
+         /**
+          * Reverts an awardgenesis action
+          */
+         [[eosio::action]]
+         void delgenesis( uint64_t nonce );
  
+         /**
+          * Removing the amount of tokens from account's refunds
+          */
+         [[eosio::action]]
+         void removerefund( name account, asset tokens );
+         
          /**
           * Pays all awarded tokens for period since last claim
           */

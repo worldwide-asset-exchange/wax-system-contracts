@@ -3544,6 +3544,307 @@ BOOST_FIXTURE_TEST_CASE(genesis_rewards, eosio_system_tester) try {
    BOOST_REQUIRE_EQUAL(get_balance(N(user11111111)), prev_balance + rewards_1_day);
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(del_genesis_rewards, eosio_system_tester) try {
+   cross_15_percent_threshold();
+
+   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   
+   asset prev_balance = get_balance(N(user11111111));
+   uint64_t nonce = 1;
+   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   produce_blocks(1);
+
+   produce_block( fc::days(1) ); //Wait until July 1st
+
+   auto staked = get_delegated_bw(N(user11111111));
+
+   BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("10.0000"));
+   BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("10.0000"));
+
+   produce_blocks(1);
+   BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
+
+   // should clear the genesis balance
+   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   produce_blocks(1);
+
+   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+
+   // should throw since the refund entry should be deleted
+   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(del_genesis_rewards_unstake_all, eosio_system_tester) try {
+   cross_15_percent_threshold();
+
+   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   
+   asset prev_balance = get_balance(N(user11111111));
+   uint64_t nonce = 1;
+   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   produce_blocks(1);
+
+   produce_block( fc::days(1) ); //Wait until July 1st
+
+   auto staked = get_delegated_bw(N(user11111111));
+
+   BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("10.0000"));
+   BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("10.0000"));
+
+   BOOST_REQUIRE_EQUAL( success(), unstake( N(user11111111), N(user11111111), core_sym::from_string("10.0000"), core_sym::from_string("10.0000") ));
+
+   produce_blocks( 1 );
+   BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
+
+   // should clear the genesis balance
+   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   produce_blocks(1);   
+
+   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+
+   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(del_genesis_rewards_unstake_partial_net, eosio_system_tester) try {
+   cross_15_percent_threshold();
+
+   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   
+   asset prev_balance = get_balance(N(user11111111));
+   uint64_t nonce = 1;
+   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   produce_blocks(1);
+
+   produce_block( fc::days(1) ); //Wait until July 1st
+
+   auto staked = get_delegated_bw(N(user11111111));
+
+   BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("10.0000"));
+   BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("10.0000"));
+
+   unstake( N(user11111111), N(user11111111), core_sym::from_string("5.0000"), core_sym::from_string("0.0000") );
+
+   produce_blocks( 1 );
+   BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
+
+   // should clear the genesis balance
+   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   produce_blocks(1);   
+
+   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+
+   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(del_genesis_rewards_unstake_partial_cpu, eosio_system_tester) try {
+   cross_15_percent_threshold();
+
+   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   
+   asset prev_balance = get_balance(N(user11111111));
+   uint64_t nonce = 1;
+   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   produce_blocks(1);
+
+   produce_block( fc::days(1) ); //Wait until July 1st
+
+   auto staked = get_delegated_bw(N(user11111111));
+
+   BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("10.0000"));
+   BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("10.0000"));
+
+   unstake( N(user11111111), N(user11111111), core_sym::from_string("0.0000"), core_sym::from_string("5.0000") );
+
+   produce_blocks( 1 );
+   BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
+
+   // should clear the genesis balance
+   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   produce_blocks(1);   
+
+   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+
+   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(del_genesis_rewards_unstake_full_net, eosio_system_tester) try {
+   cross_15_percent_threshold();
+
+   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   
+   asset prev_balance = get_balance(N(user11111111));
+   uint64_t nonce = 1;
+   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   produce_blocks(1);
+
+   produce_block( fc::days(1) ); //Wait until July 1st
+
+   auto staked = get_delegated_bw(N(user11111111));
+
+   BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("10.0000"));
+   BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("10.0000"));
+
+   unstake( N(user11111111), N(user11111111), core_sym::from_string("10.0000"), core_sym::from_string("0.0000") );
+
+   produce_blocks( 1 );
+   BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
+
+   // should clear the genesis balance
+   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   produce_blocks(1);   
+
+   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+
+   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(del_genesis_rewards_unstake_full_cpu, eosio_system_tester) try {
+   cross_15_percent_threshold();
+
+   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   
+   asset prev_balance = get_balance(N(user11111111));
+   uint64_t nonce = 1;
+   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   produce_blocks(1);
+
+   produce_block( fc::days(1) ); //Wait until July 1st
+
+   auto staked = get_delegated_bw(N(user11111111));
+
+   BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("10.0000"));
+   BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("10.0000"));
+
+   unstake( N(user11111111), N(user11111111), core_sym::from_string("0.0000"), core_sym::from_string("10.0000") );
+
+   produce_blocks( 1 );
+   BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
+
+   // should clear the genesis balance
+   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   produce_blocks(1);   
+
+   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+
+   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+} FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(del_genesis_double_rewards, eosio_system_tester) try {
+   cross_15_percent_threshold();
+
+   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   
+   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), 1);
+   produce_blocks(1);
+
+   produce_block( fc::days(1) ); //Wait until July 1st
+
+   awardgenesis(N(user11111111), core_sym::from_string("30.0000"), 2);
+   produce_blocks(1);
+
+   auto staked = get_delegated_bw(N(user11111111));
+
+   BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("25.0000"));
+   BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("25.0000"));
+
+   produce_blocks( 1 );
+   BOOST_REQUIRE_EQUAL( success(), delgenesis(2));
+
+   // should clear the genesis balance
+   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("20.0000"));
+   staked = get_delegated_bw(N(user11111111));
+
+   BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("0.0000"));
+   BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("20.0000"));
+
+   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(del_genesis_rewards_extra_stake, eosio_system_tester) try {
+   cross_15_percent_threshold();
+
+   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+   // This transer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+
+   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   
+   asset prev_balance = get_balance(N(user11111111));
+   uint64_t nonce = 1;
+   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   produce_blocks(1);
+
+   BOOST_REQUIRE_EQUAL( success(), stake(N(user11111111), N(user11111111), core_sym::from_string("5.0000"), core_sym::from_string("5.0000")));
+
+   produce_block( fc::days(1) ); //Wait until July 1st
+
+   auto staked = get_delegated_bw(N(user11111111));
+
+   BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("15.0000"));
+   BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("15.0000"));
+
+   unstake( N(user11111111), N(user11111111), core_sym::from_string("5.0000"), core_sym::from_string("5.0000") );
+
+   produce_blocks( 1 );
+   BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
+
+   // should clear the genesis balance
+   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   produce_blocks(1);   
+
+   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+
+   auto refund = get_refund_request(N(user11111111));
+   BOOST_REQUIRE_EQUAL(refund["net_amount"].as<asset>(), core_sym::from_string("0.0000"));
+   BOOST_REQUIRE_EQUAL(refund["cpu_amount"].as<asset>(), core_sym::from_string("10.0000"));
+   
+} FC_LOG_AND_RETHROW()
+
 BOOST_FIXTURE_TEST_CASE(backward_rewards, eosio_system_tester) try {
    cross_15_percent_threshold();
 
