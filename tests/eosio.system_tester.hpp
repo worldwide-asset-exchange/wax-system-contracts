@@ -1,11 +1,8 @@
-/**
- *  @file
- *  @copyright defined in eos/LICENSE.txt
- */
 #pragma once
 
 #include <eosio/testing/tester.hpp>
 #include <eosio/chain/abi_serializer.hpp>
+#include <eosio/chain/resource_limits.hpp>
 #include "contracts.hpp"
 #include "test_symbol.hpp"
 
@@ -51,9 +48,9 @@ public:
    }
 
    void create_core_token( symbol core_symbol = symbol{CORE_SYM} ) {
-      FC_ASSERT( core_symbol.precision() != 4, "create_core_token assumes precision of core token is 4" );
+      FC_ASSERT( core_symbol.decimals() == 4, "create_core_token assumes core token has 4 digits of precision" );
       create_currency( N(eosio.token), config::system_account_name, asset(100000000000000, core_symbol) );
-      issue(config::system_account_name, asset(10000000000000, core_symbol) );
+      issue( asset(10000000000000, core_symbol) );
       BOOST_REQUIRE_EQUAL( asset(10000000000000, core_symbol), get_balance( "eosio", core_symbol ) );
    }
 
@@ -343,6 +340,359 @@ public:
       return unstake( acnt, acnt, net, cpu );
    }
 
+   int64_t bancor_convert( int64_t S, int64_t R, int64_t T ) { return double(R) * T  / ( double(S) + T ); };
+
+   int64_t get_net_limit( account_name a ) {
+      int64_t ram_bytes = 0, net = 0, cpu = 0;
+      control->get_resource_limits_manager().get_account_limits( a, ram_bytes, net, cpu );
+      return net;
+   };
+
+   int64_t get_cpu_limit( account_name a ) {
+      int64_t ram_bytes = 0, net = 0, cpu = 0;
+      control->get_resource_limits_manager().get_account_limits( a, ram_bytes, net, cpu );
+      return cpu;
+   };
+
+   action_result deposit( const account_name& owner, const asset& amount ) {
+      return push_action( name(owner), N(deposit), mvo()
+                          ("owner",  owner)
+                          ("amount", amount)
+      );
+   }
+
+   action_result withdraw( const account_name& owner, const asset& amount ) {
+      return push_action( name(owner), N(withdraw), mvo()
+                          ("owner",  owner)
+                          ("amount", amount)
+      );
+   }
+
+   action_result buyrex( const account_name& from, const asset& amount ) {
+      return push_action( name(from), N(buyrex), mvo()
+                          ("from",   from)
+                          ("amount", amount)
+      );
+   }
+
+   asset get_buyrex_result( const account_name& from, const asset& amount ) {
+      auto trace = base_tester::push_action( config::system_account_name, N(buyrex), from, mvo()("from", from)("amount", amount) );
+      asset rex_received;
+      for ( size_t i = 0; i < trace->action_traces.size(); ++i ) {
+         if ( trace->action_traces[i].act.name == N(buyresult) ) {
+            fc::raw::unpack( trace->action_traces[i].act.data.data(),
+                             trace->action_traces[i].act.data.size(),
+                             rex_received );
+            return rex_received;
+         }
+      }
+      return rex_received;
+   }
+
+   action_result unstaketorex( const account_name& owner, const account_name& receiver, const asset& from_net, const asset& from_cpu ) {
+      return push_action( name(owner), N(unstaketorex), mvo()
+                          ("owner",    owner)
+                          ("receiver", receiver)
+                          ("from_net", from_net)
+                          ("from_cpu", from_cpu)
+      );
+   }
+
+   asset get_unstaketorex_result( const account_name& owner, const account_name& receiver, const asset& from_net, const asset& from_cpu ) {
+      auto trace = base_tester::push_action( config::system_account_name, N(unstaketorex), owner, mvo()
+                                             ("owner", owner)
+                                             ("receiver", receiver)
+                                             ("from_net", from_net)
+                                             ("from_cpu", from_cpu)
+      );
+      asset rex_received;
+      for ( size_t i = 0; i < trace->action_traces.size(); ++i ) {
+         if ( trace->action_traces[i].act.name == N(buyresult) ) {
+            fc::raw::unpack( trace->action_traces[i].act.data.data(),
+                             trace->action_traces[i].act.data.size(),
+                             rex_received );
+            return rex_received;
+         }
+      }
+      return rex_received;
+   }
+
+   action_result sellrex( const account_name& from, const asset& rex ) {
+      return push_action( name(from), N(sellrex), mvo()
+                          ("from", from)
+                          ("rex",  rex)
+      );
+   }
+
+   asset get_sellrex_result( const account_name& from, const asset& rex ) {
+      auto trace = base_tester::push_action( config::system_account_name, N(sellrex), from, mvo()("from", from)("rex", rex) );
+      asset proceeds;
+      for ( size_t i = 0; i < trace->action_traces.size(); ++i ) {
+         if ( trace->action_traces[i].act.name == N(sellresult) ) {
+            fc::raw::unpack( trace->action_traces[i].act.data.data(),
+                             trace->action_traces[i].act.data.size(),
+                             proceeds );
+            return proceeds;
+         }
+      }
+      return proceeds;
+   }
+
+   auto get_rexorder_result( const transaction_trace_ptr& trace ) {
+      std::vector<std::pair<account_name, asset>> output;
+      for ( size_t i = 0; i < trace->action_traces.size(); ++i ) {
+         if ( trace->action_traces[i].act.name == N(orderresult) ) {
+            fc::datastream<const char*> ds( trace->action_traces[i].act.data.data(),
+                                            trace->action_traces[i].act.data.size() );
+            account_name owner; fc::raw::unpack( ds, owner );
+            asset proceeds; fc::raw::unpack( ds, proceeds );
+            output.emplace_back( owner, proceeds );
+         }
+      }
+      return output;
+   }
+
+   action_result cancelrexorder( const account_name& owner ) {
+      return push_action( name(owner), N(cnclrexorder), mvo()("owner", owner) );
+   }
+
+   action_result rentcpu( const account_name& from, const account_name& receiver, const asset& payment, const asset& fund = core_sym::from_string("0.0000") ) {
+      return push_action( name(from), N(rentcpu), mvo()
+                          ("from",         from)
+                          ("receiver",     receiver)
+                          ("loan_payment", payment)
+                          ("loan_fund",    fund)
+      );
+   }
+
+   action_result rentnet( const account_name& from, const account_name& receiver, const asset& payment, const asset& fund = core_sym::from_string("0.0000") ) {
+      return push_action( name(from), N(rentnet), mvo()
+                          ("from",         from)
+                          ("receiver",     receiver)
+                          ("loan_payment", payment)
+                          ("loan_fund",    fund)
+      );
+   }
+
+   asset _get_rentrex_result( const account_name& from, const account_name& receiver, const asset& payment, bool cpu ) {
+      const name act = cpu ? N(rentcpu) : N(rentnet);
+      auto trace = base_tester::push_action( config::system_account_name, act, from, mvo()
+                                             ("from",         from)
+                                             ("receiver",     receiver)
+                                             ("loan_payment", payment)
+                                             ("loan_fund",    core_sym::from_string("0.0000") )
+      );
+
+      asset rented_tokens = core_sym::from_string("0.0000");
+      for ( size_t i = 0; i < trace->action_traces.size(); ++i ) {
+         if ( trace->action_traces[i].act.name == N(rentresult) ) {
+            fc::raw::unpack( trace->action_traces[i].act.data.data(),
+                             trace->action_traces[i].act.data.size(),
+                             rented_tokens );
+            return rented_tokens;
+         }
+      }
+      return rented_tokens;
+   }
+
+   asset get_rentcpu_result( const account_name& from, const account_name& receiver, const asset& payment ) {
+      return _get_rentrex_result( from, receiver, payment, true );
+   }
+
+   asset get_rentnet_result( const account_name& from, const account_name& receiver, const asset& payment ) {
+      return _get_rentrex_result( from, receiver, payment, false );
+   }
+
+   action_result fundcpuloan( const account_name& from, const uint64_t loan_num, const asset& payment ) {
+      return push_action( name(from), N(fundcpuloan), mvo()
+                          ("from",       from)
+                          ("loan_num",   loan_num)
+                          ("payment",    payment)
+      );
+   }
+
+   action_result fundnetloan( const account_name& from, const uint64_t loan_num, const asset& payment ) {
+      return push_action( name(from), N(fundnetloan), mvo()
+                          ("from",       from)
+                          ("loan_num",   loan_num)
+                          ("payment",    payment)
+      );
+   }
+
+
+   action_result defundcpuloan( const account_name& from, const uint64_t loan_num, const asset& amount ) {
+      return push_action( name(from), N(defcpuloan), mvo()
+                          ("from",     from)
+                          ("loan_num", loan_num)
+                          ("amount",   amount)
+      );
+   }
+
+   action_result defundnetloan( const account_name& from, const uint64_t loan_num, const asset& amount ) {
+      return push_action( name(from), N(defnetloan), mvo()
+                          ("from",     from)
+                          ("loan_num", loan_num)
+                          ("amount",   amount)
+      );
+   }
+
+   action_result updaterex( const account_name& owner ) {
+      return push_action( name(owner), N(updaterex), mvo()("owner", owner) );
+   }
+
+   action_result rexexec( const account_name& user, uint16_t max ) {
+      return push_action( name(user), N(rexexec), mvo()("user", user)("max", max) );
+   }
+
+   action_result consolidate( const account_name& owner ) {
+      return push_action( name(owner), N(consolidate), mvo()("owner", owner) );
+   }
+
+   action_result mvtosavings( const account_name& owner, const asset& rex ) {
+      return push_action( name(owner), N(mvtosavings), mvo()("owner", owner)("rex", rex) );
+   }
+
+   action_result mvfrsavings( const account_name& owner, const asset& rex ) {
+      return push_action( name(owner), N(mvfrsavings), mvo()("owner", owner)("rex", rex) );
+   }
+
+   action_result closerex( const account_name& owner ) {
+      return push_action( name(owner), N(closerex), mvo()("owner", owner) );
+   }
+
+   fc::variant get_last_loan(bool cpu) {
+      vector<char> data;
+      const auto& db = control->db();
+      namespace chain = eosio::chain;
+      auto table = cpu ? N(cpuloan) : N(netloan);
+      const auto* t_id = db.find<eosio::chain::table_id_object, chain::by_code_scope_table>( boost::make_tuple( config::system_account_name, config::system_account_name, table ) );
+      if ( !t_id ) {
+         return fc::variant();
+      }
+
+      const auto& idx = db.get_index<chain::key_value_index, chain::by_scope_primary>();
+
+      auto itr = idx.upper_bound( boost::make_tuple( t_id->id, std::numeric_limits<uint64_t>::max() ));
+      if ( itr == idx.begin() ) {
+         return fc::variant();
+      }
+      --itr;
+      if ( itr->t_id != t_id->id ) {
+         return fc::variant();
+      }
+
+      data.resize( itr->value.size() );
+      memcpy( data.data(), itr->value.data(), data.size() );
+      return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "rex_loan", data, abi_serializer_max_time );
+   }
+
+   fc::variant get_last_cpu_loan() {
+      return get_last_loan( true );
+   }
+
+   fc::variant get_last_net_loan() {
+      return get_last_loan( false );
+   }
+
+   fc::variant get_loan_info( const uint64_t& loan_num, bool cpu ) const {
+      name table_name = cpu ? N(cpuloan) : N(netloan);
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, table_name, loan_num );
+      return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "rex_loan", data, abi_serializer_max_time );
+   }
+
+   fc::variant get_cpu_loan( const uint64_t loan_num ) const {
+      return get_loan_info( loan_num, true );
+   }
+
+   fc::variant get_net_loan( const uint64_t loan_num ) const {
+      return get_loan_info( loan_num, false );
+   }
+
+   fc::variant get_dbw_obj( const account_name& from, const account_name& receiver ) const {
+      vector<char> data = get_row_by_account( config::system_account_name, from, N(delband), receiver );
+      return data.empty() ? fc::variant() : abi_ser.binary_to_variant("delegated_bandwidth", data, abi_serializer_max_time);
+   }
+
+   asset get_rex_balance( const account_name& act ) const {
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(rexbal), act );
+      return data.empty() ? asset(0, symbol(SY(4, REX))) : abi_ser.binary_to_variant("rex_balance", data, abi_serializer_max_time)["rex_balance"].as<asset>();
+   }
+
+   fc::variant get_rex_balance_obj( const account_name& act ) const {
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(rexbal), act );
+      return data.empty() ? fc::variant() : abi_ser.binary_to_variant("rex_balance", data, abi_serializer_max_time);
+   }
+
+   asset get_rex_fund( const account_name& act ) const {
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(rexfund), act );
+      return data.empty() ? asset(0, symbol{CORE_SYM}) : abi_ser.binary_to_variant("rex_fund", data, abi_serializer_max_time)["balance"].as<asset>();
+   }
+
+   fc::variant get_rex_fund_obj( const account_name& act ) const {
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(rexfund), act );
+      return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "rex_fund", data, abi_serializer_max_time );
+   }
+
+   asset get_rex_vote_stake( const account_name& act ) const {
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(rexbal), act );
+      return data.empty() ? core_sym::from_string("0.0000") : abi_ser.binary_to_variant("rex_balance", data, abi_serializer_max_time)["vote_stake"].as<asset>();
+   }
+
+   fc::variant get_rex_order( const account_name& act ) {
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(rexqueue), act );
+      return abi_ser.binary_to_variant( "rex_order", data, abi_serializer_max_time );
+   }
+
+   fc::variant get_rex_order_obj( const account_name& act ) {
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(rexqueue), act );
+      return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "rex_order", data, abi_serializer_max_time );
+   }
+
+   fc::variant get_rex_pool() const {
+      vector<char> data;
+      const auto& db = control->db();
+      namespace chain = eosio::chain;
+      const auto* t_id = db.find<eosio::chain::table_id_object, chain::by_code_scope_table>( boost::make_tuple( config::system_account_name, config::system_account_name, N(rexpool) ) );
+      if ( !t_id ) {
+         return fc::variant();
+      }
+
+      const auto& idx = db.get_index<chain::key_value_index, chain::by_scope_primary>();
+
+      auto itr = idx.lower_bound( boost::make_tuple( t_id->id, 0 ) );
+      if ( itr == idx.end() || itr->t_id != t_id->id || 0 != itr->primary_key ) {
+         return fc::variant();
+      }
+
+      data.resize( itr->value.size() );
+      memcpy( data.data(), itr->value.data(), data.size() );
+      return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "rex_pool", data, abi_serializer_max_time );
+   }
+
+   void setup_rex_accounts( const std::vector<account_name>& accounts,
+                            const asset& init_balance,
+                            const asset& net = core_sym::from_string("80.0000"),
+                            const asset& cpu = core_sym::from_string("80.0000"),
+                            bool deposit_into_rex_fund = true ) {
+      const asset nstake = core_sym::from_string("10.0000");
+      const asset cstake = core_sym::from_string("10.0000");
+      create_account_with_resources( N(proxyaccount), config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      BOOST_REQUIRE_EQUAL( success(), push_action( N(proxyaccount), N(regproxy), mvo()("proxy", "proxyaccount")("isproxy", true) ) );
+      for (const auto& a: accounts) {
+         create_account_with_resources( a, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+         transfer( config::system_account_name, a, init_balance + nstake + cstake, config::system_account_name );
+         BOOST_REQUIRE_EQUAL( success(),                        stake( a, a, nstake, cstake) );
+         BOOST_REQUIRE_EQUAL( success(),                        vote( a, { }, N(proxyaccount) ) );
+         BOOST_REQUIRE_EQUAL( init_balance,                     get_balance(a) );
+         BOOST_REQUIRE_EQUAL( asset::from_string("0.0000 REX"), get_rex_balance(a) );
+         if (deposit_into_rex_fund) {
+            BOOST_REQUIRE_EQUAL( success(),    deposit( a, init_balance ) );
+            BOOST_REQUIRE_EQUAL( init_balance, get_rex_fund( a ) );
+            BOOST_REQUIRE_EQUAL( 0,            get_balance( a ).get_amount() );
+         }
+      }
+   }
+
    action_result bidname( const account_name& bidder, const account_name& newname, const asset& bid ) {
       return push_action( name(bidder), N(bidname), mvo()
                           ("bidder",  bidder)
@@ -444,20 +794,47 @@ public:
       base_tester::push_action(contract, N(create), contract, act );
    }
 
-   void issue( name to, const asset& amount, name manager = config::system_account_name ) {
+   void issue( const asset& amount, const name& manager = config::system_account_name ) {
       base_tester::push_action( N(eosio.token), N(issue), manager, mutable_variant_object()
-                                ("to",      to )
+                                ("to",       manager )
                                 ("quantity", amount )
-                                ("memo", "")
+                                ("memo",     "")
                                 );
    }
-   void transfer( name from, name to, const asset& amount, name manager = config::system_account_name ) {
+
+   void transfer( const name& from, const name& to, const asset& amount, const name& manager = config::system_account_name ) {
       base_tester::push_action( N(eosio.token), N(transfer), manager, mutable_variant_object()
                                 ("from",    from)
                                 ("to",      to )
                                 ("quantity", amount)
                                 ("memo", "")
                                 );
+   }
+
+   void issue_and_transfer( const name& to, const asset& amount, const name& manager = config::system_account_name ) {
+      signed_transaction trx;
+      trx.actions.emplace_back( get_action( N(eosio.token), N(issue),
+                                            vector<permission_level>{{manager, config::active_name}},
+                                            mutable_variant_object()
+                                            ("to",       manager )
+                                            ("quantity", amount )
+                                            ("memo",     "")
+                                            )
+                                );
+      if ( to != manager ) {
+         trx.actions.emplace_back( get_action( N(eosio.token), N(transfer),
+                                               vector<permission_level>{{manager, config::active_name}},
+                                               mutable_variant_object()
+                                               ("from",     manager)
+                                               ("to",       to )
+                                               ("quantity", amount )
+                                               ("memo",     "")
+                                               )
+                                   );
+      }
+      set_transaction_headers( trx );
+      trx.sign( get_private_key( manager, "active" ), control->get_chain_id()  );
+      push_transaction( trx );
    }
 
    double stake2votes( asset stake ) {
