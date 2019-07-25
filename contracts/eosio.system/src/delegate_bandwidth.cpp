@@ -384,7 +384,7 @@ namespace eosiosystem {
          auto from_cpu = std::min(del_bw_itr->cpu_weight, tokens - from_net);
          
          if(from_net != zero_asset || from_cpu != zero_asset) {
-            system_contract::undelegatebw_action undelegatebw_act{ get_self(), { receiver, active_permission } };
+            system_contract::undelegatebw_action undelegatebw_act{ get_self(), { { receiver, active_permission } } };
             undelegatebw_act.send(receiver, receiver, from_net, from_cpu);
          }
       }
@@ -480,10 +480,8 @@ namespace eosiosystem {
       asset to_net(net_amount, core_symbol());
       asset to_cpu(tokens.amount - net_amount, core_symbol());
 
-      INLINE_ACTION_SENDER(system_contract, delegatebw)(
-            _self, { {from, active_permission}, {receiver, active_permission} },
-            { from, receiver, to_net, to_cpu, true }
-         );
+      system_contract::delegatebw_action delegatebw_act{ get_self(), { {from, active_permission}, {receiver, active_permission} } };
+      delegatebw_act.send(from, receiver, to_net, to_cpu, true);
    }
 
    int64_t system_contract::get_unclaimed_gbm_balance( name claimer )
@@ -533,10 +531,8 @@ namespace eosiosystem {
       // Deal with paying
       const asset payable_rewards ( unclaimed_balance, core_symbol() );
 
-      INLINE_ACTION_SENDER(eosio::token, transfer)(
-         token_account, { {genesis_account, "active"_n} },
-         { genesis_account, claimer, payable_rewards, std::string("claimgenesis") }
-      );
+      token::transfer_action transfer_act{ token_account, { {genesis_account, "active"_n} } };
+      transfer_act.send(genesis_account, claimer, payable_rewards, std::string("claimgenesis"));
    }
 
    bool system_contract::has_genesis_balance( name owner )

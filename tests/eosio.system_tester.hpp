@@ -92,6 +92,7 @@ public:
       full
    };
 
+/*
    static controller::config default_config() {
       controller::config vcfg = validating_tester::default_config();
 
@@ -102,8 +103,8 @@ public:
 
    eosio_system_tester( setup_level l = setup_level::full )
       :   TESTER(eosio_system_tester::default_config())
-   {
-
+   {*/
+eosio_system_tester( setup_level l = setup_level::full ) {
       if( l == setup_level::none ) return;
 
       basic_setup();
@@ -127,6 +128,7 @@ public:
       deploy_contract();
       remaining_setup();
    }
+
 
    void create_accounts_with_resources( vector<account_name> accounts, account_name creator = config::system_account_name ) {
       for( auto a : accounts ) {
