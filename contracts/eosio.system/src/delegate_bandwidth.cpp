@@ -612,6 +612,9 @@ namespace eosiosystem {
              "cannot undelegate bandwidth until the chain is activated (at least 15% of all tokens participate in voting)" );
 
       changebw( from, receiver, -unstake_net_quantity, -unstake_cpu_quantity, false);
+
+      // deal with genesis balance
+      change_genesis(receiver);
    } // undelegatebw
 
 

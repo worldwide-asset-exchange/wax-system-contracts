@@ -1242,7 +1242,7 @@ namespace eosiosystem {
           * @param owner - producer account claiming per-block and per-vote rewards.
           */
          [[eosio::action]]
-         void claimrewards( const name owner );
+         void claimrewards( const name& owner );
 
          /**
           * Claim GBM vote reward.

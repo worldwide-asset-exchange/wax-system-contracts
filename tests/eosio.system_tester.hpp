@@ -92,19 +92,7 @@ public:
       full
    };
 
-/*
-   static controller::config default_config() {
-      controller::config vcfg = validating_tester::default_config();
-
-      vcfg.genesis.initial_timestamp = fc::time_point::from_iso_string("2019-06-30T00:00:00.000");
-
-      return vcfg;
-   }
-
-   eosio_system_tester( setup_level l = setup_level::full )
-      :   TESTER(eosio_system_tester::default_config())
-   {*/
-eosio_system_tester( setup_level l = setup_level::full ) {
+   eosio_system_tester( setup_level l = setup_level::full ) {
       if( l == setup_level::none ) return;
 
       basic_setup();
@@ -746,6 +734,11 @@ eosio_system_tester( setup_level l = setup_level::full ) {
 
    uint32_t last_block_time() const {
       return time_point_sec( control->head_block_time() ).sec_since_epoch();
+   }
+
+   asset get_genesis_unclaimed_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
+      vector<char> data = get_row_by_account( config::system_account_name, act, N(genesis), balance_symbol.to_symbol_code().value );
+      return data.empty() ? asset(0, balance_symbol) : abi_ser.binary_to_variant("genesis_tokens", data, abi_serializer_max_time)["unclaimed_balance"].as<asset>();
    }
 
    asset get_genesis_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {

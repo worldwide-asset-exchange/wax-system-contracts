@@ -166,7 +166,7 @@ namespace eosiosystem {
       }
    }
 
-   void system_contract::claimrewards( const name owner ) {
+   void system_contract::claimrewards( const name& owner ) {
       claim_producer_rewards(owner, false);
    }
 

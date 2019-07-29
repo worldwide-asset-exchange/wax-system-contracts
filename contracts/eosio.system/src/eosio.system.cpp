@@ -361,9 +361,6 @@ namespace eosiosystem {
          m.quote.balance.amount = system_token_supply.amount / 1000;
          m.quote.balance.symbol = core;
       });
-
-      token::open_action open_act{ token_account, { {get_self(), active_permission} } };
-      open_act.send( rex_account, core, get_self() );
    }
 
 } /// eosio.system
