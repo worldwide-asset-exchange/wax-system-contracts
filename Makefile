@@ -33,8 +33,7 @@ dev-docker-start: dev-docker-stop
 .PHONY:dev-docker-all
 dev-docker-all: dev-docker-stop
 	docker run --tty --user $(shell id -u):$(shell id -g) $(DOCKER_COMMON) bash -c "\
-		   mkdir -p build && \
-		   cd ./build && cmake .. && \
-		   make -j$(CMAKE_CPU_SETUP) && \
-           tests/unit_test --run_test=eosio_system_tests --log_level=all"
-		   #tests/unit_test --run_test=eosio_system_tests/claim_half_period_twice --log_level=all"
+        rm -rf build && \
+        cmake . -B./build -GNinja && \
+        cmake --build ./build && \
+        build/tests/unit_test --show_progress"

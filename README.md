@@ -22,8 +22,8 @@ The following unprivileged contract(s) are also part of the system.
    * [eosio.token](./contracts/eosio.token)
 
 Dependencies:
-* [WAX v1.8.x](<WAX link here>)
-* [WAX CDT v1.6.x](<WAX link here>)
+* [WAX v1.8.x](https://github.com/worldwide-asset-exchange/wax-blockchain/tree/wax-1.8.1-1.0.0)
+* [WAX CDT v1.6.x](https://github.com/worldwide-asset-exchange/wax-cdt/tree/wax-1.6.1-1.0.0)
 
 ### Installation Instructions
 To build the contracts and the unit tests:

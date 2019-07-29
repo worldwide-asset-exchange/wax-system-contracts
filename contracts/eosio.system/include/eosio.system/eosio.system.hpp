@@ -288,8 +288,8 @@ namespace eosiosystem {
       };
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( voter_info, (owner)(proxy)(producers)(staked)(last_vote_weight)(proxied_vote_weight)(is_proxy)(flags1)(reserved2)(reserved3)
-                        (unpaid_voteshare)(unpaid_voteshare_last_updated)(unpaid_voteshare_change_rate)(last_claim_time) )
+      EOSLIB_SERIALIZE( voter_info, (owner)(proxy)(producers)(staked)(unpaid_voteshare)(unpaid_voteshare_last_updated)(unpaid_voteshare_change_rate)
+                                    (last_claim_time)(last_vote_weight)(proxied_vote_weight)(is_proxy)(flags1)(reserved2)(reserved3) )
    };
 
    /**

@@ -4656,13 +4656,6 @@ BOOST_FIXTURE_TEST_CASE( ram_gift, eosio_system_tester ) try {
    BOOST_REQUIRE_THROW( create_account_with_resources( N(abcdefghklmn), N(alice1111111), 2724 + 112 + 160 - 1400 - 1 ),
                         ram_usage_exceeded );
    */
-   //alice1111111 makes stake and votes
-   issue_and_transfer( "alice1111111", core_sym::from_string("1000.0000"),  config::system_account_name );
-   BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111", core_sym::from_string("30.0001"), core_sym::from_string("20.0001") ) );
-   BOOST_REQUIRE_EQUAL( success(), vote( N(alice1111111), { N(defproducer1), N(defproducer2) } ) );
-   BOOST_TEST_REQUIRE( stake2votes(core_sym::from_string("50.0002")) == get_producer_info( "defproducer1" )["total_votes"].as_double() );
-   BOOST_TEST_REQUIRE( stake2votes(core_sym::from_string("50.0002")) == get_producer_info( "defproducer2" )["total_votes"].as_double() );
-   BOOST_REQUIRE_EQUAL( 0, get_producer_info( "defproducer3" )["total_votes"].as_double() );
 
    //check that stake/unstake keeps the gift
    transfer( "eosio", "alice1111111", core_sym::from_string("1000.0000"), "eosio" );
