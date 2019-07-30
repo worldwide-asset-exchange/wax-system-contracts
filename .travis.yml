@@ -2,4 +2,4 @@ language: c++
 services:
   - docker
 script:
--  travis_wait 35 make dev-docker-all
+-  travis_wait 40 make dev-docker-all
