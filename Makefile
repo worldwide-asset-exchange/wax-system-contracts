@@ -32,7 +32,7 @@ dev-docker-start: dev-docker-stop
 # Useful for wax-docker project
 .PHONY:dev-docker-all
 dev-docker-all: dev-docker-stop
-	docker run --tty --user $(shell id -u):$(shell id -g) $(DOCKER_COMMON) bash -c "\
+	docker run --user $(shell id -u):$(shell id -g) $(DOCKER_COMMON) bash -c "\
         rm -rf build && \
         cmake . -B./build -GNinja && \
         cmake --build ./build && \
