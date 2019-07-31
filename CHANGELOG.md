@@ -11,7 +11,7 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
-## Pending (wax-1.7.0-1.0.0)
+## wax-1.7.0-1.0.0
 
 BREAKING CHANGES:
 - [KEW-1396] Upgrade to 1.7.0-1.0.0.
