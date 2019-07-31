@@ -33,7 +33,7 @@ dev-docker-start: dev-docker-stop
 .PHONY:dev-docker-all
 dev-docker-all: dev-docker-stop
 	docker run --user $(shell id -u):$(shell id -g) $(DOCKER_COMMON) bash -c "\
-        rm -rf build && \
+        rm -rf build -GNinja && \
         cmake . -B./build && \
         cmake --build ./build && \
         build/tests/unit_test --show_progress"
