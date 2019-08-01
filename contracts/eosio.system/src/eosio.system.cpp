@@ -21,7 +21,12 @@ namespace eosiosystem {
     _rexpool(get_self(), get_self().value),
     _rexfunds(get_self(), get_self().value),
     _rexbalance(get_self(), get_self().value),
-    _rexorders(get_self(), get_self().value)
+    _rexorders(get_self(), get_self().value),
+    _proposers(get_self(), get_self().value),
+    _proposals(get_self(), get_self().value),
+    _committees(get_self(), get_self().value),
+    _reviewers(get_self(), get_self().value),
+    _wps_env(get_self(), get_self().value)
    {
       //print( "construct system\n" );
       _gstate  = _global.exists() ? _global.get() : get_default_parameters();
