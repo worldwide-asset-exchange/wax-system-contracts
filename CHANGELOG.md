@@ -1,7 +1,7 @@
 # Changelog
 
 
-## Pending (wax-1.5.2-X.Y.Z)
+## Pending (wax-1.7.0-X.Y.Z)
 
 BREAKING CHANGES:
 
