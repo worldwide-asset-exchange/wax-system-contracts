@@ -4,6 +4,15 @@
 #include <eosio/crypto.hpp>
 #include <eosio/dispatcher.hpp>
 
+#include "producer_pay.cpp"
+#include "delegate_bandwidth.cpp"
+#include "voting.cpp"
+#include "exchange_state.cpp"
+#include "rex.cpp"
+#include "rex.results.cpp"
+#include "native.cpp"
+#include "wps.cpp"
+
 namespace eosiosystem {
 
    using eosio::current_time_point;

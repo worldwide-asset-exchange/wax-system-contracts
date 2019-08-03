@@ -79,7 +79,7 @@ namespace eosiosystem {
    static const time_point gbm_initial_time(eosio::seconds(1561939200));     // July 1st 2019 00:00:00
    static const time_point gbm_final_time = gbm_initial_time + eosio::microseconds(useconds_in_gbm_period);   // July 1st 2022 00:00:00
 
-    const uint32_t seconds_per_day = 60 * 60 * 24;
+   //static const uint32_t seconds_per_day = 60 * 60 * 24;
 
    /**
     *
@@ -707,7 +707,7 @@ namespace eosiosystem {
          rex_order_table         _rexorders;
          proposer_table          _proposers;
          proposal_table          _proposals;
-         commitee_table          _committees;
+         committee_table          _committees;
          reviewer_table          _reviewers;
          wps_env_singleton       _wps_env;
 
@@ -1507,7 +1507,7 @@ namespace eosiosystem {
        void editreviewer(name committee, name reviewer, const string& first_name, const string& last_name);
 
        [[eosio::action]]
-       void rmvreviewer(name committee, const account_name reviewer);
+       void rmvreviewer(name committee, const name reviewer);
 
        [[eosio::action]]
        void acceptprop(name reviewer, uint64_t proposal_id);
@@ -1522,7 +1522,7 @@ namespace eosiosystem {
        void rmvreject(name reviewer, uint64_t proposal_id);
 
        [[eosio::action]]
-       void rmvcompleted(account_name reviewer, uint64_t proposal_id);
+       void rmvcompleted(name reviewer, uint64_t proposal_id);
 
        [[eosio::action]]
        void setwpsenv(uint32_t total_voting_percent, uint32_t duration_of_voting, uint32_t max_duration_of_funding, uint32_t total_iteration_of_funding);
@@ -1540,7 +1540,7 @@ namespace eosiosystem {
        void rejectfund(name committeeman, uint64_t proposal_id, const string& reason);
 
        [[eosio::action]]
-       void checkexpire(account_name watchman, uint64_t proposal_id);
+       void checkexpire(name watchman, uint64_t proposal_id);
 
          using init_action = eosio::action_wrapper<"init"_n, &system_contract::init>;
          using setacctram_action = eosio::action_wrapper<"setacctram"_n, &system_contract::setacctram>;
@@ -1590,27 +1590,27 @@ namespace eosiosystem {
          using setpriv_action = eosio::action_wrapper<"setpriv"_n, &system_contract::setpriv>;
          using setalimits_action = eosio::action_wrapper<"setalimits"_n, &system_contract::setalimits>;
          using setparams_action = eosio::action_wrapper<"setparams"_n, &system_contract::setparams>;
-         using regproposer_action = eosio::action_wrapper<"regproposer"_n, &system_contract::regproposer>;
-         using editproposer_action = eosio::action_wrapper<"editproposer"_n, &system_contract::editproposer>;
-         using rmvproposer_action = eosio::action_wrapper<"rmvproposer"_n, &system_contract::rmvproposer>;
-         using regproposal_action = eosio::action_wrapper<"regproposal"_n, &system_contract::regproposal>;
-         using editproposal_action = eosio::action_wrapper<"editproposal"_n, &system_contract::editproposal>;
-         using rmvproposal_action = eosio::action_wrapper<"rmvproposal"_n, &system_contract::rmvproposal>;
-         using claimfunds_action = eosio::action_wrapper<"claimfunds"_n, &system_contract::claimfunds>;
-         using regreviewer_action = eosio::action_wrapper<"regreviewer"_n, &system_contract::regreviewer>;
-         using editreviewer_action = eosio::action_wrapper<"editreviewer"_n, &system_contract::editreviewer>;
-         using rmvreviewer_action = eosio::action_wrapper<"rmvreviewer"_n, &system_contract::rmvreviewer>;
-         using acceptprop_action = eosio::action_wrapper<"acceptprop"_n, &system_contract::acceptprop>;
-         using rejectprop_action = eosio::action_wrapper<"rejectprop"_n, &system_contract::rejectprop>;
-         using approve_action = eosio::action_wrapper<"approve"_n, &system_contract::approve>;
-         using regcommittee_action = eosio::action_wrapper<"regcommittee"_n, &system_contract::regcommittee>;
-         using edcommittee = eosio::action_wrapper<"edcommittee"_n, &system_contract::edcommittee>;
-         using rmvcommittee = eosio::action_wrapper<"rmvcommittee"_n, &system_contract::rmvcommittee>;
-         using rmvreject_action = eosio::action_wrapper<"rmvreject"_n, &system_contract::rmvreject>;
-         using rmvcompleted_action = eosio::action_wrapper<"rmvcompleted"_n, &system_contract::rmvcompleted>;
-         using setwpsenv_action = eosio::action_wrapper<"setwpsenv"_n, &system_contract::setwpsenv>;
-         using rejectfund_action = eosio::action_wrapper<"rejectfund"_n, &system_contract::rejectfund>;
-         using checkexpire_action = eosio::action_wrapper<"checkexpire"_n, &system_contract::checkexpire>;
+       using regproposer_action = eosio::action_wrapper<"regproposer"_n, &system_contract::regproposer>;
+       using editproposer_action = eosio::action_wrapper<"editproposer"_n, &system_contract::editproposer>;
+       using rmvproposer_action = eosio::action_wrapper<"rmvproposer"_n, &system_contract::rmvproposer>;
+       using regproposal_action = eosio::action_wrapper<"regproposal"_n, &system_contract::regproposal>;
+       using editproposal_action = eosio::action_wrapper<"editproposal"_n, &system_contract::editproposal>;
+       using rmvproposal_action = eosio::action_wrapper<"rmvproposal"_n, &system_contract::rmvproposal>;
+       using claimfunds_action = eosio::action_wrapper<"claimfunds"_n, &system_contract::claimfunds>;
+       using regreviewer_action = eosio::action_wrapper<"regreviewer"_n, &system_contract::regreviewer>;
+       using editreviewer_action = eosio::action_wrapper<"editreviewer"_n, &system_contract::editreviewer>;
+       using rmvreviewer_action = eosio::action_wrapper<"rmvreviewer"_n, &system_contract::rmvreviewer>;
+       using acceptprop_action = eosio::action_wrapper<"acceptprop"_n, &system_contract::acceptprop>;
+       using rejectprop_action = eosio::action_wrapper<"rejectprop"_n, &system_contract::rejectprop>;
+       using approve_action = eosio::action_wrapper<"approve"_n, &system_contract::approve>;
+       using regcommittee_action = eosio::action_wrapper<"regcommittee"_n, &system_contract::regcommittee>;
+       using edcommittee_action = eosio::action_wrapper<"edcommittee"_n, &system_contract::edcommittee>;
+       using rmvcommittee_action = eosio::action_wrapper<"rmvcommittee"_n, &system_contract::rmvcommittee>;
+       using rmvreject_action = eosio::action_wrapper<"rmvreject"_n, &system_contract::rmvreject>;
+       using rmvcompleted_action = eosio::action_wrapper<"rmvcompleted"_n, &system_contract::rmvcompleted>;
+       using setwpsenv_action = eosio::action_wrapper<"setwpsenv"_n, &system_contract::setwpsenv>;
+       using rejectfund_action = eosio::action_wrapper<"rejectfund"_n, &system_contract::rejectfund>;
+       using checkexpire_action = eosio::action_wrapper<"checkexpire"_n, &system_contract::checkexpire>;
 
       private:
          // WAX specifics
