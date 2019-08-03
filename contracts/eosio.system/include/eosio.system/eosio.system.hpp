@@ -15,14 +15,6 @@
 #include <type_traits>
 
 
-#ifdef CHANNEL_RAM_AND_NAMEBID_FEES_TO_REX
-#undef CHANNEL_RAM_AND_NAMEBID_FEES_TO_REX
-#endif
-// CHANNEL_RAM_AND_NAMEBID_FEES_TO_REX macro determines whether ramfee and namebid proceeds are
-// channeled to REX pool. In order to stop these proceeds from being channeled, the macro must
-// be set to 0.
-#define CHANNEL_RAM_AND_NAMEBID_FEES_TO_REX 1
-
 namespace eosiosystem {
 
    using eosio::asset;
@@ -79,7 +71,7 @@ namespace eosiosystem {
    static const time_point gbm_initial_time(eosio::seconds(1561939200));     // July 1st 2019 00:00:00
    static const time_point gbm_final_time = gbm_initial_time + eosio::microseconds(useconds_in_gbm_period);   // July 1st 2022 00:00:00
 
-    const uint32_t seconds_per_day = 60 * 60 * 24;
+   //static const uint32_t seconds_per_day = 60 * 60 * 24;
 
    /**
     *
@@ -296,6 +288,17 @@ namespace eosiosystem {
                                     (last_claim_time)(last_vote_weight)(proxied_vote_weight)(is_proxy)(flags1)(reserved2)(reserved3) )
    };
 
+   struct [[eosio::table, eosio::contract("eosio.system")]] wps_voter {
+       name owner;
+       std::vector<name> proposals; /// the proposals approved by this voter if no proxy is set
+       double last_vote_weight = 0;
+
+       uint64_t primary_key()const { return owner.value; }
+
+       EOSLIB_SERIALIZE( wps_voter, (owner)(proposals)(last_vote_weight))
+   };
+
+
     struct [[eosio::table, eosio::contract("eosio.system")]] proposer {
         name account;
         string first_name;
@@ -306,7 +309,7 @@ namespace eosiosystem {
         string telegram;
         string website;
         string linkedin;
-        uint64_t last_claim_time;
+        time_point_sec last_claim_time;
         uint64_t primary_key() const { return account.value; }
         EOSLIB_SERIALIZE( proposer, (account)(first_name)(last_name)(img_url)(bio)(country)(telegram)(website)(linkedin)(last_claim_time) )
     };
@@ -334,17 +337,17 @@ namespace eosiosystem {
         uint64_t duration;            // duration
         vector<string> members;       // linkedin
         asset funding_goal;           // amount of EOS
-        uint64_t total_votes;         // total votes
-        uint64_t agree_votes;         // agree votes
-        uint64_t disagree_votes;      // disagree votes
+        double total_votes;         // total votes
         uint8_t status;               // status
-        uint64_t vote_start_time;     // time when voting starts (seconds)
-        uint64_t fund_start_time;     // time when funding starts (seconds)
-        uint8_t iteration_of_funding; // number of iterations
+        time_point_sec vote_start_time;     // time when voting starts (seconds)
+        time_point_sec fund_start_time;     // time when funding starts (seconds)
+        uint32_t iteration_of_funding; // current number of iterations
+        uint32_t total_iterations; // total number of iterations
         uint64_t primary_key() const { return proposer.value; }
         uint64_t by_id() const { return id; }
+        double   by_votes()const    { return total_votes;  }
         EOSLIB_SERIALIZE( proposal, (proposer)(id)(committee)(category)(subcategory)(title)(summary)(project_img_url)(description)(roadmap)(duration)(members)(funding_goal)
-                (total_votes)(agree_votes)(disagree_votes)(status)(vote_start_time)(fund_start_time)(iteration_of_funding) )
+                (total_votes)(status)(vote_start_time)(fund_start_time)(iteration_of_funding)(total_iterations) )
     };
 
     struct [[eosio::table, eosio::contract("eosio.system")]] committee {
@@ -364,15 +367,13 @@ namespace eosiosystem {
         EOSLIB_SERIALIZE( reviewer, (account)(committee)(first_name)(last_name) )
     };
 
-    struct [[eosio::table, eosio::contract("eosio.system")]] wps_env {
-        wps_env() { }
-        uint64_t proposal_current_index = 0;
+    struct [[eosio::table("wpsglobal"), eosio::contract("eosio.system")]] wpsenv {
         uint32_t total_voting_percent = 5;           // 5%
         uint32_t duration_of_voting = 30;            // voting duration (days)
-        uint32_t max_duration_of_funding = 180;      // funding duration (days)
+        uint32_t max_duration_of_funding = 500;      // funding duration (days)
         uint32_t total_iteration_of_funding = 6;     //
         uint64_t primary_key() const { return 0; }
-        EOSLIB_SERIALIZE( wps_env, (proposal_current_index)(total_voting_percent)(duration_of_voting)(max_duration_of_funding)(total_iteration_of_funding) )
+        EOSLIB_SERIALIZE( wpsenv, (total_voting_percent)(duration_of_voting)(max_duration_of_funding)(total_iteration_of_funding) )
     };
 
     /**
@@ -389,7 +390,8 @@ namespace eosiosystem {
     * @details The proposals table stores all WPS proposal items
     */
     typedef eosio::multi_index< "proposals"_n, proposal,
-            indexed_by< "idx"_n, const_mem_fun<proposal, uint64_t, &proposal::by_id>  >
+            indexed_by< "idx"_n, const_mem_fun<proposal, uint64_t, &proposal::by_id>  >,
+            indexed_by<"prototalvote"_n, const_mem_fun<proposal, double, &proposal::by_votes>  >
     > proposal_table;
 
     /**
@@ -411,7 +413,7 @@ namespace eosiosystem {
     *
     * @details The WPS environment singleton holds configurable variables for the system
     */
-    typedef eosio::singleton< "wpsglobal"_n, wps_env > wps_env_singleton;
+    typedef eosio::singleton< "wpsglobal"_n, wpsenv > wps_env_singleton;
 
    /**
     * Voters table
@@ -420,6 +422,12 @@ namespace eosiosystem {
     */
    typedef eosio::multi_index< "voters"_n, voter_info >  voters_table;
 
+    /**
+     * WPS voters table
+     *
+     * @details The WPS voters table stores all the `wps_voter`s instances, all WPS voters information.
+     */
+    typedef eosio::multi_index< "wpsvoters"_n, wps_voter >  wps_voters_table;
 
    /**
     * Defines producer info table added in version 1.0
@@ -692,6 +700,7 @@ namespace eosiosystem {
 
       private:
          voters_table            _voters;
+         wps_voters_table        _wpsvoters;
          producers_table         _producers;
          producers_table2        _producers2;
          global_state_singleton  _global;
@@ -707,9 +716,9 @@ namespace eosiosystem {
          rex_order_table         _rexorders;
          proposer_table          _proposers;
          proposal_table          _proposals;
-         commitee_table          _committees;
+         committee_table          _committees;
          reviewer_table          _reviewers;
-         wps_env_singleton       _wps_env;
+         //wps_env_singleton       _wps_env;
 
       public:
          static constexpr eosio::name active_permission{"active"_n};
@@ -1465,7 +1474,7 @@ namespace eosiosystem {
        void rmvproposer(name account);
 
        [[eosio::action]]
-       void claimfunds(name account, uint64_t proposal_id);
+       void claimfunds(name account);
 
        [[eosio::action]]
        void regproposal(
@@ -1479,7 +1488,8 @@ namespace eosiosystem {
                    const string& roadmap,
                    uint64_t duration,
                    const vector<string>& members,
-                   const asset& funding_goal
+                   const asset& funding_goal,
+                   uint32_t total_iterations
        );
 
        [[eosio::action]]
@@ -1494,7 +1504,8 @@ namespace eosiosystem {
                    const string& roadmap,
                    uint64_t duration,
                    const vector<string>& members,
-                   const asset& funding_goal
+                   const asset& funding_goal,
+                   uint32_t total_iterations
        );
 
        [[eosio::action]]
@@ -1507,22 +1518,22 @@ namespace eosiosystem {
        void editreviewer(name committee, name reviewer, const string& first_name, const string& last_name);
 
        [[eosio::action]]
-       void rmvreviewer(name committee, const account_name reviewer);
+       void rmvreviewer(name committee, name reviewer);
 
        [[eosio::action]]
-       void acceptprop(name reviewer, uint64_t proposal_id);
+       void acceptprop(name reviewer, name proposer);
 
        [[eosio::action]]
-       void rejectprop(name reviewer, uint64_t proposal_id, const string& reason);
+       void rejectprop(name reviewer, name proposer, const string& reason);
 
        [[eosio::action]]
-       void approve(name reviewer, uint64_t proposal_id);
+       void approve(name reviewer, name proposer);
 
        [[eosio::action]]
-       void rmvreject(name reviewer, uint64_t proposal_id);
+       void rmvreject(name reviewer, name proposer);
 
        [[eosio::action]]
-       void rmvcompleted(account_name reviewer, uint64_t proposal_id);
+       void rmvcompleted(name reviewer, name proposer);
 
        [[eosio::action]]
        void setwpsenv(uint32_t total_voting_percent, uint32_t duration_of_voting, uint32_t max_duration_of_funding, uint32_t total_iteration_of_funding);
@@ -1537,10 +1548,10 @@ namespace eosiosystem {
        void rmvcommittee(name committeeman);
 
        [[eosio::action]]
-       void rejectfund(name committeeman, uint64_t proposal_id, const string& reason);
+       void rejectfund(name committeeman, name proposer, const string& reason);
 
        [[eosio::action]]
-       void checkexpire(account_name watchman, uint64_t proposal_id);
+       void voteproposal(const name& voter_name, const std::vector<name>& proposals);
 
          using init_action = eosio::action_wrapper<"init"_n, &system_contract::init>;
          using setacctram_action = eosio::action_wrapper<"setacctram"_n, &system_contract::setacctram>;
@@ -1590,27 +1601,27 @@ namespace eosiosystem {
          using setpriv_action = eosio::action_wrapper<"setpriv"_n, &system_contract::setpriv>;
          using setalimits_action = eosio::action_wrapper<"setalimits"_n, &system_contract::setalimits>;
          using setparams_action = eosio::action_wrapper<"setparams"_n, &system_contract::setparams>;
-         using regproposer_action = eosio::action_wrapper<"regproposer"_n, &system_contract::regproposer>;
-         using editproposer_action = eosio::action_wrapper<"editproposer"_n, &system_contract::editproposer>;
-         using rmvproposer_action = eosio::action_wrapper<"rmvproposer"_n, &system_contract::rmvproposer>;
-         using regproposal_action = eosio::action_wrapper<"regproposal"_n, &system_contract::regproposal>;
-         using editproposal_action = eosio::action_wrapper<"editproposal"_n, &system_contract::editproposal>;
-         using rmvproposal_action = eosio::action_wrapper<"rmvproposal"_n, &system_contract::rmvproposal>;
-         using claimfunds_action = eosio::action_wrapper<"claimfunds"_n, &system_contract::claimfunds>;
-         using regreviewer_action = eosio::action_wrapper<"regreviewer"_n, &system_contract::regreviewer>;
-         using editreviewer_action = eosio::action_wrapper<"editreviewer"_n, &system_contract::editreviewer>;
-         using rmvreviewer_action = eosio::action_wrapper<"rmvreviewer"_n, &system_contract::rmvreviewer>;
-         using acceptprop_action = eosio::action_wrapper<"acceptprop"_n, &system_contract::acceptprop>;
-         using rejectprop_action = eosio::action_wrapper<"rejectprop"_n, &system_contract::rejectprop>;
-         using approve_action = eosio::action_wrapper<"approve"_n, &system_contract::approve>;
-         using regcommittee_action = eosio::action_wrapper<"regcommittee"_n, &system_contract::regcommittee>;
-         using edcommittee = eosio::action_wrapper<"edcommittee"_n, &system_contract::edcommittee>;
-         using rmvcommittee = eosio::action_wrapper<"rmvcommittee"_n, &system_contract::rmvcommittee>;
-         using rmvreject_action = eosio::action_wrapper<"rmvreject"_n, &system_contract::rmvreject>;
-         using rmvcompleted_action = eosio::action_wrapper<"rmvcompleted"_n, &system_contract::rmvcompleted>;
-         using setwpsenv_action = eosio::action_wrapper<"setwpsenv"_n, &system_contract::setwpsenv>;
-         using rejectfund_action = eosio::action_wrapper<"rejectfund"_n, &system_contract::rejectfund>;
-         using checkexpire_action = eosio::action_wrapper<"checkexpire"_n, &system_contract::checkexpire>;
+       using regproposer_action = eosio::action_wrapper<"regproposer"_n, &system_contract::regproposer>;
+       using editproposer_action = eosio::action_wrapper<"editproposer"_n, &system_contract::editproposer>;
+       using rmvproposer_action = eosio::action_wrapper<"rmvproposer"_n, &system_contract::rmvproposer>;
+       using regproposal_action = eosio::action_wrapper<"regproposal"_n, &system_contract::regproposal>;
+       using editproposal_action = eosio::action_wrapper<"editproposal"_n, &system_contract::editproposal>;
+       using rmvproposal_action = eosio::action_wrapper<"rmvproposal"_n, &system_contract::rmvproposal>;
+       using claimfunds_action = eosio::action_wrapper<"claimfunds"_n, &system_contract::claimfunds>;
+       using regreviewer_action = eosio::action_wrapper<"regreviewer"_n, &system_contract::regreviewer>;
+       using editreviewer_action = eosio::action_wrapper<"editreviewer"_n, &system_contract::editreviewer>;
+       using rmvreviewer_action = eosio::action_wrapper<"rmvreviewer"_n, &system_contract::rmvreviewer>;
+       using acceptprop_action = eosio::action_wrapper<"acceptprop"_n, &system_contract::acceptprop>;
+       using rejectprop_action = eosio::action_wrapper<"rejectprop"_n, &system_contract::rejectprop>;
+       using approve_action = eosio::action_wrapper<"approve"_n, &system_contract::approve>;
+       using regcommittee_action = eosio::action_wrapper<"regcommittee"_n, &system_contract::regcommittee>;
+       using edcommittee_action = eosio::action_wrapper<"edcommittee"_n, &system_contract::edcommittee>;
+       using rmvcommittee_action = eosio::action_wrapper<"rmvcommittee"_n, &system_contract::rmvcommittee>;
+       using rmvreject_action = eosio::action_wrapper<"rmvreject"_n, &system_contract::rmvreject>;
+       using rmvcompleted_action = eosio::action_wrapper<"rmvcompleted"_n, &system_contract::rmvcompleted>;
+       using setwpsenv_action = eosio::action_wrapper<"setwpsenv"_n, &system_contract::setwpsenv>;
+       using rejectfund_action = eosio::action_wrapper<"rejectfund"_n, &system_contract::rejectfund>;
+       using voteproposal_action = eosio::action_wrapper<"voteproposal"_n, &system_contract::voteproposal>;
 
       private:
          // WAX specifics
@@ -1633,6 +1644,9 @@ namespace eosiosystem {
          static eosio_global_state get_default_parameters();
          symbol core_symbol()const;
          void update_ram_supply();
+
+         //defined in wps.cpp
+         void update_wps_votes( const name& voter, const std::vector<name>& proposals);
 
          // defined in rex.cpp
          void runrex( uint16_t max );
