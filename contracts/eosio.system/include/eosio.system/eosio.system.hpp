@@ -257,6 +257,10 @@ namespace eosiosystem {
       name                owner;     /// the voter
       name                proxy;     /// the proxy set by the voter, if any
       std::vector<name>   producers; /// the producers approved by this voter if no proxy set
+      /*
+       * WPS Addition
+       */
+      std::vector<name> proposals; /// the proposals approved by this voter if no proxy is set
       int64_t             staked = 0;
 
       double              unpaid_voteshare = 0;
@@ -292,7 +296,7 @@ namespace eosiosystem {
       };
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( voter_info, (owner)(proxy)(producers)(staked)(unpaid_voteshare)(unpaid_voteshare_last_updated)(unpaid_voteshare_change_rate)
+      EOSLIB_SERIALIZE( voter_info, (owner)(proxy)(producers)(proposals)(staked)(unpaid_voteshare)(unpaid_voteshare_last_updated)(unpaid_voteshare_change_rate)
                                     (last_claim_time)(last_vote_weight)(proxied_vote_weight)(is_proxy)(flags1)(reserved2)(reserved3) )
    };
 
@@ -306,7 +310,7 @@ namespace eosiosystem {
         string telegram;
         string website;
         string linkedin;
-        uint64_t last_claim_time;
+        time_point_sec last_claim_time;
         uint64_t primary_key() const { return account.value; }
         EOSLIB_SERIALIZE( proposer, (account)(first_name)(last_name)(img_url)(bio)(country)(telegram)(website)(linkedin)(last_claim_time) )
     };
@@ -334,17 +338,16 @@ namespace eosiosystem {
         uint64_t duration;            // duration
         vector<string> members;       // linkedin
         asset funding_goal;           // amount of EOS
-        uint64_t total_votes;         // total votes
-        uint64_t agree_votes;         // agree votes
-        uint64_t disagree_votes;      // disagree votes
+        double total_votes;         // total votes
         uint8_t status;               // status
-        uint64_t vote_start_time;     // time when voting starts (seconds)
-        uint64_t fund_start_time;     // time when funding starts (seconds)
-        uint8_t iteration_of_funding; // number of iterations
+        time_point_sec vote_start_time;     // time when voting starts (seconds)
+        time_point_sec fund_start_time;     // time when funding starts (seconds)
+        uint32_t iteration_of_funding; // number of iterations
         uint64_t primary_key() const { return proposer.value; }
         uint64_t by_id() const { return id; }
+        double   by_votes()const    { return total_votes;  }
         EOSLIB_SERIALIZE( proposal, (proposer)(id)(committee)(category)(subcategory)(title)(summary)(project_img_url)(description)(roadmap)(duration)(members)(funding_goal)
-                (total_votes)(agree_votes)(disagree_votes)(status)(vote_start_time)(fund_start_time)(iteration_of_funding) )
+                (total_votes)(status)(vote_start_time)(fund_start_time)(iteration_of_funding) )
     };
 
     struct [[eosio::table, eosio::contract("eosio.system")]] committee {
@@ -366,13 +369,12 @@ namespace eosiosystem {
 
     struct [[eosio::table, eosio::contract("eosio.system")]] wps_env {
         wps_env() { }
-        uint64_t proposal_current_index = 0;
         uint32_t total_voting_percent = 5;           // 5%
         uint32_t duration_of_voting = 30;            // voting duration (days)
         uint32_t max_duration_of_funding = 180;      // funding duration (days)
         uint32_t total_iteration_of_funding = 6;     //
         uint64_t primary_key() const { return 0; }
-        EOSLIB_SERIALIZE( wps_env, (proposal_current_index)(total_voting_percent)(duration_of_voting)(max_duration_of_funding)(total_iteration_of_funding) )
+        EOSLIB_SERIALIZE( wps_env, (total_voting_percent)(duration_of_voting)(max_duration_of_funding)(total_iteration_of_funding) )
     };
 
     /**
@@ -389,7 +391,8 @@ namespace eosiosystem {
     * @details The proposals table stores all WPS proposal items
     */
     typedef eosio::multi_index< "proposals"_n, proposal,
-            indexed_by< "idx"_n, const_mem_fun<proposal, uint64_t, &proposal::by_id>  >
+            indexed_by< "idx"_n, const_mem_fun<proposal, uint64_t, &proposal::by_id>  >,
+            indexed_by<"prototalvote"_n, const_mem_fun<proposal, double, &proposal::by_votes>  >
     > proposal_table;
 
     /**
@@ -1465,7 +1468,7 @@ namespace eosiosystem {
        void rmvproposer(name account);
 
        [[eosio::action]]
-       void claimfunds(name account, uint64_t proposal_id);
+       void claimfunds(name account, name proposal);
 
        [[eosio::action]]
        void regproposal(
@@ -1507,22 +1510,22 @@ namespace eosiosystem {
        void editreviewer(name committee, name reviewer, const string& first_name, const string& last_name);
 
        [[eosio::action]]
-       void rmvreviewer(name committee, const name reviewer);
+       void rmvreviewer(name committee, name reviewer);
 
        [[eosio::action]]
-       void acceptprop(name reviewer, uint64_t proposal_id);
+       void acceptprop(name reviewer, name proposer);
 
        [[eosio::action]]
-       void rejectprop(name reviewer, uint64_t proposal_id, const string& reason);
+       void rejectprop(name reviewer, name proposer, const string& reason);
 
        [[eosio::action]]
-       void approve(name reviewer, uint64_t proposal_id);
+       void approve(name reviewer, name proposer);
 
        [[eosio::action]]
-       void rmvreject(name reviewer, uint64_t proposal_id);
+       void rmvreject(name reviewer, name proposer);
 
        [[eosio::action]]
-       void rmvcompleted(name reviewer, uint64_t proposal_id);
+       void rmvcompleted(name reviewer, name proposer);
 
        [[eosio::action]]
        void setwpsenv(uint32_t total_voting_percent, uint32_t duration_of_voting, uint32_t max_duration_of_funding, uint32_t total_iteration_of_funding);
@@ -1537,10 +1540,10 @@ namespace eosiosystem {
        void rmvcommittee(name committeeman);
 
        [[eosio::action]]
-       void rejectfund(name committeeman, uint64_t proposal_id, const string& reason);
+       void rejectfund(name committeeman, name proposer, const string& reason);
 
        [[eosio::action]]
-       void checkexpire(name watchman, uint64_t proposal_id);
+       void voteproposal(const name& voter_name, const name& proxy, const std::vector<name>& proposals);
 
          using init_action = eosio::action_wrapper<"init"_n, &system_contract::init>;
          using setacctram_action = eosio::action_wrapper<"setacctram"_n, &system_contract::setacctram>;
@@ -1610,7 +1613,7 @@ namespace eosiosystem {
        using rmvcompleted_action = eosio::action_wrapper<"rmvcompleted"_n, &system_contract::rmvcompleted>;
        using setwpsenv_action = eosio::action_wrapper<"setwpsenv"_n, &system_contract::setwpsenv>;
        using rejectfund_action = eosio::action_wrapper<"rejectfund"_n, &system_contract::rejectfund>;
-       using checkexpire_action = eosio::action_wrapper<"checkexpire"_n, &system_contract::checkexpire>;
+       using voteproposal_action = eosio::action_wrapper<"voteproposal"_n, &system_contract::voteproposal>;
 
       private:
          // WAX specifics
@@ -1633,6 +1636,10 @@ namespace eosiosystem {
          static eosio_global_state get_default_parameters();
          symbol core_symbol()const;
          void update_ram_supply();
+
+         //defined in wps.cpp
+         void checkexpire(name proposer);
+         void update_wps_votes( const name& voter, const name& proxy, const std::vector<name>& proposals, bool voting);
 
          // defined in rex.cpp
          void runrex( uint16_t max );
