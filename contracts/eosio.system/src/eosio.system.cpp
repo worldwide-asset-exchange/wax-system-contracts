@@ -12,12 +12,17 @@ namespace eosiosystem {
    system_contract::system_contract( name s, name code, datastream<const char*> ds )
    :native(s,code,ds),
     _voters(get_self(), get_self().value),
+    _wpsvoters(get_self(), get_self().value),
     _producers(get_self(), get_self().value),
     _producers2(get_self(), get_self().value),
     _global(get_self(), get_self().value),
     _global2(get_self(), get_self().value),
     _global3(get_self(), get_self().value),
-    _rammarket(get_self(), get_self().value)
+    _rammarket(get_self(), get_self().value),
+    _proposers(get_self(), get_self().value),
+    _proposals(get_self(), get_self().value),
+    _committees(get_self(), get_self().value),
+    _reviewers(get_self(), get_self().value)
    {
       //print( "construct system\n" );
       _gstate  = _global.exists() ? _global.get() : get_default_parameters();
