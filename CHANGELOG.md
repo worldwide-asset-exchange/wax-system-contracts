@@ -8,6 +8,7 @@ BREAKING CHANGES:
 FEATURES:
 
 IMPROVEMENTS:
+- [KEW-1468] Removed REX referencies.
 
 BUG FIXES:
 
