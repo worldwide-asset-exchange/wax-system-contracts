@@ -15,14 +15,6 @@
 #include <type_traits>
 
 
-#ifdef CHANNEL_RAM_AND_NAMEBID_FEES_TO_REX
-#undef CHANNEL_RAM_AND_NAMEBID_FEES_TO_REX
-#endif
-// CHANNEL_RAM_AND_NAMEBID_FEES_TO_REX macro determines whether ramfee and namebid proceeds are
-// channeled to REX pool. In order to stop these proceeds from being channeled, the macro must
-// be set to 0.
-#define CHANNEL_RAM_AND_NAMEBID_FEES_TO_REX 1
-
 namespace eosiosystem {
 
    using eosio::asset;

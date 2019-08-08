@@ -9,6 +9,7 @@ FEATURES:
 
 IMPROVEMENTS:
 - [KEW-1468] Removed REX referencies.
+- [KEW-1463] Clean up recommendations
 
 BUG FIXES:
 
