@@ -17,11 +17,7 @@ namespace eosiosystem {
     _global(get_self(), get_self().value),
     _global2(get_self(), get_self().value),
     _global3(get_self(), get_self().value),
-    _rammarket(get_self(), get_self().value),
-    _rexpool(get_self(), get_self().value),
-    _rexfunds(get_self(), get_self().value),
-    _rexbalance(get_self(), get_self().value),
-    _rexorders(get_self(), get_self().value)
+    _rammarket(get_self(), get_self().value)
    {
       //print( "construct system\n" );
       _gstate  = _global.exists() ? _global.get() : get_default_parameters();

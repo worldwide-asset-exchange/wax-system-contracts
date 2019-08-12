@@ -67,7 +67,6 @@ namespace eosiosystem {
       if ( fee.amount > 0 ) {
          token::transfer_action transfer_act{ token_account, { {payer, active_permission} } };
          transfer_act.send( payer, ramfee_account, fee, "ram fee" );
-         channel_to_rex( ramfee_account, fee );
       }
 
       int64_t bytes_out;
@@ -157,7 +156,6 @@ namespace eosiosystem {
       if ( fee > 0 ) {
          token::transfer_action transfer_act{ token_account, { {account, active_permission} } };
          transfer_act.send( account, ramfee_account, asset(fee, core_symbol()), "sell ram fee" );
-         channel_to_rex( ramfee_account, asset(fee, core_symbol() ));
       }
    }
 
@@ -343,7 +341,6 @@ namespace eosiosystem {
          }
       }
 
-      vote_stake_updater( from );
       update_voting_power( from, stake_net_delta + stake_cpu_delta );
    }
 

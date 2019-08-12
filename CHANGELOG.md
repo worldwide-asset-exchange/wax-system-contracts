@@ -1,13 +1,24 @@
 # Changelog
 
-
-## Pending (wax-1.5.2-X.Y.Z)
+## Pending (wax-1.7.0-X.Y.Z)
 
 BREAKING CHANGES:
 
 FEATURES:
 
 IMPROVEMENTS:
+
+BUG FIXES:
+
+## Pending (wax-1.7.0-1.1.0)
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
+- [KEW-1468] Removed REX referencies.
+- [KEW-1463] Clean up recommendations
 
 BUG FIXES:
 
