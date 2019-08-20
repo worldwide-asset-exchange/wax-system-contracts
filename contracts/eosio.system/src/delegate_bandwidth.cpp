@@ -561,6 +561,7 @@ namespace eosiosystem {
        const auto unclaimed_balance = get_unclaimed_gbm_balance(owner);
 
        const asset zero_asset( 0, core_symbol() );
+       asset withdrawn_genesis;
 
        del_bandwidth_table del_bw_tbl( _self, owner.value );
        auto del_bw_itr = del_bw_tbl.find( owner.value );
@@ -568,6 +569,7 @@ namespace eosiosystem {
          genesis.unclaimed_balance = asset(unclaimed_balance, core_symbol());
          genesis.last_updated    = current_time_point();
          if(del_bw_itr == del_bw_tbl.end()) {
+            withdrawn_genesis = genesis.balance;
             genesis.balance = zero_asset; // receiver consumed all her tokens an row will be erased
          } else {
             // receiver consumed shorter amount than available delegated_to_self_tokens
@@ -575,12 +577,27 @@ namespace eosiosystem {
             // -> genesis balance should stay unchanged
             // else (remaining amount is less than genesis balance )
             // -> genesis balance is now decreased to new_delegated_to_self_tokens amount
+            const auto prev_genesis = genesis.balance;
             genesis.balance = std::min<asset>(del_bw_itr->net_weight + del_bw_itr->cpu_weight, genesis.balance);
+            withdrawn_genesis = prev_genesis - genesis.balance;
          }
        });
 
        if( owner_genesis.balance == zero_asset && owner_genesis.unclaimed_balance == zero_asset){
            genesis_tbl.erase(owner_genesis);
+       }
+
+       const int64_t delta_time_usec = (gbm_final_time - current_time_point()).count();
+       int64_t to_burn_amount = static_cast<int64_t>(withdrawn_genesis.amount * (delta_time_usec / double(useconds_in_gbm_period)));
+       
+       const asset to_burn(to_burn_amount, core_symbol());
+       token::transfer_action transfer_act{ token_account, { {genesis_account, active_permission} } };
+
+       // withdrawn_genesis represents the amount of genesis affected by unstaking.
+       if (withdrawn_genesis.amount > 0) {
+         transfer_act.send(genesis_account, get_self(), to_burn, "transfering back to eosio to burn pre-minted tokens from unstaking.");
+         token::retire_action retire_act{ token_account, { {get_self(), active_permission} } };
+         retire_act.send(to_burn, "to burn pre-minted tokens from unstaking.");
        }
      }
    }

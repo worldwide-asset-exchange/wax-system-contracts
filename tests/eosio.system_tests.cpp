@@ -1998,6 +1998,53 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
    }
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(burning_preminted, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
+   cross_15_percent_threshold();
+
+   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+   // This transfer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("100000000.0000"), N(eosio) );
+
+   uint64_t nonce = 1;
+   asset genesis_tokens_user1{core_sym::from_string("5000.0000")};
+   awardgenesis(N(user11111111), genesis_tokens_user1, nonce);
+
+   produce_block( fc::days(1) ); //Wait until July 1st
+   produce_block( fc::days(1096 / 2) );
+
+   BOOST_REQUIRE_EQUAL(success(), unstake( N(user11111111), N(user11111111), core_sym::from_string("2500.0000"), core_sym::from_string("2500.0000")));
+   produce_blocks(1);
+
+   const asset balance = get_balance(N(genesis.wax));
+   const double tolerance = 1e-5;   // ~0.000028%
+   const asset expected = core_sym::from_string("99992500.0000");
+   const asset difference = balance - expected;
+   BOOST_REQUIRE(std::abs(difference.get_amount()) < std::abs(expected.get_amount() * tolerance));
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(burning_preminted_invalid_values, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
+   cross_15_percent_threshold();
+
+   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+   // This transfer creates a sub_balance for genesis.wax account
+   transfer( N(eosio), N(genesis.wax), core_sym::from_string("100000000.0000"), N(eosio) );
+
+   uint64_t nonce = 1;
+   asset genesis_tokens_user1{core_sym::from_string("5000.0000")};
+   awardgenesis(N(user11111111), genesis_tokens_user1, nonce);
+
+   produce_block( fc::days(1) ); //Wait until July 1st
+   produce_block( fc::days(1096 / 4) );
+
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("insufficient staked net bandwidth"), unstake( N(user11111111), N(user11111111), core_sym::from_string("3000.0000"), core_sym::from_string("3000.0000")));
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("must unstake a positive amount"), unstake( N(user11111111), N(user11111111), core_sym::from_string("0.0000"), core_sym::from_string("0.0000")));
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("must unstake a positive amount"), unstake( N(user11111111), N(user11111111), core_sym::from_string("-10.0000"), core_sym::from_string("-10.0000")));
+} FC_LOG_AND_RETHROW()
+
 BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
 
    const double continuous_rate = 0.0582689;
