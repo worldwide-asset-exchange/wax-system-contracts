@@ -28,6 +28,7 @@ using namespace eosio_system;
 BOOST_AUTO_TEST_SUITE(eosio_system_tests)
 
 bool within_one(int64_t a, int64_t b) { return std::abs(a - b) <= 1; }
+bool within_and_gte(int64_t a, int64_t b, int64_t w) { return a - b <= w && a >= b; }
 
 BOOST_FIXTURE_TEST_CASE( buysell, eosio_system_tester ) try {
 
@@ -1998,11 +1999,42 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
    }
 } FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(burning_preminted, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
+BOOST_FIXTURE_TEST_CASE(gbm_burns_on_immature_balance, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
+  cross_15_percent_threshold();
+
+  create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+  // This transfer creates a sub_balance for genesis.wax account
+  transfer( N(eosio), N(genesis.wax), core_sym::from_string("100000000.0000"), N(eosio) );
+
+  uint64_t nonce = 1;
+  asset genesis_tokens_user1{core_sym::from_string("5000.0000")};
+  awardgenesis(N(user11111111), genesis_tokens_user1, nonce);
+
+  produce_block( fc::days(1) ); //Wait until July 1st
+  produce_block( fc::days(1096 / 2) );
+
+  BOOST_REQUIRE_EQUAL(success(), unstake( N(user11111111), N(user11111111), core_sym::from_string("2500.0000"), core_sym::from_string("2500.0000")));
+  produce_blocks(1);
+
+  auto balance = get_balance(N(genesis.wax)).get_amount();
+  const double tolerance = 1e-5;   // ~0.000028%
+  // We burned and extra ~2500 due to an early genesis withdrawal
+  auto expected = core_sym::from_string("99992500.0000").get_amount();
+  // balance is within and greater than or equal to expected, meaning we are not left with a deficit.
+  // Ie. we can always cover the genesis rewards outstanding
+  BOOST_REQUIRE(within_and_gte(balance, expected, expected * tolerance));
+  claimgenesis(N(user11111111));
+  balance = get_balance(N(genesis.wax)).get_amount();
+  // We claimed the reward earned for half maturity genesis coins, clearing all remaining coins reserved
+  expected = core_sym::from_string("99990000.0000").get_amount();
+  BOOST_REQUIRE(within_and_gte(balance, expected, 1));
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(gbm_does_not_burn_matured_balance, eosio_system_tester, * boost::unit_test::tolerance(1e-5)) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
-                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transfer creates a sub_balance for genesis.wax account
    transfer( N(eosio), N(genesis.wax), core_sym::from_string("100000000.0000"), N(eosio) );
@@ -2012,23 +2044,22 @@ BOOST_FIXTURE_TEST_CASE(burning_preminted, eosio_system_tester, * boost::unit_te
    awardgenesis(N(user11111111), genesis_tokens_user1, nonce);
 
    produce_block( fc::days(1) ); //Wait until July 1st
-   produce_block( fc::days(1096 / 2) );
+   produce_block( fc::days(1096) );
 
    BOOST_REQUIRE_EQUAL(success(), unstake( N(user11111111), N(user11111111), core_sym::from_string("2500.0000"), core_sym::from_string("2500.0000")));
    produce_blocks(1);
 
-   const asset balance = get_balance(N(genesis.wax));
-   const double tolerance = 1e-5;   // ~0.000028%
-   const asset expected = core_sym::from_string("99992500.0000");
-   const asset difference = balance - expected;
-   BOOST_REQUIRE(std::abs(difference.get_amount()) < std::abs(expected.get_amount() * tolerance));
+   // No coins were burned because the genesis award reached full maturity
+   BOOST_REQUIRE_EQUAL(get_balance(N(genesis.wax)), core_sym::from_string("99995000.0000"));
+   claimgenesis(N(user11111111));
+   // Claiming the fully mature genesis rewards clears the amount reserved
+   BOOST_REQUIRE_EQUAL(get_balance(N(genesis.wax)), core_sym::from_string("99990000.0000"));
 } FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(burning_preminted_invalid_values, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
+BOOST_FIXTURE_TEST_CASE(gbm_burning_preminted_invalid_values, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
-                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transfer creates a sub_balance for genesis.wax account
    transfer( N(eosio), N(genesis.wax), core_sym::from_string("100000000.0000"), N(eosio) );
