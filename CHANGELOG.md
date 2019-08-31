@@ -1,16 +1,17 @@
 # Changelog
 
-## Pending (wax-1.7.0-X.Y.Z)
+## Pending (wax-1.7.0-1.2.0)
 
 BREAKING CHANGES:
 
 FEATURES:
+- [KEW-1394] Token burn for unstaking
 
 IMPROVEMENTS:
 
 BUG FIXES:
 
-## Pending (wax-1.7.0-1.1.0)
+## wax-1.7.0-1.1.0
 
 BREAKING CHANGES:
 
