@@ -1,6 +1,16 @@
 # Changelog
 
-## Pending (wax-1.7.0-1.2.0)
+## Pending (wax-1.7.0-X.Y.Z)
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
+
+BUG FIXES:
+
+## wax-1.7.0-1.2.0
 
 BREAKING CHANGES:
 
