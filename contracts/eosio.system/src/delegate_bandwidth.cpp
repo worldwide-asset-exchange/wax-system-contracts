@@ -67,7 +67,6 @@ namespace eosiosystem {
       if ( fee.amount > 0 ) {
          token::transfer_action transfer_act{ token_account, { {payer, active_permission} } };
          transfer_act.send( payer, ramfee_account, fee, "ram fee" );
-         channel_to_rex( ramfee_account, fee );
       }
 
       int64_t bytes_out;
@@ -157,7 +156,6 @@ namespace eosiosystem {
       if ( fee > 0 ) {
          token::transfer_action transfer_act{ token_account, { {account, active_permission} } };
          transfer_act.send( account, ramfee_account, asset(fee, core_symbol()), "sell ram fee" );
-         channel_to_rex( ramfee_account, asset(fee, core_symbol() ));
       }
    }
 
@@ -343,7 +341,6 @@ namespace eosiosystem {
          }
       }
 
-      vote_stake_updater( from );
       update_voting_power( from, stake_net_delta + stake_cpu_delta );
    }
 
@@ -499,11 +496,11 @@ namespace eosiosystem {
       const auto claim_time = std::min(current_time_point(), gbm_final_time);
 
       if (claim_time <= genesis_tbl_row.last_updated) {
-         return 0;
+         return genesis_tbl_row.unclaimed_balance.amount;
       }
 
       const int64_t elapsed_useconds = (claim_time - genesis_tbl_row.last_updated).count();
-      const int64_t unclaimed_balance = static_cast<int64_t>(genesis_tbl_row.balance.amount * (elapsed_useconds / double(useconds_in_gbm_period)))  + genesis_tbl_row.unclaimed_balance.amount;
+      const int64_t unclaimed_balance = static_cast<int64_t>(genesis_tbl_row.balance.amount * (elapsed_useconds / double(useconds_in_gbm_period))) + genesis_tbl_row.unclaimed_balance.amount;
       return unclaimed_balance;
    }
 
@@ -569,6 +566,8 @@ namespace eosiosystem {
        const auto unclaimed_balance = get_unclaimed_gbm_balance(owner);
 
        const asset zero_asset( 0, core_symbol() );
+       // withdrawn_genesis represents the amount of genesis affected by unstaking.
+       asset withdrawn_genesis;
 
        del_bandwidth_table del_bw_tbl( _self, owner.value );
        auto del_bw_itr = del_bw_tbl.find( owner.value );
@@ -576,6 +575,7 @@ namespace eosiosystem {
          genesis.unclaimed_balance = asset(unclaimed_balance, core_symbol());
          genesis.last_updated    = current_time_point();
          if(del_bw_itr == del_bw_tbl.end()) {
+            withdrawn_genesis = genesis.balance;
             genesis.balance = zero_asset; // receiver consumed all her tokens an row will be erased
          } else {
             // receiver consumed shorter amount than available delegated_to_self_tokens
@@ -583,12 +583,26 @@ namespace eosiosystem {
             // -> genesis balance should stay unchanged
             // else (remaining amount is less than genesis balance )
             // -> genesis balance is now decreased to new_delegated_to_self_tokens amount
+            const auto prev_genesis = genesis.balance;
             genesis.balance = std::min<asset>(del_bw_itr->net_weight + del_bw_itr->cpu_weight, genesis.balance);
+            withdrawn_genesis = prev_genesis - genesis.balance;
          }
        });
 
        if( owner_genesis.balance == zero_asset && owner_genesis.unclaimed_balance == zero_asset){
            genesis_tbl.erase(owner_genesis);
+       }
+
+       const auto unstake_time = std::min(current_time_point(), gbm_final_time);
+       const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
+       int64_t to_burn_amount = static_cast<int64_t>(withdrawn_genesis.amount * (delta_time_usec / double(useconds_in_gbm_period)));
+
+       if (to_burn_amount > 0) {
+         const asset to_burn(to_burn_amount, core_symbol());
+         token::transfer_action transfer_act{ token_account, { {genesis_account, active_permission} } };
+         transfer_act.send(genesis_account, get_self(), to_burn, "transfering back to eosio to burn pre-minted tokens from unstaking.");
+         token::retire_action retire_act{ token_account, { {get_self(), active_permission} } };
+         retire_act.send(to_burn, "to burn pre-minted tokens from unstaking.");
        }
      }
    }
