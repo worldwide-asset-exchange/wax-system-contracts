@@ -7,6 +7,7 @@ namespace eosiosystem {
    using eosio::microseconds;
    using eosio::token;
 
+ 
    void system_contract::onblock( ignore<block_header> ) {
       using namespace eosio;
 
@@ -15,6 +16,10 @@ namespace eosiosystem {
       block_timestamp timestamp;
       name producer;
       _ds >> timestamp >> producer;
+
+      debug::print("system_contract::onblock: producer = %, block counter = %, time = %\n", 
+         producer.to_string(), _gstandby.block_counter, timestamp.slot);
+      _gstandby.block_counter++;
 
       // _gstate2.last_block_num is not used anywhere in the system contract code anymore.
       // Although this field is deprecated, we will continue updating it for now until the last_block_num field
@@ -28,7 +33,6 @@ namespace eosiosystem {
       if( _gstate.last_pervote_bucket_fill == time_point() )  /// start the presses
          _gstate.last_pervote_bucket_fill = current_time_point();
 
-
       /**
        * At startup the initial producer may not be one that is registered / elected
        * and therefore there may be no producer object for them.
@@ -41,9 +45,12 @@ namespace eosiosystem {
          });
       }
 
+      //bool pickup_standby_producer = (++_gstandby.block_counter % standby_producers_round) == 0; 
+      bool pickup_standby_producer = false;
+
       /// only update block producers once every minute, block_timestamp is in half seconds
-      if( timestamp.slot - _gstate.last_producer_schedule_update.slot > 120 ) {
-         update_elected_producers( timestamp );
+      if( pickup_standby_producer || (timestamp.slot - _gstate.last_producer_schedule_update.slot > 120) ) {
+         update_elected_producers( timestamp, pickup_standby_producer );
 
          if( (timestamp.slot - _gstate.last_name_close.slot) > blocks_per_day ) {
             name_bid_table bids(get_self(), get_self().value);

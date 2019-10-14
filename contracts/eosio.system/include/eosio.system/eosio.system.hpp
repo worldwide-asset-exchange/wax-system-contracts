@@ -14,6 +14,55 @@
 #include <string>
 #include <type_traits>
 
+/// @todo This is temporary, must be removed before constract release/merge
+namespace debug {
+    extern "C" {
+         __attribute__((eosio_wasm_import))
+         void prints(const char*);
+    }
+
+    inline std::string& operator<<(std::string& str, char value) {
+        return str += value;
+    }
+
+    inline std::string& operator<<(std::string& str, const char* cstr) {
+        return str += cstr;
+    }
+
+    inline std::string& operator<<(std::string& str, const std::string& cppstr) {
+        return str += cppstr;
+    }
+
+    inline std::string& operator<<(std::string& str, bool value) {
+        return str += (value ? "true" : "false");
+    }
+
+    // Generic types forwarded to std::to_string
+    template<typename T>
+    inline std::string& operator<<(std::string& str, T value) {
+        return str += std::to_string(value);
+    }
+
+   inline void print(const char* msg) {
+      prints(msg);
+   }
+
+   template<typename T, typename... Targs>
+   void print(const char* format, T value, Targs... Fargs) 
+   {
+      for ( ; *format != '\0'; format++ ) {
+         std::string msg; 
+         if ( *format == '%' ) { 
+            msg << value;
+            prints(msg.c_str());
+            print(format+1, Fargs...);
+            return;
+         }
+         msg << *format;
+         prints(msg.c_str());
+      }
+   }
+}
 
 namespace eosiosystem {
 
@@ -68,6 +117,7 @@ namespace eosiosystem {
    static const time_point gbm_initial_time(eosio::seconds(1561939200));     // July 1st 2019 00:00:00
    static const time_point gbm_final_time = gbm_initial_time + eosio::microseconds(useconds_in_gbm_period);   // July 1st 2022 00:00:00
 
+   static constexpr uint16_t standby_producers_round = 1200; // blocks between standby producer pickup
 
    /**
     *
@@ -196,6 +246,19 @@ namespace eosiosystem {
    };
 
    /**
+    * Defines standby producer globals
+    */
+   struct [[eosio::table("globalstdby"), eosio::contract("eosio.system")]] eosio_global_standby {
+      eosio_global_standby() { }
+
+      uint64_t          block_counter = 0;
+      eosio::name       current_standby_producer;
+      
+      EOSLIB_SERIALIZE( eosio_global_standby, (block_counter)(current_standby_producer) )
+   };
+
+
+   /**
     * Defines `producer_info` structure to be stored in `producer_info` table, added after version 1.0
     */
    struct [[eosio::table, eosio::contract("eosio.system")]] producer_info {
@@ -230,6 +293,17 @@ namespace eosiosystem {
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
       EOSLIB_SERIALIZE( producer_info2, (owner)(votepay_share)(last_votepay_share_update) )
+   };
+
+   struct [[eosio::table, eosio::contract("eosio.system")]] standby_info {
+      eosio::name  owner;
+      bool         ready = true;       /// state of proof of readiness
+      uint64_t     produced_blocks = 0;
+
+      uint64_t primary_key() const { return owner.value; }
+
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE( standby_info,(owner)(ready)(produced_blocks) )
    };
 
    /**
@@ -303,6 +377,12 @@ namespace eosiosystem {
     */
    typedef eosio::multi_index< "producers2"_n, producer_info2 > producers_table2;
 
+   /** 
+    * Standby producers table
+    */
+   typedef eosio::multi_index< "standbyinfo"_n, standby_info > standby_info_table;
+
+
    /**
     * Global state singleton added in version 1.0
     */
@@ -315,6 +395,9 @@ namespace eosiosystem {
     * Global state singleton added in version 1.3
     */
    typedef eosio::singleton< "global3"_n, eosio_global_state3 > global_state3_singleton;
+
+   
+   typedef eosio::singleton< "globalstdby"_n, eosio_global_standby > global_standby_singleton;
 
    struct [[eosio::table, eosio::contract("eosio.system")]] user_resources {
       name          owner;
@@ -386,12 +469,13 @@ namespace eosiosystem {
     *  These tables are designed to be constructed in the scope of the relevant user, this
     *  facilitates simpler API for per-user queries
     */
-   typedef eosio::multi_index< "userres"_n, user_resources >      user_resources_table;
-   typedef eosio::multi_index< "delband"_n, delegated_bandwidth > del_bandwidth_table;
-   typedef eosio::multi_index< "refunds"_n, refund_request >      refunds_table;
-   typedef eosio::multi_index< "genesis"_n, genesis_tokens >      genesis_balance_table;
-   typedef eosio::multi_index< "genonce"_n, genesis_nonce >       genesis_nonce_table;
-
+   typedef eosio::multi_index< "userres"_n,     user_resources >      user_resources_table;
+   typedef eosio::multi_index< "delband"_n,     delegated_bandwidth > del_bandwidth_table;
+   typedef eosio::multi_index< "refunds"_n,     refund_request >      refunds_table;
+   typedef eosio::multi_index< "genesis"_n,     genesis_tokens >      genesis_balance_table;
+   typedef eosio::multi_index< "genonce"_n,     genesis_nonce >       genesis_nonce_table;
+   typedef eosio::multi_index< "standbyinfo"_n, standby_info >        standby_info_table;
+   
    /**
     * The EOSIO system contract.
     *
@@ -400,16 +484,19 @@ namespace eosiosystem {
    class [[eosio::contract("eosio.system")]] system_contract : public native {
 
       private:
-         voters_table            _voters;
-         producers_table         _producers;
-         producers_table2        _producers2;
-         global_state_singleton  _global;
-         global_state2_singleton _global2;
-         global_state3_singleton _global3;
-         eosio_global_state      _gstate;
-         eosio_global_state2     _gstate2;
-         eosio_global_state3     _gstate3;
-         rammarket               _rammarket;
+         voters_table             _voters;
+         producers_table          _producers;
+         producers_table2         _producers2;
+         standby_info_table       _standby_info;
+         global_state_singleton   _global;
+         global_state2_singleton  _global2;
+         global_state3_singleton  _global3;
+         global_standby_singleton _global_standby;
+         eosio_global_state       _gstate;
+         eosio_global_state2      _gstate2;
+         eosio_global_state3      _gstate3;
+         eosio_global_standby     _gstandby;
+         rammarket                _rammarket;
 
       public:
          static constexpr eosio::name active_permission{"active"_n};
@@ -937,7 +1024,7 @@ namespace eosiosystem {
          void update_voter_votepay_share(const voters_table::const_iterator& voter_itr);
 
          // defined in voting.hpp
-         void update_elected_producers( const block_timestamp& timestamp );
+         void update_elected_producers( const block_timestamp& timestamp, bool pickup_standby_producer = false );
          void update_votes( const name& voter, const name& proxy, const std::vector<name>& producers, bool voting );
          void propagate_weight_change( const voter_info& voter );
          double update_producer_votepay_share( const producers_table2::const_iterator& prod_itr,

@@ -74,33 +74,74 @@ namespace eosiosystem {
       });
    }
 
-   void system_contract::update_elected_producers( const block_timestamp& block_time ) {
+   void system_contract::update_elected_producers( const block_timestamp& block_time, 
+                                                   bool pickup_standby_producer ) {
       _gstate.last_producer_schedule_update = block_time;
 
       auto idx = _producers.get_index<"prototalvote"_n>();
 
-      std::vector< std::pair<eosio::producer_key,uint16_t> > top_producers;
-      top_producers.reserve(21);
+      if (!pickup_standby_producer) {
+         std::vector< std::pair<eosio::producer_key,uint16_t> > top_producers;
+         top_producers.reserve(21);
 
-      for ( auto it = idx.cbegin(); it != idx.cend() && top_producers.size() < 21 && 0 < it->total_votes && it->active(); ++it ) {
-         top_producers.emplace_back( std::pair<eosio::producer_key,uint16_t>({{it->owner, it->producer_key}, it->location}) );
+         for ( auto it = idx.cbegin(); 
+               it != idx.cend() && 
+               top_producers.size() < 21 && 
+               0 < it->total_votes && it->active(); ++it ) 
+         {
+            top_producers.emplace_back( std::pair<eosio::producer_key,uint16_t>({{it->owner, it->producer_key}, it->location}) );
+         }
+
+         if ( top_producers.size() == 0 || top_producers.size() < _gstate.last_producer_schedule_size ) {
+            return;
+         }
+
+         /// sort by producer name
+         std::sort( top_producers.begin(), top_producers.end() );
+
+         std::vector<eosio::producer_key> producers;
+
+         producers.reserve(top_producers.size());
+         for( const auto& item : top_producers )
+            producers.push_back(item.first);
+
+         if( set_proposed_producers( producers ) >= 0 ) {
+            _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
+         }
       }
+      else {         
+         // Get the current producer information
+         if (auto it = _standby_info.find(_gstandby.current_standby_producer.value); it != _standby_info.end()) {
+            if (it->produced_blocks >= 0/*por_blocks*/) {
+               // Current standby producer has passed the proof of readiness
+               _standby_info.modify( it, same_payer, [&]( auto& info ) {
+                  info.ready = true;
+                  info.produced_blocks = 0;
+               });
+               _gstandby.current_standby_producer = eosio::name();
+            }
+            else {
+               _standby_info.modify( it, same_payer, [&]( auto& info ) {
+                  info.ready = false;
+                  info.produced_blocks++;
+               });
+            }
+         }
+         else {
+            std::vector< std::pair<eosio::producer_key,uint16_t> > standby_producers;
+            standby_producers.reserve(36);
 
-      if ( top_producers.size() == 0 || top_producers.size() < _gstate.last_producer_schedule_size ) {
-         return;
-      }
+            // for ( auto it = idx.cbegin() + 21; it != idx.cend() && standby_producers.size() < 36; ++it ) {
+            //    standby_producers.emplace_back( 
+            //       std::pair<eosio::producer_key,uint16_t>({{it->owner, it->producer_key}, it->location}) );
+            // }
 
-      /// sort by producer name
-      std::sort( top_producers.begin(), top_producers.end() );
+            if ( standby_producers.size() == 0 || standby_producers.size() < _gstate.last_producer_schedule_size ) {
+               return;
+            }
 
-      std::vector<eosio::producer_key> producers;
-
-      producers.reserve(top_producers.size());
-      for( const auto& item : top_producers )
-         producers.push_back(item.first);
-
-      if( set_proposed_producers( producers ) >= 0 ) {
-         _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
+            // Pick some producer 
+         }
       }
    }
 
