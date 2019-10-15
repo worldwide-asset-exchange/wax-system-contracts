@@ -946,7 +946,7 @@ namespace eosiosystem {
                                             double additional_shares_delta = 0.0, double shares_rate_delta = 0.0 );
          
          using prod_vec_t = std::vector<std::pair<eosio::producer_key, uint16_t /* location */ >>;
-         void select_producers_into( uint64_t begin, uint64_t end, prod_vec_t& result );
+         void select_producers_into( uint64_t begin, uint64_t count, prod_vec_t& result );
 
          template <auto system_contract::*...Ptrs>
          class registration {

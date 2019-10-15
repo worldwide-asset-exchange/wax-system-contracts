@@ -93,13 +93,13 @@ namespace eosiosystem {
    }
 
    void system_contract::select_producers_into(uint64_t begin,
-                                               uint64_t end,
+                                               uint64_t count,
                                                prod_vec_t& producers) {
       auto idx = _producers.get_index<"prototalvote"_n>();
       uint64_t i = 0;
 
       for (auto it = idx.cbegin(); 
-           it != idx.cend() && i < end && 0 < it->total_votes && it->active(); 
+           it != idx.cend() && i < (begin + end) && 0 < it->total_votes && it->active(); 
            ++it, ++i) 
       {
          if (i >= begin)
@@ -129,7 +129,7 @@ namespace eosiosystem {
       if (standby_index < num_standbys) {
          prod_vec_t standbys;
          standbys.reserve(num_standbys);
-         select_producers_into(21, 21 + num_standbys, standbys);
+         select_producers_into(21, num_standbys, standbys);
 
          if (standbys.size() == num_standbys)
             top_producers.emplace_back(standbys[standby_index]);
