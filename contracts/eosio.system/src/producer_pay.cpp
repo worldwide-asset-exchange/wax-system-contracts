@@ -8,7 +8,7 @@ namespace eosiosystem {
    using eosio::token;
 
  
-   void system_contract::onblock(const block_header& bheader) { //   ignore<block_header> bheader ) {
+   void system_contract::onblock( const block_header& bheader ) { 
       using namespace eosio;
 
       require_auth(get_self());
@@ -16,8 +16,6 @@ namespace eosiosystem {
       block_timestamp timestamp;
       name producer;
       _ds >> timestamp >> producer;
-
-      debug::print("system_contract::onblock: producer = %, time = %\n", producer.to_string(), timestamp.slot);
 
       // _gstate2.last_block_num is not used anywhere in the system contract code anymore.
       // Although this field is deprecated, we will continue updating it for now until the last_block_num field
@@ -44,9 +42,9 @@ namespace eosiosystem {
       }
 
       /// only update block producers once every minute, block_timestamp is in half seconds
-      if( timestamp.slot - _gstate.last_producer_schedule_update.slot > 120)  {
+      if( timestamp.slot - _gstate.last_producer_schedule_update.slot > 120 ) {
          update_elected_producers( timestamp, bheader.previous );
-     
+
          if( (timestamp.slot - _gstate.last_name_close.slot) > blocks_per_day ) {
             name_bid_table bids(get_self(), get_self().value);
             auto idx = bids.get_index<"highbid"_n>();

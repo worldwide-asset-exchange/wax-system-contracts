@@ -14,57 +14,6 @@
 #include <string>
 #include <type_traits>
 
-////////////////////////////////////////////////////////////////////////////////
-/// @todo This is temporary, must be removed before constract release/merge
-namespace debug {
-    extern "C" {
-         __attribute__((eosio_wasm_import))
-         void prints(const char*);
-    }
-
-    inline std::string& operator<<(std::string& str, char value) {
-        return str += value;
-    }
-
-    inline std::string& operator<<(std::string& str, const char* cstr) {
-        return str += cstr;
-    }
-
-    inline std::string& operator<<(std::string& str, const std::string& cppstr) {
-        return str += cppstr;
-    }
-
-    inline std::string& operator<<(std::string& str, bool value) {
-        return str += (value ? "true" : "false");
-    }
-
-    // Generic types forwarded to std::to_string
-    template<typename T>
-    inline std::string& operator<<(std::string& str, T value) {
-        return str += std::to_string(value);
-    }
-
-   inline void print(const char* msg) {
-      prints(msg);
-   }
-
-   template<typename T, typename... Targs>
-   void print(const char* format, T value, Targs... Fargs) 
-   {
-      for ( ; *format != '\0'; format++ ) {
-         std::string msg; 
-         if ( *format == '%' ) { 
-            msg << value;
-            prints(msg.c_str());
-            print(format+1, Fargs...);
-            return;
-         }
-         msg << *format;
-         prints(msg.c_str());
-      }
-   }
-}
-////////////////////////////////////////////////////////////////////////////////
 
 namespace eosiosystem {
 
@@ -441,7 +390,7 @@ namespace eosiosystem {
    typedef eosio::multi_index< "refunds"_n, refund_request >      refunds_table;
    typedef eosio::multi_index< "genesis"_n, genesis_tokens >      genesis_balance_table;
    typedef eosio::multi_index< "genonce"_n, genesis_nonce >       genesis_nonce_table;
-   
+
    /**
     * The EOSIO system contract.
     *
@@ -450,16 +399,16 @@ namespace eosiosystem {
    class [[eosio::contract("eosio.system")]] system_contract : public native {
 
       private:
-         voters_table             _voters;
-         producers_table          _producers;
-         producers_table2         _producers2;
-         global_state_singleton   _global;
-         global_state2_singleton  _global2;
-         global_state3_singleton  _global3;
-         eosio_global_state       _gstate;
-         eosio_global_state2      _gstate2;
-         eosio_global_state3      _gstate3;
-         rammarket                _rammarket;
+         voters_table            _voters;
+         producers_table         _producers;
+         producers_table2        _producers2;
+         global_state_singleton  _global;
+         global_state2_singleton _global2;
+         global_state3_singleton _global3;
+         eosio_global_state      _gstate;
+         eosio_global_state2     _gstate2;
+         eosio_global_state3     _gstate3;
+         rammarket               _rammarket;
 
       public:
          static constexpr eosio::name active_permission{"active"_n};
