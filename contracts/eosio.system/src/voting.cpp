@@ -144,11 +144,12 @@ namespace eosiosystem {
       std::sort( top_producers.begin(), top_producers.end() );
 
       std::vector<eosio::producer_key> producers;
+
       producers.reserve(top_producers.size());
-      for (const auto& item : top_producers)
+      for( const auto& item : top_producers )
          producers.push_back(item.first);
 
-      if ( set_proposed_producers( producers ) >= 0 ) {
+      if( set_proposed_producers( producers ) >= 0 ) {
          _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
       }
    }
