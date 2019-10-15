@@ -94,7 +94,7 @@ namespace eosiosystem {
 
    void system_contract::select_producers_into(uint64_t begin,
                                                uint64_t count,
-                                               prod_vec_t& producers) {
+                                               prod_vec_t& result) {
       auto idx = _producers.get_index<"prototalvote"_n>();
       uint64_t i = 0;
 
@@ -103,7 +103,7 @@ namespace eosiosystem {
            ++it, ++i) 
       {
          if (i >= begin)
-            producers.emplace_back(
+            result.emplace_back(
                prod_vec_t::value_type{{it->owner, it->producer_key}, it->location});
       }
    }
