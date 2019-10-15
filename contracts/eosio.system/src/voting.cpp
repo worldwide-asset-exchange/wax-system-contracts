@@ -99,7 +99,7 @@ namespace eosiosystem {
       uint64_t i = 0;
 
       for (auto it = idx.cbegin(); 
-           it != idx.cend() && i < (begin + end) && 0 < it->total_votes && it->active(); 
+           it != idx.cend() && i < (begin + count) && 0 < it->total_votes && it->active(); 
            ++it, ++i) 
       {
          if (i >= begin)
