@@ -131,11 +131,12 @@ namespace eosiosystem {
          standbys.reserve(num_standbys);
          select_producers_into(21, num_standbys, standbys);
 
-         if (standbys.size() == num_standbys)
+         if (standbys.size() > standby_index)
             top_producers.emplace_back(standbys[standby_index]);
       }
 
-      select_producers_into(0, 20, top_producers);
+      select_producers_into(0, 21 - top_producers.size(), top_producers);
+
       if (top_producers.size() == 0 || top_producers.size() < _gstate.last_producer_schedule_size ) {
          return;
       }
