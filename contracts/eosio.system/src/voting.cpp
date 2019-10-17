@@ -12,6 +12,20 @@
 #include <algorithm>
 #include <cmath>
 
+namespace {
+   uint64_t to_int(const eosio::checksum256& value) {
+      auto byte_array = value.extract_as_byte_array();
+
+      uint64_t int_value = 0;
+      for (int i = 0; i < 8; i++) {
+         int_value <<= 8;
+         int_value |= static_cast<uint64_t>(byte_array[i]);
+      }
+      return int_value;
+   }
+
+} // namespace
+
 namespace eosiosystem {
 
    using eosio::const_mem_fun;
@@ -74,23 +88,53 @@ namespace eosiosystem {
       });
    }
 
-   void system_contract::update_elected_producers( const block_timestamp& block_time ) {
+   void system_contract::select_producers_into( uint64_t begin, uint64_t count, prod_vec_t& result ) {
+      auto idx = _producers.get_index<"prototalvote"_n>();
+      uint64_t i = 0;
+
+      for (auto it = idx.cbegin(); 
+           it != idx.cend() && i < (begin + count) && 0 < it->total_votes && it->active(); 
+           ++it, ++i) 
+      {
+         if (i >= begin)
+            result.emplace_back(
+               prod_vec_t::value_type{{it->owner, it->producer_key}, it->location});
+      }
+   }
+
+   void system_contract::update_elected_producers( const block_timestamp& block_time, 
+                                                   const eosio::checksum256& previous_block_hash ) {
       _gstate.last_producer_schedule_update = block_time;
 
-      auto idx = _producers.get_index<"prototalvote"_n>();
+      auto constexpr total_weight = 1'000'000;
+      auto constexpr one_percent_weight = total_weight * 0.01;
+      auto constexpr num_standbys = 36;
 
-      std::vector< std::pair<eosio::producer_key,uint16_t> > top_producers;
+      // multiplied by 21 because we are effectively making 21 separate random selection to insert a standby in this round
+      auto constexpr standby_weight = 21 * one_percent_weight / num_standbys; 
+
+      auto const selected_weight = to_int(previous_block_hash) % total_weight;
+      auto const standby_index = selected_weight / standby_weight;
+
+      prod_vec_t top_producers;
       top_producers.reserve(21);
 
-      for ( auto it = idx.cbegin(); it != idx.cend() && top_producers.size() < 21 && 0 < it->total_votes && it->active(); ++it ) {
-         top_producers.emplace_back( std::pair<eosio::producer_key,uint16_t>({{it->owner, it->producer_key}, it->location}) );
+      if (standby_index < num_standbys) {
+         prod_vec_t standbys;
+         standbys.reserve(num_standbys);
+         select_producers_into(21, num_standbys, standbys);
+
+         if (standbys.size() > standby_index)
+            top_producers.emplace_back(standbys[standby_index]);
       }
 
-      if ( top_producers.size() == 0 || top_producers.size() < _gstate.last_producer_schedule_size ) {
+      select_producers_into(0, 21 - top_producers.size(), top_producers);
+
+      if (top_producers.size() == 0 || top_producers.size() < _gstate.last_producer_schedule_size ) {
          return;
       }
 
-      /// sort by producer name
+      // sort by producer name, if both are equal it will sort by location
       std::sort( top_producers.begin(), top_producers.end() );
 
       std::vector<eosio::producer_key> producers;
