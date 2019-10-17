@@ -1,12 +1,13 @@
 # Changelog
 
-## Pending (wax-1.7.0-X.Y.Z)
+## Pending (wax-1.7.0-1.3.0)
 
 BREAKING CHANGES:
 
 FEATURES:
 
 IMPROVEMENTS:
+- [KEW-42] Proof of readiness scheduling
 
 BUG FIXES:
 

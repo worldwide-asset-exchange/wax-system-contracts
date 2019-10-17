@@ -1,9 +1,9 @@
-CMAKE_CPU_SETUP := $(shell expr $(shell getconf _NPROCESSORS_ONLN) + 2)
+CMAKE_CPU_SETUP := $(shell expr $(shell nproc) + 2)
 
-DOCKER_CONTAINER=contracts-development
+DEV_DOCKER_VERSION=wax-1.6.1-1.2.0
+CONTAINER=wax-system-contracts
 
-DOCKER_COMMON=-v `pwd`:/opt/contracts \
-			--name $(DOCKER_CONTAINER) -w /opt/contracts waxteam/dev:wax-1.6.1-1.0.0
+DOCKER_COMMON=-v `pwd`:`pwd` --name $(CONTAINER) -w `pwd` waxteam/dev:$(DEV_DOCKER_VERSION)
 
 build:
 	mkdir -p build
@@ -23,7 +23,7 @@ test: compile
 
 .PHONY:dev-docker-stop
 dev-docker-stop:
-	-docker rm -f $(DOCKER_CONTAINER)
+	-docker rm $(CONTAINER)
 
 .PHONY:dev-docker-start
 dev-docker-start: dev-docker-stop

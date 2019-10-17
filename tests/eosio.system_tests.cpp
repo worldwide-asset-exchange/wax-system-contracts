@@ -23,6 +23,17 @@ struct connector {
 };
 FC_REFLECT( connector, (balance)(weight) );
 
+namespace std {
+   // Just in case we need to print a vector<account_name> with BOOST_TEST_MESSAGE
+   std::ostream& operator<<(std::ostream& oss, const std::vector<account_name>& names) 
+   {
+      oss << "[ ";
+      for (auto const& n: names)
+         oss << n.to_string() << ' ';
+      return oss << ']';
+   }
+}
+
 using namespace eosio_system;
 
 BOOST_AUTO_TEST_SUITE(eosio_system_tests)
@@ -2468,6 +2479,9 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
             producer_names.emplace_back(root + std::string(1, c));
          }
       }
+
+      BOOST_TEST_MESSAGE("Producers: " << producer_names);
+
       setup_producer_accounts(producer_names);
       for (const auto& p: producer_names) {
          BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
@@ -2513,19 +2527,24 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
    // give a chance for everyone to produce blocks
    {
       produce_blocks(23 * 12 + 20);
-      bool all_21_produced = true;
+
+      uint32_t prod_counter = 0;
       for (uint32_t i = 0; i < 21; ++i) {
-         if (0 == get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
-            all_21_produced = false;
-         }
+         if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>())
+            prod_counter++;
       }
-      bool rest_didnt_produce = true;
+
+      uint32_t stb_counter = 0;
       for (uint32_t i = 21; i < producer_names.size(); ++i) {
-         if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
-            rest_didnt_produce = false;
-         }
+         if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>())
+            stb_counter++;
       }
-      BOOST_REQUIRE(all_21_produced && rest_didnt_produce);
+
+      switch (prod_counter) {
+         case 20: BOOST_REQUIRE_EQUAL(stb_counter, 1); break;
+         case 21: BOOST_REQUIRE_EQUAL(stb_counter, 0); break;
+         default: BOOST_FAIL("Invalid counters: " << prod_counter << " " << stb_counter);
+      }
    }
 
    std::vector<double> vote_shares(producer_names.size());
@@ -2698,13 +2717,12 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
       BOOST_REQUIRE_EQUAL( success(),
                            push_action(config::system_account_name, N(rmvproducer), mvo()("producer", prod_name) ) );
       {
-         bool rest_didnt_produce = true;
+         uint32_t stb_counter = 0;
          for (uint32_t i = 21; i < producer_names.size(); ++i) {
-            if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
-               rest_didnt_produce = false;
-            }
+            if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>())
+               stb_counter++;
          }
-         BOOST_REQUIRE(rest_didnt_produce);
+         BOOST_REQUIRE(stb_counter == 0 || stb_counter == 1);
       }
 
       produce_blocks(3 * 21 * 12);
@@ -3424,6 +3442,7 @@ BOOST_FIXTURE_TEST_CASE(producers_upgrade_system_contract, eosio_system_tester) 
 
 } FC_LOG_AND_RETHROW()
 
+
 BOOST_FIXTURE_TEST_CASE(producer_onblock_check, eosio_system_tester) try {
 
    const asset large_asset = core_sym::from_string("80.0000");
@@ -3433,11 +3452,24 @@ BOOST_FIXTURE_TEST_CASE(producer_onblock_check, eosio_system_tester) try {
 
    // create accounts {defproducera, defproducerb, ..., defproducerz} and register as producers
    std::vector<account_name> producer_names;
-   producer_names.reserve('z' - 'a' + 1);
+   producer_names.reserve(60);
+   
+   // Active producers
    const std::string root("defproducer");
-   for ( char c = 'a'; c <= 'z'; ++c ) {
+   for ( char c = 'a'; c <= 'u'; ++c ) {
       producer_names.emplace_back(root + std::string(1, c));
    }
+
+   // Standby producers
+   const std::string stbroot("stbprod");
+   for (int i=1; i<3; i++) {
+      for ( char c = 'a'; c <= 'z'; ++c ) {
+         producer_names.emplace_back(stbroot + std::to_string(i) + std::string(1, c));
+      }      
+   }
+
+   BOOST_TEST_MESSAGE("Producers (" << producer_names.size() << "): " << producer_names);
+
    setup_producer_accounts(producer_names);
 
    for (auto a:producer_names)
@@ -3448,7 +3480,6 @@ BOOST_FIXTURE_TEST_CASE(producer_onblock_check, eosio_system_tester) try {
    BOOST_REQUIRE_EQUAL(0, get_producer_info( producer_names.front() )["total_votes"].as<double>());
    BOOST_REQUIRE_EQUAL(0, get_producer_info( producer_names.back() )["total_votes"].as<double>());
 
-
    transfer(config::system_account_name, "producvotera", core_sym::from_string("200000000.0000"), config::system_account_name);
    BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("70000000.0000"), core_sym::from_string("70000000.0000") ));
    BOOST_REQUIRE_EQUAL(success(), vote( N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+10)));
@@ -3458,20 +3489,19 @@ BOOST_FIXTURE_TEST_CASE(producer_onblock_check, eosio_system_tester) try {
    // give a chance for everyone to produce blocks
    {
       produce_blocks(21 * 12);
-      bool all_21_produced = true;
+      uint32_t prod_counter = 0;
+
       for (uint32_t i = 0; i < 21; ++i) {
-         if (0 == get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
-            all_21_produced= false;
-         }
+         if (0 != get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>())
+            prod_counter++;
       }
-      bool rest_didnt_produce = true;
+
       for (uint32_t i = 21; i < producer_names.size(); ++i) {
-         if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
-            rest_didnt_produce = false;
-         }
+         if (0 != get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) 
+            prod_counter++;
       }
-      BOOST_REQUIRE_EQUAL(false, all_21_produced);
-      BOOST_REQUIRE_EQUAL(true, rest_didnt_produce);
+
+      BOOST_REQUIRE_EQUAL(prod_counter, 0);
    }
 
    {
@@ -3492,25 +3522,30 @@ BOOST_FIXTURE_TEST_CASE(producer_onblock_check, eosio_system_tester) try {
    BOOST_REQUIRE_EQUAL(success(), stake("producvoterc", core_sym::from_string("2000000.0000"), core_sym::from_string("2000000.0000")));
 
    BOOST_REQUIRE_EQUAL(success(), vote( N(producvoterb), vector<account_name>(producer_names.begin(), producer_names.begin()+21)));
-   BOOST_REQUIRE_EQUAL(success(), vote( N(producvoterc), vector<account_name>(producer_names.begin(), producer_names.end())));
+   BOOST_REQUIRE_EQUAL(success(), vote( N(producvoterc), vector<account_name>(producer_names.begin(), producer_names.begin()+30)));
 
    // give a chance for everyone to produce blocks
    {
       produce_blocks(21 * 12);
-      bool all_21_produced = true;
+
+      uint32_t prod_counter = 0;
       for (uint32_t i = 0; i < 21; ++i) {
-         if (0 == get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
-            all_21_produced= false;
-         }
+         if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>())
+            prod_counter++;
       }
-      bool rest_didnt_produce = true;
+
+      uint32_t stb_counter = 0;
       for (uint32_t i = 21; i < producer_names.size(); ++i) {
-         if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
-            rest_didnt_produce = false;
-         }
+         if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>())
+            stb_counter++;
       }
-      BOOST_REQUIRE_EQUAL(true, all_21_produced);
-      BOOST_REQUIRE_EQUAL(true, rest_didnt_produce);
+
+      switch (prod_counter) {
+         case 20: BOOST_REQUIRE_EQUAL(stb_counter, 1); break;
+         case 21: BOOST_REQUIRE_EQUAL(stb_counter, 0); break;
+         default: BOOST_FAIL("Invalid counters: " << prod_counter << " " << stb_counter);
+      }
+
       BOOST_REQUIRE_EQUAL(success(),
                           push_action(producer_names.front(), N(claimrewards), mvo()("owner", producer_names.front())));
       BOOST_REQUIRE(0 < get_balance(producer_names.front()).get_amount());
@@ -4459,19 +4494,24 @@ BOOST_FIXTURE_TEST_CASE( vote_producers_in_and_out, eosio_system_tester ) try {
    // give a chance for everyone to produce blocks
    {
       produce_blocks(23 * 12 + 20);
-      bool all_21_produced = true;
+
+      uint32_t prod_counter = 0;
       for (uint32_t i = 0; i < 21; ++i) {
-         if (0 == get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
-            all_21_produced = false;
-         }
+         if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>())
+            prod_counter++;
       }
-      bool rest_didnt_produce = true;
+
+      uint32_t stb_counter = 0;
       for (uint32_t i = 21; i < producer_names.size(); ++i) {
-         if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
-            rest_didnt_produce = false;
-         }
+         if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>())
+            stb_counter++;
       }
-      BOOST_REQUIRE(all_21_produced && rest_didnt_produce);
+
+      switch (prod_counter) {
+         case 20: BOOST_REQUIRE_EQUAL(stb_counter, 1); break;
+         case 21: BOOST_REQUIRE_EQUAL(stb_counter, 0); break;
+         default: BOOST_FAIL("Invalid counters: " << prod_counter << " " << stb_counter);
+      }
    }
 
    {
