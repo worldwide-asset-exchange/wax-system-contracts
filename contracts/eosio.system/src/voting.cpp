@@ -109,7 +109,7 @@ namespace eosiosystem {
    }
 
    void system_contract::update_elected_producers( const block_timestamp& block_time, 
-                                                   const eosio::checksum256& last_block_hash ) {
+                                                   const eosio::checksum256& previous_block_hash ) {
 
       _gstate.last_producer_schedule_update = block_time;
 
@@ -120,7 +120,7 @@ namespace eosiosystem {
       // multiplied by 21 because we are effectively making 21 separate random selection to insert a standby in this round
       auto constexpr standby_weight = 21 * one_percent_weight / num_standbys; 
 
-      auto const selected_weight = to_int(last_block_hash) % total_weight;
+      auto const selected_weight = to_int(previous_block_hash) % total_weight;
       auto const standby_index = selected_weight / standby_weight;
 
       prod_vec_t top_producers;
