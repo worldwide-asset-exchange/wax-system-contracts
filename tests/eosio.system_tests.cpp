@@ -2543,7 +2543,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
       switch (prod_counter) {
          case 20: BOOST_REQUIRE_EQUAL(stb_counter, 1); break;
          case 21: BOOST_REQUIRE_EQUAL(stb_counter, 0); break;
-         default: BOOST_FAIL("Invalid counter values: " << prod_counter << " " << stb_counter);
+         default: BOOST_FAIL("Invalid counters: " << prod_counter << " " << stb_counter);
       }
    }
 
@@ -3543,7 +3543,7 @@ BOOST_FIXTURE_TEST_CASE(producer_onblock_check, eosio_system_tester) try {
       switch (prod_counter) {
          case 20: BOOST_REQUIRE_EQUAL(stb_counter, 1); break;
          case 21: BOOST_REQUIRE_EQUAL(stb_counter, 0); break;
-         default: BOOST_FAIL("Invalid counter values: " << prod_counter << " " << stb_counter);
+         default: BOOST_FAIL("Invalid counters: " << prod_counter << " " << stb_counter);
       }
 
       BOOST_REQUIRE_EQUAL(success(),
@@ -4510,7 +4510,7 @@ BOOST_FIXTURE_TEST_CASE( vote_producers_in_and_out, eosio_system_tester ) try {
       switch (prod_counter) {
          case 20: BOOST_REQUIRE_EQUAL(stb_counter, 1); break;
          case 21: BOOST_REQUIRE_EQUAL(stb_counter, 0); break;
-         default: BOOST_FAIL("Invalid counter values: " << prod_counter << " " << stb_counter);
+         default: BOOST_FAIL("Invalid counters: " << prod_counter << " " << stb_counter);
       }
    }
 
