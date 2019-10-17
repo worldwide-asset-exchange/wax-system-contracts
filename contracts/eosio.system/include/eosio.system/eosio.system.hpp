@@ -71,8 +71,6 @@ namespace eosiosystem {
    static const time_point gbm_initial_time(eosio::seconds(1561939200));     // July 1st 2019 00:00:00
    static const time_point gbm_final_time = gbm_initial_time + eosio::microseconds(useconds_in_gbm_period);   // July 1st 2022 00:00:00
 
-   //static const uint32_t seconds_per_day = 60 * 60 * 24;
-
    /**
     *
     * @defgroup eosiosystem eosio.system
@@ -1216,7 +1214,7 @@ namespace eosiosystem {
          void update_voter_votepay_share(const voters_table::const_iterator& voter_itr);
 
          // defined in voting.hpp
-         void update_elected_producers( const block_timestamp& timestamp );
+         void update_elected_producers( const block_timestamp& timestamp, const eosio::checksum256& previous_block_hash);
          void update_votes( const name& voter, const name& proxy, const std::vector<name>& producers, bool voting );
          void propagate_weight_change( const voter_info& voter );
          double update_producer_votepay_share( const producers_table2::const_iterator& prod_itr,
@@ -1224,6 +1222,9 @@ namespace eosiosystem {
                                                double shares_rate, bool reset_to_zero = false );
          double update_total_votepay_share( const time_point& ct,
                                             double additional_shares_delta = 0.0, double shares_rate_delta = 0.0 );
+         
+         using prod_vec_t = std::vector<std::pair<eosio::producer_key, uint16_t /* location */ >>;
+         void select_producers_into( uint64_t begin, uint64_t count, prod_vec_t& result );
 
          template <auto system_contract::*...Ptrs>
          class registration {

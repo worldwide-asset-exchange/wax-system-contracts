@@ -14,6 +14,7 @@ namespace eosiosystem {
 
       block_timestamp timestamp;
       name producer;
+
       _ds >> timestamp >> producer;
 
       // _gstate2.last_block_num is not used anywhere in the system contract code anymore.
@@ -28,7 +29,6 @@ namespace eosiosystem {
       if( _gstate.last_pervote_bucket_fill == time_point() )  /// start the presses
          _gstate.last_pervote_bucket_fill = current_time_point();
 
-
       /**
        * At startup the initial producer may not be one that is registered / elected
        * and therefore there may be no producer object for them.
@@ -40,10 +40,15 @@ namespace eosiosystem {
                p.unpaid_blocks++;
          });
       }
-
+   
       /// only update block producers once every minute, block_timestamp is in half seconds
       if( timestamp.slot - _gstate.last_producer_schedule_update.slot > 120 ) {
-         update_elected_producers( timestamp );
+         uint16_t _;
+         checksum256 previous; 
+
+         _ds >> _ >> previous;
+
+         update_elected_producers( timestamp, previous );
 
          if( (timestamp.slot - _gstate.last_name_close.slot) > blocks_per_day ) {
             name_bid_table bids(get_self(), get_self().value);
