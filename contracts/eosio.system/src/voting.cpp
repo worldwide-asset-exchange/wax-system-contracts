@@ -88,9 +88,7 @@ namespace eosiosystem {
       });
    }
 
-   void system_contract::select_producers_into(uint64_t begin,
-                                               uint64_t count,
-                                               prod_vec_t& result) {
+   void system_contract::select_producers_into(uint64_t begin, uint64_t count, prod_vec_t& result) {
       auto idx = _producers.get_index<"prototalvote"_n>();
       uint64_t i = 0;
 
