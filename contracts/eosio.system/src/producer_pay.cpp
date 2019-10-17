@@ -14,10 +14,8 @@ namespace eosiosystem {
 
       block_timestamp timestamp;
       name producer;
-      uint16_t _;
-      checksum256 previous; 
 
-      _ds >> timestamp >> producer >> _ >> previous;
+      _ds >> timestamp >> producer;
 
       // _gstate2.last_block_num is not used anywhere in the system contract code anymore.
       // Although this field is deprecated, we will continue updating it for now until the last_block_num field
@@ -45,6 +43,11 @@ namespace eosiosystem {
    
       /// only update block producers once every minute, block_timestamp is in half seconds
       if( timestamp.slot - _gstate.last_producer_schedule_update.slot > 120 ) {
+         uint16_t _;
+         checksum256 previous; 
+
+         _ds >> _ >> previous;
+
          update_elected_producers( timestamp, previous );
 
          if( (timestamp.slot - _gstate.last_name_close.slot) > blocks_per_day ) {

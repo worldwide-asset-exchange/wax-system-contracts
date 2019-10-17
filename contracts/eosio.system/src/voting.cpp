@@ -24,10 +24,6 @@ namespace {
       return int_value;
    }
 
-   inline eosio::checksum256 next_random_value(const eosio::checksum256& value) {
-      return eosio::sha256(reinterpret_cast<const char *>(value.data()), 32);
-   }
-
 } // namespace
 
 namespace eosiosystem {
