@@ -81,11 +81,12 @@ namespace eosiosystem {
             info.owner = producer;
             info.blocks_as_producer = info.blocks_as_standby = 0;
 
-            auto prod_count = _producers.size();
+            auto prod_count = std::distance(_producers.cbegin(), _producers.cend());
+
             if (prod_count < 21)
                info.set_status(rewards_info::status_field::producer);
 
-            else if (prod_count < 21 + num_standby)
+            else if (prod_count < 21 + num_standbys)
                info.set_status(rewards_info::status_field::standby);
 
             else
@@ -108,13 +109,13 @@ namespace eosiosystem {
       auto idx = _producers.get_index<"prototalvote"_n>();
       uint64_t i = 0;
 
-      for (auto it = idx.cbegin(); it != idx.cend() && < it->total_votes && it->active(); ++it, ++i) {
+      for (auto it = idx.cbegin(); it != idx.cend() && it->active(); ++it, ++i) {
          if (auto reward = _rewards.find(it->owner.value); reward != _rewards.end()) {
             _rewards.modify( reward, same_payer, [&](auto& rec) {
                if (i < 21)
                   rec.set_status(rewards_info::status_field::producer);
 
-               else if (i < 21 + num_standby)
+               else if (i < 21 + num_standbys)
                   rec.set_status(rewards_info::status_field::standby);
 
                else
