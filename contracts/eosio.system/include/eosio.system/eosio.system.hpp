@@ -63,6 +63,7 @@ namespace eosiosystem {
    static constexpr int64_t  inflation_pay_factor  = 5;                // 20% of the inflation
    static constexpr int64_t  votepay_factor        = 4;                // 25% of the producer pay
    static constexpr uint32_t refund_delay_sec      = 3 * seconds_per_day;
+   static constexpr uint32_t num_standby           = 36;  
 
    static constexpr uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022
    static const time_point gbm_initial_time(eosio::seconds(1561939200));     // July 1st 2019 00:00:00
@@ -323,12 +324,12 @@ namespace eosiosystem {
                blocks_as_standby++;
                break;
 
-            // One of the 1st 21 producers is starting to produce (see 
-            // system_contract::onblock and system_contract::update_elected_producers)
-            case status_field::none:
-               set_status(status_field::producer);
-               blocks_as_producer++;
-               break;
+            // // One of the 1st 21 producers is starting to produce (see 
+            // // system_contract::onblock and system_contract::update_elected_producers)
+            // case status_field::none:
+            //    set_status(status_field::producer);
+            //    blocks_as_producer++;
+            //    break;
 
             default:
                ;
@@ -999,6 +1000,7 @@ namespace eosiosystem {
          void update_voter_votepay_share(const voters_table::const_iterator& voter_itr);
 
          // defined in voting.hpp
+         void update_producer_reward_status();
          void update_elected_producers( const block_timestamp& timestamp, const eosio::checksum256& previous_block_hash);
          void update_votes( const name& voter, const name& proxy, const std::vector<name>& producers, bool voting );
          void propagate_weight_change( const voter_info& voter );

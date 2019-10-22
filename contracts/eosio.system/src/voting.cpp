@@ -71,15 +71,25 @@ namespace eosiosystem {
             info.location        = location;
             info.last_claim_time = ct;
          });
+
          _producers2.emplace( producer, [&]( producer_info2& info ){
             info.owner                     = producer;
             info.last_votepay_share_update = ct;
          });
-         /// @todo Check if this piece of code should be moved to system_contract::onblock
+
          _rewards.emplace( producer, [&]( rewards_info& info ){
             info.owner = producer;
-            info.status = 0;
             info.blocks_as_producer = info.blocks_as_standby = 0;
+
+            auto prod_count = _producers.size();
+            if (prod_count < 21)
+               info.set_status(rewards_info::status_field::producer);
+
+            else if (prod_count < 21 + num_standby)
+               info.set_status(rewards_info::status_field::standby);
+
+            else
+               info.set_status(rewards_info::status_field::none);
          });
       }
 
@@ -92,6 +102,26 @@ namespace eosiosystem {
       _producers.modify( prod, same_payer, [&]( producer_info& info ){
          info.deactivate();
       });
+   }
+
+   void system_contract::update_producer_reward_status() {
+      auto idx = _producers.get_index<"prototalvote"_n>();
+      uint64_t i = 0;
+
+      for (auto it = idx.cbegin(); it != idx.cend() && < it->total_votes && it->active(); ++it, ++i) {
+         if (auto reward = _rewards.find(it->owner.value); reward != _rewards.end()) {
+            _rewards.modify( reward, same_payer, [&](auto& rec) {
+               if (i < 21)
+                  rec.set_status(rewards_info::status_field::producer);
+
+               else if (i < 21 + num_standby)
+                  rec.set_status(rewards_info::status_field::standby);
+
+               else
+                  rec.set_status(rewards_info::status_field::none);
+            });
+         }
+      } 
    }
 
    void system_contract::select_producers_into( uint64_t begin, uint64_t count, prod_vec_t& result ) {
@@ -114,7 +144,6 @@ namespace eosiosystem {
 
       auto constexpr total_weight = 1'000'000;
       auto constexpr one_percent_weight = total_weight * 0.01;
-      auto constexpr num_standbys = 36;
 
       // multiplied by 21 because we are effectively making 21 separate random selection to insert a standby in this round
       auto constexpr standby_weight = 21 * one_percent_weight / num_standbys; 
@@ -152,10 +181,10 @@ namespace eosiosystem {
       if( set_proposed_producers( producers ) >= 0 ) {
          _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
 
-         /// @todo Update reward_info::status. It's a complicated task because we don't know exactly when the 
-         ///       function "set_proposed_producers" has updated (or will update) the producer list :-O
+         /// @todo Check this call in this place
+         update_producer_reward_status();
       }
-   }
+   } 
 
    double stake2vote( int64_t staked ) {
       /// TODO subtract 2080 brings the large numbers closer to this decade
