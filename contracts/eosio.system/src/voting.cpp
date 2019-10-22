@@ -110,7 +110,7 @@ namespace eosiosystem {
       auto constexpr one_percent_weight = total_weight * 0.01;
       auto constexpr num_standbys = 36;
 
-      // multiplied by 10 (120/12, 12 blocks in 120 seconds)
+      // multiplied by 10 (120/12, 10 rounds of 12 blocks in 120 seconds)
       auto constexpr standby_weight = 10 * one_percent_weight / num_standbys; 
 
       auto const selected_weight = to_int(previous_block_hash) % total_weight;
