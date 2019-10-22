@@ -40,6 +40,14 @@ namespace eosiosystem {
                p.unpaid_blocks++;
          });
       }
+
+      // Counts blocks according to producer type
+      auto reward = _rewards.find( producer.value );
+      if ( reward != _rewards.end() ) {
+         _rewards.modify( reward, same_payer, [&](auto& rec ) {
+               rec.add_new_block();
+         });
+      }
    
       /// only update block producers once every minute, block_timestamp is in half seconds
       if( timestamp.slot - _gstate.last_producer_schedule_update.slot > 120 ) {

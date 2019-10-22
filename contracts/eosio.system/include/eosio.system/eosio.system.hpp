@@ -68,6 +68,7 @@ namespace eosiosystem {
    static const time_point gbm_initial_time(eosio::seconds(1561939200));     // July 1st 2019 00:00:00
    static const time_point gbm_final_time = gbm_initial_time + eosio::microseconds(useconds_in_gbm_period);   // July 1st 2022 00:00:00
 
+
    /**
     *
     * @defgroup eosiosystem eosio.system
@@ -284,6 +285,62 @@ namespace eosiosystem {
    };
 
    /**
+    * TODO 
+    */
+   struct [[eosio::table, eosio::contract("eosio.system")]] rewards_info {
+      name      owner;     /// producer
+      uint32_t  status = 0;
+      uint64_t  blocks_as_producer = 0;
+      uint64_t  blocks_as_standby = 0;
+
+      enum class status_field: decltype(status) {
+         none = 0,
+         producer = 1,
+         standby = 2
+      };
+
+      // Table helpers
+
+      uint64_t primary_key() const { 
+         return owner.value; 
+      }
+
+      void set_status(status_field rhs) {
+         status = static_cast<std::underlying_type_t<status_field>>(rhs);
+      }
+
+      status_field get_status() const {
+         return static_cast<status_field>(status);
+      }
+
+      void add_new_block() {
+         switch (get_status()) {
+            case status_field::producer:
+               blocks_as_producer++;
+               break;
+
+            case status_field::standby:
+               blocks_as_standby++;
+               break;
+
+            // One of the 1st 21 producers is starting to produce (see 
+            // system_contract::onblock and system_contract::update_elected_producers)
+            case status_field::none:
+               set_status(status_field::producer);
+               blocks_as_producer++;
+               break;
+
+            default:
+               ;
+         }
+      }
+
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE( rewards_info, (owner)(status)(blocks_as_producer)(blocks_as_standby) )
+   };
+
+
+   /**
     * Voters table
     *
     * @details The voters table stores all the `voter_info`s instances, all voters information.
@@ -301,6 +358,11 @@ namespace eosiosystem {
     * Defines new producer info table added in version 1.3.0
     */
    typedef eosio::multi_index< "producers2"_n, producer_info2 > producers_table2;
+
+   /**
+    * Keep produced blocks for rewards
+    */
+   typedef eosio::multi_index< "rewards"_n, rewards_info > rewards_table;
 
    /**
     * Global state singleton added in version 1.0
@@ -402,6 +464,7 @@ namespace eosiosystem {
          voters_table            _voters;
          producers_table         _producers;
          producers_table2        _producers2;
+         rewards_table           _rewards;
          global_state_singleton  _global;
          global_state2_singleton _global2;
          global_state3_singleton _global3;
@@ -944,7 +1007,7 @@ namespace eosiosystem {
                                                double shares_rate, bool reset_to_zero = false );
          double update_total_votepay_share( const time_point& ct,
                                             double additional_shares_delta = 0.0, double shares_rate_delta = 0.0 );
-         
+
          using prod_vec_t = std::vector<std::pair<eosio::producer_key, uint16_t /* location */ >>;
          void select_producers_into( uint64_t begin, uint64_t count, prod_vec_t& result );
 

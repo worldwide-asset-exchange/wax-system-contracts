@@ -75,6 +75,12 @@ namespace eosiosystem {
             info.owner                     = producer;
             info.last_votepay_share_update = ct;
          });
+         /// @todo Check if this piece of code should be moved to system_contract::onblock
+         _rewards.emplace( producer, [&]( rewards_info& info ){
+            info.owner = producer;
+            info.status = 0;
+            info.blocks_as_producer = info.blocks_as_standby = 0;
+         });
       }
 
    }
@@ -145,6 +151,9 @@ namespace eosiosystem {
 
       if( set_proposed_producers( producers ) >= 0 ) {
          _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
+
+         /// @todo Update reward_info::status. It's a complicated task because we don't know exactly when the 
+         ///       function "set_proposed_producers" has updated (or will update) the producer list :-O
       }
    }
 
