@@ -109,9 +109,7 @@ namespace eosiosystem {
       auto constexpr total_weight = 1'000'000;
       auto constexpr one_percent_weight = total_weight * 0.01;
       auto constexpr num_standbys = 36;
-
-      // multiplied by 21 because we are effectively making 21 separate random selection to insert a standby in this round
-      auto constexpr standby_weight = 21 * one_percent_weight / num_standbys;
+      auto constexpr standby_weight = 10 * one_percent_weight / num_standbys;
 
       auto const selected_weight = to_int(previous_block_hash) % total_weight;
       auto const standby_index = selected_weight / standby_weight;
