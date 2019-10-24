@@ -71,11 +71,14 @@ namespace eosiosystem {
       const auto usecs_since_last_fill = (ct - _gstate.last_pervote_bucket_fill).count();
 
       if( usecs_since_last_fill > 0 && _gstate.last_pervote_bucket_fill > time_point() ) {
+         const auto unstake_time = std::min(current_time_point(), gbm_final_time);
+         const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
          auto new_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
-         // needs to be 1/2 Savings, 1/6 Producers, 1/6 Voters, 1/6 Genesis Block Member
-         auto to_voters        = new_tokens / 6;
+         // needs to be 1/2 Savings, 1/5 Voters, GBM receives a linearly deflating share over three years
+         auto to_voters        = new_tokens / 5;
          auto to_per_block_pay = to_voters;
-         auto to_gbm           = to_voters;
+         auto to_gbm           = to_voters * 2 * (delta_time_usec / double(useconds_in_gbm_period));
+         new_tokens           += to_gbm;
          auto to_savings       = new_tokens - (to_voters + to_per_block_pay + to_gbm);
 
          {
@@ -86,8 +89,10 @@ namespace eosiosystem {
             token::transfer_action transfer_act{ token_account, { {get_self(), active_permission} } };
             transfer_act.send( get_self(), saving_account, asset(to_savings, core_symbol()), "unallocated inflation" );
             transfer_act.send( get_self(), voters_account, asset(to_voters, core_symbol()), "fund voters bucket" );
-            transfer_act.send( get_self(), bpay_account, asset(to_per_block_pay, core_symbol()), "fund voters bucket" );
-            transfer_act.send( get_self(), genesis_account, asset(to_gbm, core_symbol()), "fund voters bucket" );
+            transfer_act.send( get_self(), bpay_account, asset(to_per_block_pay, core_symbol()), "fund bpay bucket" );
+            if (to_gbm > 0) {
+               transfer_act.send( get_self(), genesis_account, asset(to_gbm, core_symbol()), "fund gbm rewards bucket" );
+            }
          }
 
          _gstate.perblock_bucket    += to_per_block_pay;

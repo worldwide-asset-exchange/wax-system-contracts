@@ -31,9 +31,12 @@ dev-docker-start: dev-docker-stop
 
 # Useful for wax-docker project
 .PHONY:dev-docker-all
-dev-docker-all: dev-docker-stop
+dev-docker-all: dev-docker-stop 
 	docker run --user $(shell id -u):$(shell id -g) $(DOCKER_COMMON) bash -c "\
         rm -rf build && \
         cmake . -B./build -GNinja && \
         cmake --build ./build && \
-        build/tests/unit_test --show_progress"
+		build/tests/unit_test --log_level=all"
+        #build/tests/unit_test --show_progress"
+
+#build/tests/unit_test --log_level=all --run_test=eosio_system_tests/voter_pay"
