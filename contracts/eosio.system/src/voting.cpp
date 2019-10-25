@@ -19,7 +19,7 @@ namespace {
       uint64_t int_value = 0;
       for (int i = 0; i < 8; i++) {
          int_value <<= 8;
-         int_value |= static_cast<uint64_t>(byte_array[i]);
+         int_value |= byte_array[i] & 127;
       }
       return int_value;
    }
@@ -109,9 +109,7 @@ namespace eosiosystem {
       auto constexpr total_weight = 1'000'000;
       auto constexpr one_percent_weight = total_weight * 0.01;
       auto constexpr num_standbys = 36;
-
-      // multiplied by 21 because we are effectively making 21 separate random selection to insert a standby in this round
-      auto constexpr standby_weight = 21 * one_percent_weight / num_standbys; 
+      auto constexpr standby_weight = 10 * one_percent_weight / num_standbys;
 
       auto const selected_weight = to_int(previous_block_hash) % total_weight;
       auto const standby_index = selected_weight / standby_weight;
@@ -124,8 +122,12 @@ namespace eosiosystem {
          standbys.reserve(num_standbys);
          select_producers_into(21, num_standbys, standbys);
 
-         if (standbys.size() > standby_index)
+         if (standbys.size() > standby_index) {
             top_producers.emplace_back(standbys[standby_index]);
+
+            eosio::print_f("Standby producer '%' was selected\n", 
+               standbys[standby_index].first.producer_name.to_string());
+         }
       }
 
       select_producers_into(0, 21 - top_producers.size(), top_producers);
