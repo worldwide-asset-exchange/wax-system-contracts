@@ -172,13 +172,10 @@ namespace eosiosystem {
       // Producer/Standby rewards
 
       if (auto reward = _rewards.find(owner.value); reward != _rewards.end()) {
-         
          /// @todo
-         
 
-         // Reset reward counters
-         rewards.modify( reward, same_payer, [&](auto& rec) {
-            rec.reset_blocks();
+         _rewards.modify( reward, same_payer, [&](auto& rec) {
+            rec.reset_counters();
          });
       }
 

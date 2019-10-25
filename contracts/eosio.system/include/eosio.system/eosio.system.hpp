@@ -12,6 +12,7 @@
 #include <deque>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <type_traits>
 
 
@@ -998,7 +999,11 @@ namespace eosiosystem {
          void update_voter_votepay_share(const voters_table::const_iterator& voter_itr);
 
          // defined in voting.hpp
-         void update_producer_reward_status();
+         //using prod_vec_t = std::vector<std::pair<eosio::producer_key, uint16_t /* location */ >>;
+         using prod_vec_t = std::vector<std::tuple<eosio::producer_key, uint16_t /* location */, rewards_info::status_field>>;
+
+         void update_producer_reward_status(const prod_vec_t& top_producers);
+         void update_selection_counter(const prod_vec_t& top_producers);
          void update_elected_producers( const block_timestamp& timestamp, const eosio::checksum256& previous_block_hash);
          void update_votes( const name& voter, const name& proxy, const std::vector<name>& producers, bool voting );
          void propagate_weight_change( const voter_info& voter );
@@ -1008,8 +1013,7 @@ namespace eosiosystem {
          double update_total_votepay_share( const time_point& ct,
                                             double additional_shares_delta = 0.0, double shares_rate_delta = 0.0 );
 
-         using prod_vec_t = std::vector<std::pair<eosio::producer_key, uint16_t /* location */ >>;
-         void select_producers_into( uint64_t begin, uint64_t count, prod_vec_t& result );
+         void select_producers_into( uint64_t begin, uint64_t count, rewards_info::status_field status, prod_vec_t& result );
 
          template <auto system_contract::*...Ptrs>
          class registration {
