@@ -7,7 +7,8 @@ BREAKING CHANGES:
 FEATURES:
 
 IMPROVEMENTS:
-- [KEW-42] Proof of readiness scheduling
+- [KEW-43] Proof of readiness scheduling
+- [KEW-42] Standby and producer rewards
 
 BUG FIXES:
 

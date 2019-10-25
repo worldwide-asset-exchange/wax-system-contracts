@@ -12,6 +12,7 @@
 #include <deque>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <type_traits>
 
 
@@ -50,6 +51,11 @@ namespace eosiosystem {
          return ( flags & ~static_cast<F>(field) );
    }
 
+   template<typename EnumType, typename IntType = std::underlying_type_t<EnumType>>
+   IntType enum_cast(EnumType value) {
+      return static_cast<IntType>(value);
+   }
+
    static constexpr uint32_t seconds_per_year      = 52 * 7 * 24 * 3600;
    static constexpr uint32_t seconds_per_day       = 24 * 3600;
    static constexpr int64_t  useconds_per_year     = int64_t(seconds_per_year) * 1000'000ll;
@@ -63,6 +69,9 @@ namespace eosiosystem {
    static constexpr int64_t  inflation_pay_factor  = 5;                // 20% of the inflation
    static constexpr int64_t  votepay_factor        = 4;                // 25% of the producer pay
    static constexpr uint32_t refund_delay_sec      = 3 * seconds_per_day;
+   static constexpr uint32_t num_standbys          = 36;  
+   static constexpr double   producer_perc_reward  = 0.60;
+   static constexpr double   standby_perc_reward   = 1 - producer_perc_reward;
 
    static constexpr uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022
    static const time_point gbm_initial_time(eosio::seconds(1561939200));     // July 1st 2019 00:00:00
@@ -82,6 +91,18 @@ namespace eosiosystem {
     *    and users to rent CPU and Network resources in return for a market-determined fee.
     * @{
     */
+
+   /**
+    * Type of rewards
+    * 
+    * @details Defines types of rewards for all producers and also the current 
+    *          reward status. 
+    */
+   enum class reward_type: uint32_t {
+      none = 0,
+      producer = 1,
+      standby = 2
+   };
 
    /**
     * A name bid.
@@ -195,6 +216,39 @@ namespace eosiosystem {
    };
 
    /**
+    * Global counters for producer/standby rewards
+    */
+   struct [[eosio::table("glbrewards"), eosio::contract("eosio.system")]] eosio_global_rewards {
+      // A unique name is needed in order to avoid problems with ABI generator
+      // which doesn't understand scopes (see rewards_info table)
+      struct global_rewards_counter_type {
+         uint64_t total_unpaid_blocks = 0;
+         /// @todo Other counters here
+      };
+
+      bool activated = false;  // Producer/standby rewards activated 
+      std::map<uint32_t /*reward_type*/, global_rewards_counter_type> counters;
+
+      eosio_global_rewards() { 
+         counters.emplace(enum_cast(reward_type::producer), global_rewards_counter_type());
+         counters.emplace(enum_cast(reward_type::standby), global_rewards_counter_type());
+      }
+
+      auto& get_counters(reward_type type) {
+         auto it = counters.find(enum_cast(type));
+         check(it != counters.end(), "Invalid reward type");
+         return it->second;
+      }
+
+      /// @todo Maybe this function can be removed (just use get_counters)
+      void new_total_unpaid_block(reward_type type) {
+         get_counters(type).total_unpaid_blocks++;
+      }
+      
+      EOSLIB_SERIALIZE( eosio_global_rewards, (activated)(counters) )
+   };
+
+   /**
     * Defines `producer_info` structure to be stored in `producer_info` table, added after version 1.0
     */
    struct [[eosio::table, eosio::contract("eosio.system")]] producer_info {
@@ -203,7 +257,7 @@ namespace eosiosystem {
       eosio::public_key     producer_key; /// a packed public key object
       bool                  is_active = true;
       std::string           url;
-      uint32_t              unpaid_blocks = 0;
+      uint32_t              unpaid_blocks = 0;  /// @todo Possibly deprecated in future version due to standby rewards, see voter_info table
       time_point            last_claim_time;
       uint16_t              location = 0;
 
@@ -284,6 +338,72 @@ namespace eosiosystem {
    };
 
    /**
+    * Producer reward information  
+    */
+   struct [[eosio::table, eosio::contract("eosio.system")]] rewards_info {
+      // A unique name is needed in order to avoid problems with ABI generator
+      // which doesn't understand scopes (see eosio_global_rewards)
+      struct reward_info_counter_type {
+         uint64_t unpaid_blocks = 0;  // # of blocks produced
+         uint64_t selection     = 0;  // # of times a 'producer' was selected to produce
+      };
+
+      name                                         owner;
+      uint32_t                                     current_type = 0;
+      std::map<uint32_t, reward_info_counter_type> counters; // [reward_type, counters]
+
+      // Table helpers / accessors
+
+      auto primary_key() const { 
+         return owner.value; 
+      }
+
+      void init(const name& owner) {
+         this->owner = owner;
+         current_type = enum_cast(reward_type::none);
+         counters.try_emplace(enum_cast(reward_type::producer), reward_info_counter_type());
+         counters.try_emplace(enum_cast(reward_type::standby), reward_info_counter_type());
+      }
+
+      void set_current_type(reward_type rhs) {
+         current_type = enum_cast(rhs);
+      }
+
+      auto get_current_type() const {
+         return static_cast<reward_type>(current_type);
+      }
+
+      void select(reward_type type) {
+         set_current_type(type);
+
+         if (auto it = counters.find(current_type); it != counters.end())
+            it->second.selection++;
+      }
+
+      void new_unpaid_block() {
+         if (auto it = counters.find(current_type); it != counters.end())
+            it->second.unpaid_blocks++;
+      }
+
+      void reset_counters() {
+         for (auto& counter: counters) {
+            counter.second.unpaid_blocks = 0;
+            counter.second.selection = 0;
+         }
+      }
+
+      const auto& get_counters(reward_type type) const {
+         auto it = counters.find(enum_cast(type)); 
+         check(it != counters.end(), "Invalid counter data"); 
+         return it->second;
+      }
+
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE( rewards_info, (owner)(current_type)(counters) )
+   };
+
+
+   /**
     * Voters table
     *
     * @details The voters table stores all the `voter_info`s instances, all voters information.
@@ -303,17 +423,29 @@ namespace eosiosystem {
    typedef eosio::multi_index< "producers2"_n, producer_info2 > producers_table2;
 
    /**
+    * Keeps produced blocks for rewards
+    */
+   typedef eosio::multi_index< "rewards"_n, rewards_info > rewards_table;
+
+   /**
     * Global state singleton added in version 1.0
     */
    typedef eosio::singleton< "global"_n, eosio_global_state >   global_state_singleton;
+   
    /**
     * Global state singleton added in version 1.1.0
     */
    typedef eosio::singleton< "global2"_n, eosio_global_state2 > global_state2_singleton;
+   
    /**
     * Global state singleton added in version 1.3
     */
    typedef eosio::singleton< "global3"_n, eosio_global_state3 > global_state3_singleton;
+
+   /**
+    * Global rewards singleton
+    */
+   typedef eosio::singleton< "glbrewards"_n, eosio_global_rewards > global_rewards_singleton;
 
    struct [[eosio::table, eosio::contract("eosio.system")]] user_resources {
       name          owner;
@@ -399,15 +531,18 @@ namespace eosiosystem {
    class [[eosio::contract("eosio.system")]] system_contract : public native {
 
       private:
-         voters_table            _voters;
-         producers_table         _producers;
-         producers_table2        _producers2;
-         global_state_singleton  _global;
-         global_state2_singleton _global2;
-         global_state3_singleton _global3;
-         eosio_global_state      _gstate;
-         eosio_global_state2     _gstate2;
-         eosio_global_state3     _gstate3;
+         voters_table             _voters;
+         producers_table          _producers;
+         producers_table2         _producers2;
+         rewards_table            _rewards;
+         global_state_singleton   _global;
+         global_state2_singleton  _global2;
+         global_state3_singleton  _global3;
+         global_rewards_singleton _globalrewards;
+         eosio_global_state       _gstate;
+         eosio_global_state2      _gstate2;
+         eosio_global_state3      _gstate3;
+         eosio_global_rewards     _grewards;
          rammarket               _rammarket;
 
       public:
@@ -417,6 +552,7 @@ namespace eosiosystem {
          static constexpr eosio::name ramfee_account{"eosio.ramfee"_n};
          static constexpr eosio::name stake_account{"eosio.stake"_n};
          static constexpr eosio::name bpay_account{"eosio.bpay"_n};
+         static constexpr eosio::name spay_account{"eosio.spay"_n};
          static constexpr eosio::name vpay_account{"eosio.vpay"_n};
          static constexpr eosio::name names_account{"eosio.names"_n};
          static constexpr eosio::name saving_account{"eosio.saving"_n};
@@ -536,6 +672,15 @@ namespace eosiosystem {
           */
          [[eosio::action]]
          void activate( const eosio::checksum256& feature_digest );
+
+         /**
+          * Activates producer/standby rewards
+          *
+          * @details 
+          *   
+          */
+         [[eosio::action]]
+         void activaterewd();
 
          // functions defined in delegate_bandwidth.cpp
 
@@ -878,6 +1023,7 @@ namespace eosiosystem {
          using setacctnet_action = eosio::action_wrapper<"setacctnet"_n, &system_contract::setacctnet>;
          using setacctcpu_action = eosio::action_wrapper<"setacctcpu"_n, &system_contract::setacctcpu>;
          using activate_action = eosio::action_wrapper<"activate"_n, &system_contract::activate>;
+         using activaterewd_action = eosio::action_wrapper<"activaterewd"_n, &system_contract::activaterewd>;
          using delegatebw_action = eosio::action_wrapper<"delegatebw"_n, &system_contract::delegatebw>;
          using awardgenesis_action = eosio::action_wrapper<"awardgenesis"_n, &system_contract::awardgenesis>;
          using delgenesis_action = eosio::action_wrapper<"delgenesis"_n, &system_contract::delgenesis>;
@@ -936,6 +1082,9 @@ namespace eosiosystem {
          void update_voter_votepay_share(const voters_table::const_iterator& voter_itr);
 
          // defined in voting.hpp
+         using prod_vec_t = std::vector<std::tuple<eosio::producer_key, uint16_t /* location */, reward_type>>;
+
+         void update_producer_reward_status(const prod_vec_t& top_producers);
          void update_elected_producers( const block_timestamp& timestamp, const eosio::checksum256& previous_block_hash);
          void update_votes( const name& voter, const name& proxy, const std::vector<name>& producers, bool voting );
          void propagate_weight_change( const voter_info& voter );
@@ -944,9 +1093,8 @@ namespace eosiosystem {
                                                double shares_rate, bool reset_to_zero = false );
          double update_total_votepay_share( const time_point& ct,
                                             double additional_shares_delta = 0.0, double shares_rate_delta = 0.0 );
-         
-         using prod_vec_t = std::vector<std::pair<eosio::producer_key, uint16_t /* location */ >>;
-         void select_producers_into( uint64_t begin, uint64_t count, prod_vec_t& result );
+
+         void select_producers_into( uint64_t begin, uint64_t count, reward_type type, prod_vec_t& result );
 
          template <auto system_contract::*...Ptrs>
          class registration {
