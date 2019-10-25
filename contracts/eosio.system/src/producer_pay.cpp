@@ -168,6 +168,23 @@ namespace eosiosystem {
          p.unpaid_blocks   = 0;
       });
 
+      //////////////////////////////////////////////////
+      // Producer/Standby rewards
+
+      if (auto reward = _rewards.find(owner.value); reward != _rewards.end()) {
+         
+         /// @todo
+         
+
+         // Reset reward counters
+         rewards.modify( reward, same_payer, [&](auto& rec) {
+            rec.reset_blocks();
+         });
+      }
+
+      // End standby rewars
+      //////////////////////////////////////////////////
+
       if( producer_per_block_pay > 0 ) {
          if(as_gbm){
             send_genesis_token( bpay_account, owner, asset(producer_per_block_pay, core_symbol()));

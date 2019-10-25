@@ -293,6 +293,7 @@ namespace eosiosystem {
       uint32_t  status = 0;
       uint64_t  blocks_as_producer = 0;
       uint64_t  blocks_as_standby = 0;
+      uint64_t  selection_counter = 0;   // # of times the producer was selected to produce
 
       enum class status_field: decltype(status) {
          none = 0,
@@ -324,16 +325,13 @@ namespace eosiosystem {
                blocks_as_standby++;
                break;
 
-            // // One of the 1st 21 producers is starting to produce (see 
-            // // system_contract::onblock and system_contract::update_elected_producers)
-            // case status_field::none:
-            //    set_status(status_field::producer);
-            //    blocks_as_producer++;
-            //    break;
-
             default:
                ;
          }
+      }
+
+      void reset_counters() {
+         blocks_as_producer = blocks_as_standby = selection_counter = 0;
       }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
