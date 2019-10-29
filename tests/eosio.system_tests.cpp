@@ -1578,8 +1578,8 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
       BOOST_REQUIRE_EQUAL(0, initial_voters_bucket); //no tokens were reserved yet
       BOOST_REQUIRE_EQUAL(0, voters_bucket); // all tokens were already distributed
 
-      BOOST_REQUIRE_EQUAL(new_tokens, supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 6), balance.get_amount() - initial_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5), balance.get_amount() - initial_balance.get_amount());
    }
 
    {
@@ -1629,8 +1629,8 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
       BOOST_REQUIRE_EQUAL(0, initial_voters_bucket); //no tokens were reserved yet
       BOOST_REQUIRE_EQUAL(0, voters_bucket); // all tokens were already distributed
 
-      BOOST_REQUIRE_EQUAL(new_tokens, supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 6), balance.get_amount() - initial_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5), balance.get_amount() - initial_balance.get_amount());
    }
 
    // Voting less than 16 producers should award no rewards
@@ -1649,7 +1649,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
       const asset supply  = get_token_supply();
       const asset balance = get_balance(N(producvotera));
 
-      BOOST_REQUIRE_EQUAL((supply.get_amount() - initial_supply.get_amount()) / 6, balance.get_amount() - initial_balance.get_amount());
+      BOOST_REQUIRE(supply.get_amount() - initial_supply.get_amount() / 5 >= balance.get_amount() - initial_balance.get_amount());
 
       produce_block(fc::hours(24));
       // There should be no more rewards available
@@ -1919,8 +1919,8 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
       BOOST_REQUIRE_EQUAL(0, initial_voters_bucket); //no tokens were reserved yet
       BOOST_REQUIRE_EQUAL(0, voters_bucket); // all tokens were already distributed
 
-      BOOST_REQUIRE_EQUAL(new_tokens, supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 6), genesis_balance.get_amount() - initial_genesis_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5), genesis_balance.get_amount() - initial_genesis_balance.get_amount());
    }
 
    {
@@ -1970,8 +1970,8 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
       BOOST_REQUIRE_EQUAL(0, initial_voters_bucket); //no tokens were reserved yet
       BOOST_REQUIRE_EQUAL(0, voters_bucket); // all tokens were already distributed
 
-      BOOST_REQUIRE_EQUAL(new_tokens, supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 6), genesis_balance.get_amount() - initial_genesis_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5), genesis_balance.get_amount() - initial_genesis_balance.get_amount());
    }
 
    // Voting less than 16 producers should award no rewards
@@ -1990,7 +1990,7 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
       const asset supply  = get_token_supply();
       const asset genesis_balance = get_genesis_balance(N(producvotera));
 
-      BOOST_REQUIRE_EQUAL((supply.get_amount() - initial_supply.get_amount()) / 6, genesis_balance.get_amount() - initial_genesis_balance.get_amount());
+      BOOST_REQUIRE((supply.get_amount() - initial_supply.get_amount()) / 5 >= genesis_balance.get_amount() - initial_genesis_balance.get_amount());
 
       produce_block(fc::hours(24));
       // There should be no more rewards available
