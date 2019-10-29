@@ -2334,7 +2334,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
 
       BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
       BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 2), savings - initial_savings);
-      BOOST_REQUIRE_EQUAL(add_gbm(new_tokens) - new_tokens, genesis_balance.get_amount() - initial_genesis_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(new_tokens / 5, genesis_balance.get_amount() - initial_genesis_balance.get_amount());
 
       int64_t from_perblock_bucket = int64_t( initial_supply.get_amount() * double(secs_between_fills) * (continuous_rate/ 5.) / secs_per_year ) ;
 
@@ -2393,12 +2393,12 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
       BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
       auto usecs_between_fills = claim_time - initial_claim_time;
 
-      BOOST_REQUIRE_EQUAL(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year ) ),
+      BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year )) ),
                           supply.get_amount() - initial_supply.get_amount());
       BOOST_REQUIRE_EQUAL( (supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 5) * 2,
                           savings - initial_savings);
 
-      int64_t to_producer        = int64_t( (double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate) / usecs_per_year ) / 6;
+      int64_t to_producer        = int64_t( (double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate) / usecs_per_year ) / 5;
       int64_t to_perblock_bucket = to_producer;
       
       BOOST_REQUIRE_EQUAL(to_perblock_bucket, genesis_balance.get_amount() - initial_genesis_balance.get_amount());
