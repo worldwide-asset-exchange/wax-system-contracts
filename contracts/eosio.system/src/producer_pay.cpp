@@ -149,6 +149,7 @@ namespace eosiosystem {
       // In fact it is desired behavior because the producers votes need to be counted in the global total_producer_votepay_share for the first time.
 
       int64_t per_block_pay = 0;
+      constexpr reward_type reward_types[] = { reward_type::producer, reward_type::standby };
 
       if (_grewards.activated) {
          // Adapter for global "*_perc_reward"
@@ -159,17 +160,14 @@ namespace eosiosystem {
 
          const auto& reward = _rewards.get(owner.value); 
 
-         for (auto type: { reward_type::producer, reward_type::standby }) {
+         for (auto type: reward_types) {
             if (auto total_unpaid_blocks = _grewards.get_counters(type).total_unpaid_blocks; total_unpaid_blocks > 0) {
                auto counters = reward.get_counters(type);
 
                if (counters.selection > 0 && counters.unpaid_blocks > 0) {
-                  // efficiency > 1 is normalized to 1 (this can happen when there are less than 21 producers
-                  const auto efficiency = std::min(counters.unpaid_blocks / (counters.selection * 12.0), 1.0);
                   const auto perblock_buckets = _gstate.perblock_bucket * perc_reward_by_type(type);
                   
-                  const int64_t partial_per_block_pay =
-                     efficiency * perblock_buckets * counters.unpaid_blocks / total_unpaid_blocks;
+                  const int64_t partial_per_block_pay = perblock_buckets * counters.unpaid_blocks / total_unpaid_blocks;
 
                   per_block_pay += partial_per_block_pay;
                }
@@ -193,7 +191,7 @@ namespace eosiosystem {
       _gstate.total_unpaid_blocks -= prod.unpaid_blocks; /// @todo This could be replaced in a future by the following lines
 
       if (_grewards.activated) {
-         for (auto type: { reward_type::producer, reward_type::standby }) {
+         for (auto type: reward_types) {
             _grewards.get_counters(type).total_unpaid_blocks -=
                      _rewards.get(owner.value).get_counters(type).unpaid_blocks;
          }

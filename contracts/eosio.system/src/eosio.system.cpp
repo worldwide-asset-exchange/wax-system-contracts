@@ -393,9 +393,9 @@ namespace eosiosystem {
          auto idx = _producers.get_index<"prototalvote"_n>();
          uint64_t i = 0;
 
-         for (auto it = idx.cbegin(); 
-               it != idx.cend() && i < 21 && 0 < it->total_votes && it->active(); 
-               ++it, ++i) 
+         for (auto it = idx.cbegin();
+              it != idx.cend() && i < 21 && 0 < it->total_votes && it->active();
+              ++it, ++i)
          {
             if (auto it_rwd = _rewards.find(it->owner.value); it_rwd != _rewards.end()) {
                _rewards.modify(it_rwd, same_payer, [&](rewards_info& info) {
