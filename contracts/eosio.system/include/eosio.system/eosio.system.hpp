@@ -59,7 +59,7 @@ namespace eosiosystem {
    static constexpr int64_t  min_activated_stake   = 150'000'000'0000;
    static constexpr int64_t  ram_gift_bytes        = 1400;
    static constexpr int64_t  min_pervote_daily_pay = 100'0000;
-   static constexpr double   continuous_rate       = 0.0582689;        // 6% annual rate
+   static constexpr double   continuous_rate       = 0.04879;          // 5% annual rate
    static constexpr int64_t  inflation_pay_factor  = 5;                // 20% of the inflation
    static constexpr int64_t  votepay_factor        = 4;                // 25% of the producer pay
    static constexpr uint32_t refund_delay_sec      = 3 * seconds_per_day;
@@ -801,6 +801,7 @@ namespace eosiosystem {
          */
          [[eosio::action]]
          void claimgbmvote(const name owner);
+
 
          /**
           * Claim GBM producer reward.

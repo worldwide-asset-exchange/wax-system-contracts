@@ -10,9 +10,20 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+## (wax-1.7.0-1.3.0)
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
+
+BUG FIXES:
+
 ## wax-1.7.0-1.2.0
 
 BREAKING CHANGES:
+- [KEW-1650] Updated GBM rewards dispensing.
 
 FEATURES:
 - [KEW-1394] Token burn for unstaking
