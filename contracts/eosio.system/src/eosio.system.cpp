@@ -368,11 +368,18 @@ namespace eosiosystem {
 
       check(!_grewards.activated, "Standby rewards feature already activated");
 
+      _grewards.get_counters(reward_type::producer).total_unpaid_blocks = _gstate.total_unpaid_blocks;
+
       // Add reward information to all producers
       for (const auto& producer: _producers) {
          if (auto it = _rewards.find(producer.owner.value); it == _rewards.end()) {
             _rewards.emplace(producer.owner, [&](rewards_info& info) {
                info.init(producer.owner);
+
+               if (producer.unpaid_blocks > 0) {
+                  info.get_counters(reward_type::producer).unpaid_blocks = producer.unpaid_blocks;
+                  info.get_counters(reward_type::producer).selection = 1; /// @todo Is this correct? we don't know how many time was selected :-O
+               }
             });
          }
       }

@@ -223,7 +223,7 @@ namespace eosiosystem {
       // which doesn't understand scopes (see rewards_info table)
       struct global_rewards_counter_type {
          uint64_t total_unpaid_blocks = 0;
-         /// @todo Other counters here
+         int64_t  perblock_bucket = 0;
       };
 
       bool activated = false;  // Producer/standby rewards activated 
@@ -234,17 +234,18 @@ namespace eosiosystem {
          counters.emplace(enum_cast(reward_type::standby), global_rewards_counter_type());
       }
 
+      const auto& get_counters(reward_type type) const {
+         auto it = counters.find(enum_cast(type));
+         check(it != counters.end(), "Invalid reward type");
+         return it->second;
+      }
+
       auto& get_counters(reward_type type) {
          auto it = counters.find(enum_cast(type));
          check(it != counters.end(), "Invalid reward type");
          return it->second;
       }
 
-      /// @todo Maybe this function can be removed (just use get_counters)
-      void new_total_unpaid_block(reward_type type) {
-         get_counters(type).total_unpaid_blocks++;
-      }
-      
       EOSLIB_SERIALIZE( eosio_global_rewards, (activated)(counters) )
    };
 
@@ -373,16 +374,21 @@ namespace eosiosystem {
          return static_cast<reward_type>(current_type);
       }
 
-      void select(reward_type type) {
-         set_current_type(type);
-
-         if (auto it = counters.find(current_type); it != counters.end())
-            it->second.selection++;
+      const auto& get_counters(reward_type type) const {
+         auto it = counters.find(enum_cast(type));
+         check(it != counters.end(), "Invalid counter data");
+         return it->second;
       }
 
-      void new_unpaid_block() {
-         if (auto it = counters.find(current_type); it != counters.end())
-            it->second.unpaid_blocks++;
+      auto& get_counters(reward_type type) {
+         auto it = counters.find(enum_cast(type));
+         check(it != counters.end(), "Invalid counter data");
+         return it->second;
+      }
+
+      void select(reward_type type) {
+         set_current_type(type);
+         get_counters(type).selection++;
       }
 
       void reset_counters() {
@@ -390,12 +396,6 @@ namespace eosiosystem {
             counter.second.unpaid_blocks = 0;
             counter.second.selection = 0;
          }
-      }
-
-      const auto& get_counters(reward_type type) const {
-         auto it = counters.find(enum_cast(type)); 
-         check(it != counters.end(), "Invalid counter data"); 
-         return it->second;
       }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
