@@ -18,14 +18,14 @@ namespace eosiosystem {
     _global(get_self(), get_self().value),
     _global2(get_self(), get_self().value),
     _global3(get_self(), get_self().value),
-    _globalrewards(get_self(), get_self().value),
+    _globalreward(get_self(), get_self().value),
     _rammarket(get_self(), get_self().value)
    {
       //print( "construct system\n" );
       _gstate  = _global.exists() ? _global.get() : get_default_parameters();
       _gstate2 = _global2.exists() ? _global2.get() : eosio_global_state2{};
       _gstate3 = _global3.exists() ? _global3.get() : eosio_global_state3{};
-      _grewards = _globalrewards.exists() ? _globalrewards.get() : eosio_global_rewards{};
+      _greward = _globalreward.exists() ? _globalreward.get() : eosio_global_reward{};
    }
 
    eosio_global_state system_contract::get_default_parameters() {
@@ -43,7 +43,7 @@ namespace eosiosystem {
       _global.set( _gstate, get_self() );
       _global2.set( _gstate2, get_self() );
       _global3.set( _gstate3, get_self() );
-      _globalrewards.set( _grewards, get_self() );
+      _globalreward.set( _greward, get_self() );
    }
 
    void system_contract::setram( uint64_t max_ram_size ) {
@@ -366,19 +366,22 @@ namespace eosiosystem {
    void system_contract::activaterewd() {
       require_auth( get_self() );
 
-      check(!_grewards.activated, "Standby rewards feature already activated");
+      check(!_greward.activated, "Standby rewards feature already activated");
 
-      _grewards.get_counters(reward_type::producer).total_unpaid_blocks = _gstate.total_unpaid_blocks;
+      auto& prod_counters = _greward.get_counters(reward_type::producer);
+      prod_counters.total_unpaid_blocks = _gstate.total_unpaid_blocks;
+      prod_counters.perblock_bucket = _gstate.perblock_bucket;
 
       // Add reward information to all producers
       for (const auto& producer: _producers) {
          if (auto it = _rewards.find(producer.owner.value); it == _rewards.end()) {
-            _rewards.emplace(producer.owner, [&](rewards_info& info) {
+            _rewards.emplace(producer.owner, [&](auto& info) {
                info.init(producer.owner);
 
                if (producer.unpaid_blocks > 0) {
-                  info.get_counters(reward_type::producer).unpaid_blocks = producer.unpaid_blocks;
-                  info.get_counters(reward_type::producer).selection = 1; /// @todo Is this correct? we don't know how many time was selected :-O
+                  auto& prod_counters = info.get_counters(reward_type::producer);
+                  prod_counters.unpaid_blocks = producer.unpaid_blocks;
+                  prod_counters.selection = 0;
                }
             });
          }
@@ -389,7 +392,7 @@ namespace eosiosystem {
       if (std::distance(_producers.cbegin(), _producers.cend()) < 21) {
          for (const auto& producer: _producers) {
             if (auto it = _rewards.find(producer.owner.value); it != _rewards.end()) {
-               _rewards.modify(it, same_payer, [&](rewards_info& info) {
+               _rewards.modify(it, same_payer, [&](reward_info& info) {
                   info.select(reward_type::producer);
                });
             }
@@ -405,14 +408,14 @@ namespace eosiosystem {
               ++it, ++i)
          {
             if (auto it_rwd = _rewards.find(it->owner.value); it_rwd != _rewards.end()) {
-               _rewards.modify(it_rwd, same_payer, [&](rewards_info& info) {
+               _rewards.modify(it_rwd, same_payer, [&](reward_info& info) {
                   info.select(reward_type::producer);
                });
             }
          }
       }
 
-      _grewards.activated = true;
+      _greward.activated = true;
       eosio::print("Standby rewards feature activated\n");
    }
 

@@ -218,7 +218,7 @@ namespace eosiosystem {
    /**
     * Global counters for producer/standby rewards
     */
-   struct [[eosio::table("glbrewards"), eosio::contract("eosio.system")]] eosio_global_rewards {
+   struct [[eosio::table("glbreward"), eosio::contract("eosio.system")]] eosio_global_reward {
       // A unique name is needed in order to avoid problems with ABI generator
       // which doesn't understand scopes (see rewards_info table)
       struct global_rewards_counter_type {
@@ -229,7 +229,7 @@ namespace eosiosystem {
       bool activated = false;  // Producer/standby rewards activated 
       std::map<uint32_t /*reward_type*/, global_rewards_counter_type> counters;
 
-      eosio_global_rewards() { 
+      eosio_global_reward() {
          counters.emplace(enum_cast(reward_type::producer), global_rewards_counter_type());
          counters.emplace(enum_cast(reward_type::standby), global_rewards_counter_type());
       }
@@ -246,7 +246,7 @@ namespace eosiosystem {
          return it->second;
       }
 
-      EOSLIB_SERIALIZE( eosio_global_rewards, (activated)(counters) )
+      EOSLIB_SERIALIZE( eosio_global_reward, (activated)(counters) )
    };
 
    /**
@@ -341,9 +341,9 @@ namespace eosiosystem {
    /**
     * Producer reward information  
     */
-   struct [[eosio::table, eosio::contract("eosio.system")]] rewards_info {
+   struct [[eosio::table, eosio::contract("eosio.system")]] reward_info {
       // A unique name is needed in order to avoid problems with ABI generator
-      // which doesn't understand scopes (see eosio_global_rewards)
+      // which doesn't understand scopes (see eosio_global_reward)
       struct reward_info_counter_type {
          uint64_t unpaid_blocks = 0;  // # of blocks produced
          uint64_t selection     = 0;  // # of times a 'producer' was selected to produce
@@ -399,7 +399,7 @@ namespace eosiosystem {
       }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( rewards_info, (owner)(current_type)(counters) )
+      EOSLIB_SERIALIZE( reward_info, (owner)(current_type)(counters) )
    };
 
 
@@ -425,7 +425,7 @@ namespace eosiosystem {
    /**
     * Keeps produced blocks for rewards
     */
-   typedef eosio::multi_index< "rewards"_n, rewards_info > rewards_table;
+   typedef eosio::multi_index< "rewards"_n, reward_info > rewards_table;
 
    /**
     * Global state singleton added in version 1.0
@@ -445,7 +445,7 @@ namespace eosiosystem {
    /**
     * Global rewards singleton
     */
-   typedef eosio::singleton< "glbrewards"_n, eosio_global_rewards > global_rewards_singleton;
+   typedef eosio::singleton< "glbreward"_n, eosio_global_reward > global_reward_singleton;
 
    struct [[eosio::table, eosio::contract("eosio.system")]] user_resources {
       name          owner;
@@ -531,18 +531,18 @@ namespace eosiosystem {
    class [[eosio::contract("eosio.system")]] system_contract : public native {
 
       private:
-         voters_table             _voters;
-         producers_table          _producers;
-         producers_table2         _producers2;
-         rewards_table            _rewards;
-         global_state_singleton   _global;
-         global_state2_singleton  _global2;
-         global_state3_singleton  _global3;
-         global_rewards_singleton _globalrewards;
-         eosio_global_state       _gstate;
-         eosio_global_state2      _gstate2;
-         eosio_global_state3      _gstate3;
-         eosio_global_rewards     _grewards;
+         voters_table            _voters;
+         producers_table         _producers;
+         producers_table2        _producers2;
+         rewards_table           _rewards;
+         global_state_singleton  _global;
+         global_state2_singleton _global2;
+         global_state3_singleton _global3;
+         global_reward_singleton _globalreward;
+         eosio_global_state      _gstate;
+         eosio_global_state2     _gstate2;
+         eosio_global_state3     _gstate3;
+         eosio_global_reward     _greward;
          rammarket               _rammarket;
 
       public:

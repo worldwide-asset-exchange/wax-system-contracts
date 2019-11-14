@@ -120,8 +120,8 @@ namespace eosiosystem {
             info.last_votepay_share_update = ct;
          });
 
-         if (_grewards.activated) {
-            _rewards.emplace( producer, [&]( rewards_info& info ){
+         if (_greward.activated) {
+            _rewards.emplace( producer, [&]( reward_info& info ){
                info.init(producer);
 
                // If we only have 21 producers or less they are ready to produce, otherwise
@@ -262,7 +262,9 @@ namespace eosiosystem {
       }
       else {
          // New list accepted
-         _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
+         _gstate.last_producer_schedule_size =
+            static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
+
          update_producer_reward_status(top_producers);
       }
    }
