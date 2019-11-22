@@ -378,11 +378,8 @@ namespace eosiosystem {
             _rewards.emplace(producer.owner, [&](auto& info) {
                info.init(producer.owner);
 
-               if (producer.unpaid_blocks > 0) {
-                  auto& prod_counters = info.get_counters(reward_type::producer);
-                  prod_counters.unpaid_blocks = producer.unpaid_blocks;
-                  prod_counters.selection = 0;
-               }
+               if (producer.unpaid_blocks > 0)
+                  info.get_counters(reward_type::producer).unpaid_blocks = producer.unpaid_blocks;
             });
          }
       }
@@ -400,16 +397,24 @@ namespace eosiosystem {
       }
       else {
          // Mark the first 21 ready (with votes and active) as "selected" to produce
+         // the remaining 36 will set as "standby"
          auto idx = _producers.get_index<"prototalvote"_n>();
          uint64_t i = 0;
 
          for (auto it = idx.cbegin();
-              it != idx.cend() && i < 21 && 0 < it->total_votes && it->active();
+              it != idx.cend() && i < 21 + 36 && 0 < it->total_votes && it->active();
               ++it, ++i)
          {
             if (auto it_rwd = _rewards.find(it->owner.value); it_rwd != _rewards.end()) {
                _rewards.modify(it_rwd, same_payer, [&](reward_info& info) {
-                  info.select(reward_type::producer);
+                  if (i < 21)
+                     info.select(reward_type::producer);
+
+                  else if (i >=21 && i < 21 + 36)
+                     info.select(reward_type::standby);
+
+                  else
+                     info.set_current_type(reward_type::none);
                });
             }
          }
