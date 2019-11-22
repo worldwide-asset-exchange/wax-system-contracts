@@ -11,6 +11,8 @@
 #include <eosio/chain/exceptions.hpp>
 #include <Runtime/Runtime.h>
 
+#include "eosio.system_tester.hpp"
+
 // percent expressed as a float number between 0 and 1
 #define BOOST_REQUIRE_APROX(R, L, percent) \
    { \
@@ -24,8 +26,32 @@
       } \
    }
 
+////////////////////////////////////////////////////////////////////////////////
+/// Temporary section
+/// @todo This piece of code will be removed soon
+#include <chrono>
+class lap_measure {
+   std::string msg_;
+   std::chrono::high_resolution_clock::time_point start_;
 
-#include "eosio.system_tester.hpp"
+public:
+   lap_measure(const std::string& msg)
+      : msg_(msg)
+      , start_(std::chrono::high_resolution_clock::now())
+   {
+   }
+
+   ~lap_measure() {
+      std::chrono::duration<double> elapsed =
+         std::chrono::high_resolution_clock::now() - start_;
+
+      BOOST_TEST_MESSAGE(msg_ << elapsed.count());
+   }
+};
+
+// End of temporary section
+////////////////////////////////////////////////////////////////////////////////
+
 struct _abi_hash {
    name owner;
    fc::sha256 hash;
@@ -2331,17 +2357,17 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
       produce_blocks(50);
 
       const auto     initial_global_state      = get_global_state();
-      const auto     initial_global_rewards    = get_global_reward();
+      const auto     initial_global_reward    = get_global_reward();
       BOOST_TEST_MESSAGE("Global state: " << initial_global_state << '\n');
-      BOOST_TEST_MESSAGE("Global rewards: " << initial_global_rewards << '\n');
+      BOOST_TEST_MESSAGE("Global rewards: " << initial_global_reward << '\n');
 
       const uint64_t initial_claim_time        = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
       const int64_t  initial_pervote_bucket    = initial_global_state["pervote_bucket"].as<int64_t>();
       const int64_t  initial_perblock_bucket   = initial_global_state["perblock_bucket"].as<int64_t>();
       const int64_t  initial_savings           = get_balance(N(eosio.saving)).get_amount();
 
-      const uint32_t initial_tot_unpaid_blocks_prod = vo2map(initial_global_rewards["counters"])[rewProducer]["total_unpaid_blocks"].as<uint32_t>();
-      const uint32_t initial_tot_unpaid_blocks_stb = vo2map(initial_global_rewards["counters"])[rewStandby]["total_unpaid_blocks"].as<uint32_t>();
+      const uint32_t initial_tot_unpaid_blocks_prod = vo2map(initial_global_reward["counters"])[rewProducer]["total_unpaid_blocks"].as<uint32_t>();
+      const uint32_t initial_tot_unpaid_blocks_stb = vo2map(initial_global_reward["counters"])[rewStandby]["total_unpaid_blocks"].as<uint32_t>();
 
       auto reward_info = get_reward_info("defproducera");
       BOOST_TEST_MESSAGE("Reward info: " << reward_info);
@@ -2532,7 +2558,137 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
 
 BOOST_FIXTURE_TEST_CASE(producer_standby_pay_reward, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
 
-  /// @todo
+   using prod_vec_t = std::vector<account_name>;
+
+   const double continuous_rate = 0.0582689;
+   const double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
+   const double producer_perc_reward = 0.6;
+
+   const asset large_asset = core_sym::from_string("80.0000");
+
+   const char* voters[] = { "producvotera", "producvoterb" /*, "producvoterc"*/ };
+
+   for (auto v: voters) {
+      BOOST_TEST_CHECKPOINT("Voter = " << v);
+
+      create_account_with_resources(
+         v, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   }
+
+   prod_vec_t producers, standbys;
+   producers.reserve(21);
+   standbys.reserve(52);
+
+   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
+   auto gen_producters = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
+      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
+         account_name prod{prefix + std::string(1, c)};
+
+         //BOOST_TEST_MESSAGE("Producer: " << prod.to_string());
+         result.emplace_back(prod);
+         create_account_with_resources(
+            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
+
+         regproducer(prod);
+      }
+   };
+
+   //activaterewd();
+
+   gen_producters("defproducer", 21, producers);
+   produce_block();
+
+   gen_producters("defstandby1", 26, standbys);
+   produce_block();
+
+   gen_producters("defstandby2", 26, standbys);
+   produce_block();
+
+   produce_block(fc::hours(24));
+
+   for (auto v: voters) {
+      BOOST_TEST_CHECKPOINT("Voter = " << v);
+
+      transfer(config::system_account_name, v, core_sym::from_string("400000000.0000"), config::system_account_name);
+      BOOST_REQUIRE_EQUAL(success(), stake(v, core_sym::from_string( "100000000.0000"), core_sym::from_string("100000000.0000")));
+   }
+
+   auto print_votes = [this](const prod_vec_t& prods, const std::string& post = std::string{}) {
+      for (const auto& prod: prods)
+         BOOST_TEST_MESSAGE(prod.to_string() << ", votes = " << std::fixed << get_producer_info(prod)["total_votes"].as_double());
+
+      if (post.size() > 0)
+         BOOST_TEST_MESSAGE(post);
+   };
+
+   // Check initial voting conditions (producers)
+   for (const auto& prod: producers) {
+      BOOST_TEST_CHECKPOINT("Producer = " << prod.to_string());
+
+      auto prod_info = get_producer_info(prod);
+      BOOST_REQUIRE_EQUAL(prod.to_string(), prod_info["owner"].as_string());
+      BOOST_REQUIRE_EQUAL(0, prod_info["total_votes"].as_double());
+   }
+
+   // Vote for producers (all voters vote for them)
+   for (auto v: voters) {
+      BOOST_TEST_CHECKPOINT("Voter = " << v);
+
+      BOOST_REQUIRE_EQUAL(success(), vote(v, producers));
+   }
+
+   print_votes(producers, "\n");
+
+   // Check initial voting conditions (standbys)
+   for (auto i = 0; i < 36; i++) {
+      const auto& stb = standbys[i];
+      BOOST_TEST_CHECKPOINT("Standby(" << i << ") = " << stb.to_string());
+
+      auto stb_info = get_producer_info(stb);
+      BOOST_REQUIRE_EQUAL(stb.to_string(), stb_info["owner"].as_string());
+      BOOST_REQUIRE_EQUAL(0, stb_info["total_votes"].as_double());
+   }
+
+   // Vote for standbys (1 vote for each of them). Cannot vote for more than
+   // 30, that's why the voting was split in 2 phases
+   prod_vec_t filtered; filtered.reserve(30);
+   std::copy(standbys.begin(), standbys.begin() + 30, std::back_inserter(filtered));
+   BOOST_REQUIRE_EQUAL(success(), vote( N(producvotera), filtered));
+
+   filtered.clear();
+   std::copy(standbys.begin() + 30, standbys.begin() + 36, std::back_inserter(filtered));
+   BOOST_REQUIRE_EQUAL(success(), vote( N(producvoterb), filtered));
+
+   print_votes(standbys, "\n");
+
+   // defproducera is the only active producer
+   // produce enough blocks so new schedule kicks in and defproducera produces some blocks
+   {
+      activaterewd();
+
+      {
+         lap_measure lap("Producing block time: ");
+         produce_blocks(1000);
+      }
+
+      BOOST_TEST_MESSAGE("\nGlobal reward: " << get_global_reward());
+
+      for (const auto& prod: producers) {
+         BOOST_TEST_MESSAGE("\nReward info prod (" << prod.to_string() << "): " << get_reward_info(prod));
+      }
+
+      // Find a standby selection
+      uint64_t num_sel = 0;
+      for (const auto& prod: standbys) {
+         BOOST_TEST_MESSAGE("\nReward info stb (" << prod.to_string() << "): " << get_reward_info(prod));
+
+         num_sel += vo2map(get_reward_info(prod)["counters"])[rewStandby]["selection"].as_uint64();
+      }
+
+      BOOST_TEST_MESSAGE("\nStandby selection num = " << num_sel);
+   }
+
+   /// @todo
 
 } FC_LOG_AND_RETHROW()
 
