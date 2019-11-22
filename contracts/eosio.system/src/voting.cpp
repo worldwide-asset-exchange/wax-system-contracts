@@ -84,6 +84,18 @@ namespace eosiosystem {
       auto prod = _producers.find( producer.value );
       const auto ct = current_time_point();
 
+      auto add_reward_info = [&]() {
+         _rewards.emplace( producer, [&]( reward_info& info ){
+            info.init(producer);
+
+            // If we only have 21 producers or less they are ready to produce, otherwise
+            // they will have to wait to be selected
+            /// @todo It's necessary to check for "active" producers.
+            if (std::distance(_producers.cbegin(), _producers.cend()) <= 21)
+               info.select(reward_type::producer);
+         });
+      };
+
       if ( prod != _producers.end() ) {
          _producers.modify( prod, producer, [&]( producer_info& info ){
             info.producer_key = producer_key;
@@ -104,6 +116,12 @@ namespace eosiosystem {
             // When introducing the producer2 table row for the first time, the producer's votes must also be accounted for in the global total_producer_votepay_share at the same time.
          }
 
+         if (_greward.activated) {
+            if (auto it = _rewards.find(producer.value); it == _rewards.end())
+               add_reward_info();
+         }
+
+
       } else {
          _producers.emplace( producer, [&]( producer_info& info ){
             info.owner           = producer;
@@ -120,17 +138,8 @@ namespace eosiosystem {
             info.last_votepay_share_update = ct;
          });
 
-         if (_greward.activated) {
-            _rewards.emplace( producer, [&]( reward_info& info ){
-               info.init(producer);
-
-               // If we only have 21 producers or less they are ready to produce, otherwise
-               // they will have to wait to be selected 
-               /// @todo It's necessary to check for "active" producers.
-               if (std::distance(_producers.cbegin(), _producers.cend()) < 21) 
-                  info.select(reward_type::producer);
-            });
-         }
+         if (_greward.activated)
+            add_reward_info();
       }
 
    }
@@ -148,37 +157,36 @@ namespace eosiosystem {
     * Updates the reward status of all producers (including those that are not top producers)
     */
    void system_contract::update_producer_reward_status(const prod_vec_t& top_producers) {
-      auto idx = _producers.get_index<"prototalvote"_n>();
-      uint64_t i = 0;
-
-      for (auto it = idx.cbegin(); it != idx.cend() && it->active(); ++it, ++i) {
-         // Look for the status in the top producer list
-         auto prod_it = std::lower_bound(
-            top_producers.begin(), 
-            top_producers.end(), 
-            it->owner, 
-            [](const auto& prod_tuple, const auto& owner) -> bool { 
-               return std::get<0>(prod_tuple).producer_name < owner; 
-            });
-
-         if (prod_it != top_producers.end()) {
-            const auto& [ prod_key, _, type ] = *prod_it;
-            
-            if (auto reward_it = _rewards.find(prod_key.producer_name.value); reward_it != _rewards.end()) {
-               // type = type => workaround for a limitation of capturing structured bindings
-               _rewards.modify(reward_it, same_payer, [type = type](auto& rec) { 
-                  rec.select(type);
+      for (auto prod: _producers) {
+         if (prod.is_active) {
+            auto prod_it = std::lower_bound(
+               top_producers.begin(),
+               top_producers.end(),
+               prod.owner,
+               [](const auto& prod_tuple, const auto& owner) -> bool {
+                  return std::get<0>(prod_tuple).producer_name < owner;
                });
+
+            if (prod_it != top_producers.end()) {
+               const auto& [ prod_key, _, type ] = *prod_it;
+
+               if (auto reward_it = _rewards.find(prod_key.producer_name.value); reward_it != _rewards.end()) {
+                  // type = type => workaround for a limitation of capturing structured bindings
+                  _rewards.modify(reward_it, same_payer, [type = type](auto& rec) {
+                     rec.select(type);
+                  });
+               }
             }
-         }
-         else {
-            if (auto reward_it = _rewards.find(it->owner.value); reward_it != _rewards.end()) {
-               _rewards.modify(reward_it, same_payer, [&](auto& rec) {
-                  rec.set_current_type(reward_type::none);
-               });
+            else {
+               if (auto reward_it = _rewards.find(prod.owner.value); reward_it != _rewards.end()) {
+                  _rewards.modify(reward_it, same_payer, [&](auto& rec) {
+                     rec.set_current_type(reward_type::none);
+                  });
+               }
             }
+
          }
-      } 
+      }
    }
 
    /**
@@ -216,19 +224,23 @@ namespace eosiosystem {
       prod_vec_t top_producers;
       top_producers.reserve(21);
 
+      // Is it time to select a standby to produce blocks?
       if (standby_index < num_standbys) {
-         prod_vec_t standbys;
-         standbys.reserve(num_standbys);
+         prod_vec_t standbys; standbys.reserve(num_standbys);
+         // Pick the current 36 standbys
          select_producers_into(21, num_standbys, reward_type::standby, standbys);
 
          if (standbys.size() > standby_index) {
+            // Add the selected standby as an elected top producer
             top_producers.emplace_back(standbys[standby_index]);
 
-            eosio::print_f("Standby producer '%' was selected\n", 
-               std::get<0>(standbys[standby_index]).producer_name.to_string());
+            /// @todo print_f is not working well, check it
+            //eosio::print_f("Selected standby producer: %\n",
+            //   std::get<0>(standbys[standby_index]).producer_name.value);
          }
       }
 
+      // Add the rest of the elected top producers
       select_producers_into(0, 21 - top_producers.size(), reward_type::producer, top_producers);
 
       if (top_producers.size() == 0 || top_producers.size() < _gstate.last_producer_schedule_size ) {
@@ -240,11 +252,12 @@ namespace eosiosystem {
       std::sort( top_producers.begin(), top_producers.end() );
 
       std::vector<eosio::producer_key> producers;
-
       producers.reserve(top_producers.size());
+
       for( const auto& item : top_producers )
          producers.push_back(std::get<0>(item));
 
+      // Proposes a new list
       auto result = set_proposed_producers_ex( producers );
 
       using eosio::proposed_producers_errors;

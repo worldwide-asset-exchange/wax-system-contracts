@@ -385,8 +385,8 @@ namespace eosiosystem {
       }
 
       // If we only have 21 producers or less they are ready to produce
-      /// @todo It's necessary to check for "active" producers.
-      if (std::distance(_producers.cbegin(), _producers.cend()) < 21) {
+      /// @todo It's necessary to check for "active" producers (?)
+      if (std::distance(_producers.cbegin(), _producers.cend()) <= 21) {
          for (const auto& producer: _producers) {
             if (auto it = _rewards.find(producer.owner.value); it != _rewards.end()) {
                _rewards.modify(it, same_payer, [&](reward_info& info) {
@@ -397,27 +397,20 @@ namespace eosiosystem {
       }
       else {
          // Mark the first 21 ready (with votes and active) as "selected" to produce
-         // the remaining 36 will set as "standby"
          auto idx = _producers.get_index<"prototalvote"_n>();
          uint64_t i = 0;
 
          for (auto it = idx.cbegin();
-              it != idx.cend() && i < 21 + 36 && 0 < it->total_votes && it->active();
+              it != idx.cend() && i < 21 && 0 < it->total_votes && it->active();
               ++it, ++i)
          {
             if (auto it_rwd = _rewards.find(it->owner.value); it_rwd != _rewards.end()) {
                _rewards.modify(it_rwd, same_payer, [&](reward_info& info) {
-                  if (i < 21)
-                     info.select(reward_type::producer);
-
-                  else if (i >=21 && i < 21 + 36)
-                     info.select(reward_type::standby);
-
-                  else
-                     info.set_current_type(reward_type::none);
+                  info.select(reward_type::producer);
                });
             }
          }
+
       }
 
       _greward.activated = true;

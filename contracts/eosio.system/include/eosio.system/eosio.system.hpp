@@ -230,6 +230,7 @@ namespace eosiosystem {
       std::map<uint32_t /*reward_type*/, global_rewards_counter_type> counters;
 
       eosio_global_reward() {
+         counters.emplace(enum_cast(reward_type::none), global_rewards_counter_type());
          counters.emplace(enum_cast(reward_type::producer), global_rewards_counter_type());
          counters.emplace(enum_cast(reward_type::standby), global_rewards_counter_type());
       }
@@ -362,6 +363,7 @@ namespace eosiosystem {
       void init(const name& owner) {
          this->owner = owner;
          current_type = enum_cast(reward_type::none);
+         counters.try_emplace(enum_cast(reward_type::none), reward_info_counter_type());
          counters.try_emplace(enum_cast(reward_type::producer), reward_info_counter_type());
          counters.try_emplace(enum_cast(reward_type::standby), reward_info_counter_type());
       }

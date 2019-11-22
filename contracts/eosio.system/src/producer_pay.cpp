@@ -1,8 +1,6 @@
 #include <eosio.system/eosio.system.hpp>
 #include <eosio.token/eosio.token.hpp>
 
-#include <eosio.system/debug_print.hpp>
-
 namespace eosiosystem {
    
    using eosio::current_time_point;
@@ -35,7 +33,6 @@ namespace eosiosystem {
          // Counts blocks according to producer type
          if (auto it = _rewards.find( producer.value ); it != _rewards.end() ) {
             _greward.get_counters(it->get_current_type()).total_unpaid_blocks++;
-
             _rewards.modify( it, same_payer, [&](auto& rec ) {
                rec.get_counters(it->get_current_type()).unpaid_blocks++;
             });
@@ -167,9 +164,7 @@ namespace eosiosystem {
       // In fact it is desired behavior because the producers votes need to be counted in the global total_producer_votepay_share for the first time.
 
       if (_greward.activated) {
-         constexpr reward_type reward_types[] = { reward_type::producer, reward_type::standby };
-
-         struct data {
+          struct data {
             int64_t     per_block_pay = 0;
             eosio::name account;
             std::string check_msg;
@@ -195,7 +190,7 @@ namespace eosiosystem {
 
          const auto& reward = _rewards.get(owner.value);
 
-         for (auto type: reward_types) {
+         for (auto type: { reward_type::producer, reward_type::standby }) {
             auto& curr_info = info[type];
             auto& curr_gcnt = _greward.get_counters(type);
             auto& curr_cnt = reward.get_counters(type);
@@ -209,12 +204,8 @@ namespace eosiosystem {
 
             check(curr_info.per_block_pay >= 0, curr_info.check_msg);
 
-            debug::print("[%] Total = %, partial = %\n", int(type), curr_gcnt.total_unpaid_blocks, curr_cnt.unpaid_blocks);
-
             curr_gcnt.perblock_bucket -= curr_info.per_block_pay;
             curr_gcnt.total_unpaid_blocks -= curr_cnt.unpaid_blocks;
-
-            debug::print("[%] Total = %, partial = %\n", int(type), curr_gcnt.total_unpaid_blocks, curr_cnt.unpaid_blocks);
 
             if (curr_info.per_block_pay > 0) {
                if (as_gbm)
