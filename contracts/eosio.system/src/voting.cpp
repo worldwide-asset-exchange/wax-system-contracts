@@ -26,48 +26,6 @@ namespace {
 
 } // namespace
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// @todo This should be moved to CDT
-
-#include <variant>
-#include <vector>
-
-namespace eosio {
-   namespace internal_use_do_not_use {
-      extern "C" {
-        __attribute((eosio_wasm_import))
-        int64_t set_proposed_producers( char*, uint32_t );
-      }
-   }
-
-   using schedule_version = uint64_t;
-
-   enum class proposed_producers_errors {
-      disallow_empty_producer_schedule = -1,
-      already_proposed_schedule = -2,
-      schedule_does_not_change = -3,
-      schedule_would_not_change = -4
-   };
-
-   auto set_proposed_producers_ex(const std::vector<producer_key>& prods)
-      -> std::variant<schedule_version, proposed_producers_errors>
-   {
-      auto packed_prods = eosio::pack(prods);
-
-      int64_t ret = internal_use_do_not_use::set_proposed_producers(
-         static_cast<char*>(packed_prods.data()), packed_prods.size());
-
-      if (ret >= 0)
-         return static_cast<schedule_version>(ret);
-      else
-         return static_cast<proposed_producers_errors>(ret);
-   }
-} // namespace eosio
-
-// End of CDT section
-////////////////////////////////////////////////////////////////////////////////
-
 namespace eosiosystem {
 
    using eosio::const_mem_fun;
@@ -153,27 +111,43 @@ namespace eosiosystem {
       });
    }
 
+
    /**
     * Updates the reward status of all producers (including those that are not top producers)
     */
-   void system_contract::update_producer_reward_status(const prod_vec_t& top_producers) {
+   void system_contract::update_producer_reward_status(int64_t schedule_version) {
+      // Is there a pendint new list of producers?
+      if (schedule_version != _greward.proposed_schedule_version)
+         return;
+
+      auto comp = [](const top_prod_vec_t::value_type& prod, const name& owner) {
+         return prod.first < owner;
+      };
+
+      auto comp_rev = [](const name& owner, const top_prod_vec_t::value_type& prod) {
+         return owner < prod.first;
+      };
+
       for (auto prod: _producers) {
          if (prod.is_active) {
-            auto prod_it = std::lower_bound(
-               top_producers.begin(),
-               top_producers.end(),
+            auto first_it = std::lower_bound(
+               _greward.proposed_top_producers.begin(),
+               _greward.proposed_top_producers.end(),
                prod.owner,
-               [](const auto& prod_tuple, const auto& owner) -> bool {
-                  return std::get<0>(prod_tuple).producer_name < owner;
-               });
+               comp);
 
-            if (prod_it != top_producers.end()) {
-               const auto& [ prod_key, _, type ] = *prod_it;
+            auto prod_it =
+               first_it != _greward.proposed_top_producers.end() && !comp_rev(prod.owner, *first_it)
+                  ? first_it
+                  : _greward.proposed_top_producers.end();
 
-               if (auto reward_it = _rewards.find(prod_key.producer_name.value); reward_it != _rewards.end()) {
-                  // type = type => workaround for a limitation of capturing structured bindings
+            if (prod_it != _greward.proposed_top_producers.end()) {
+               const auto& [ prod_name, type ] = *prod_it;
+
+               if (auto reward_it = _rewards.find(prod_name.value); reward_it != _rewards.end()) {
+                  // [type = type] => workaround for a limitation of capturing structured bindings
                   _rewards.modify(reward_it, same_payer, [type = type](auto& rec) {
-                     rec.select(type);
+                     rec.select(static_cast<reward_type>(type));
                   });
                }
             }
@@ -187,6 +161,9 @@ namespace eosiosystem {
 
          }
       }
+
+      _greward.proposed_schedule_version =
+         eosiosystem::eosio_global_reward::no_pending_schedule;
    }
 
    /**
@@ -214,12 +191,12 @@ namespace eosiosystem {
                                                    const eosio::checksum256& previous_block_hash ) {
       _gstate.last_producer_schedule_update = block_time;
 
-      auto constexpr total_weight = 1'000'000;
-      auto constexpr one_percent_weight = total_weight * 0.01;
-      auto constexpr standby_weight = 10 * one_percent_weight / num_standbys;
+      constexpr uint64_t total_weight = 1'000'000;
+      constexpr double   one_percent_weight = total_weight * 0.01;
+      constexpr double   standby_weight = one_percent_weight / num_standbys;
 
-      auto const selected_weight = to_int(previous_block_hash) % total_weight;
-      auto const standby_index = selected_weight / standby_weight;
+      const uint64_t selected_weight = to_int(previous_block_hash) % total_weight;
+      const uint64_t standby_index = 10 * selected_weight / standby_weight;
 
       prod_vec_t top_producers;
       top_producers.reserve(21);
@@ -227,6 +204,7 @@ namespace eosiosystem {
       // Is it time to select a standby to produce blocks?
       if (standby_index < num_standbys) {
          prod_vec_t standbys; standbys.reserve(num_standbys);
+
          // Pick the current 36 standbys
          select_producers_into(21, num_standbys, reward_type::standby, standbys);
 
@@ -236,7 +214,7 @@ namespace eosiosystem {
 
             /// @todo print_f is not working well, check it
             //eosio::print_f("Selected standby producer: %\n",
-            //   std::get<0>(standbys[standby_index]).producer_name.value);
+            //   std::get<0>(standbys[standby_index]).producer_name.to_string());
          }
       }
 
@@ -258,27 +236,22 @@ namespace eosiosystem {
          producers.push_back(std::get<0>(item));
 
       // Proposes a new list
-      auto result = set_proposed_producers_ex( producers );
-
-      using eosio::proposed_producers_errors;
-
-      if (auto err = std::get_if<proposed_producers_errors>(&result)) {
-         switch(*err) {
-            case proposed_producers_errors::schedule_does_not_change:
-            case proposed_producers_errors::schedule_would_not_change:
-               update_producer_reward_status(top_producers);
-               break;
-
-            default:
-               ;
+      if (auto version = set_proposed_producers(producers); version >= 0) {
+         if (_greward.proposed_schedule_version != eosiosystem::eosio_global_reward::no_pending_schedule) {
+            /// @todo Proposed schedule will be overwritten
          }
-      }
-      else {
-         // New list accepted
-         _gstate.last_producer_schedule_size =
-            static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
 
-         update_producer_reward_status(top_producers);
+         _greward.proposed_schedule_version = *version;
+         _greward.proposed_top_producers.clear();
+
+         using namespace std;
+         transform(
+            top_producers.begin(),
+            top_producers.end(),
+            back_inserter(_greward.proposed_top_producers),
+            [](const auto& prod_tuple) {
+               return pair(get<0>(prod_tuple).producer_name, enum_cast(get<2>(prod_tuple)));
+            });
       }
    }
 

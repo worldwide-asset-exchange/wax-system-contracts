@@ -29,10 +29,23 @@ namespace eosiosystem {
       if( _gstate.last_pervote_bucket_fill == time_point() )  /// start the presses
          _gstate.last_pervote_bucket_fill = current_time_point();
 
+      uint16_t    ignored1;
+      checksum256 previous;
+
+      _ds >> ignored1 >> previous;
+
       if (_greward.activated) {
+         checksum256 ignored2;
+         uint32_t schedule_version;
+
+         _ds >> ignored2 >> ignored2 >> schedule_version;
+
+         update_producer_reward_status(schedule_version);
+
          // Counts blocks according to producer type
          if (auto it = _rewards.find( producer.value ); it != _rewards.end() ) {
             _greward.get_counters(it->get_current_type()).total_unpaid_blocks++;
+
             _rewards.modify( it, same_payer, [&](auto& rec ) {
                rec.get_counters(it->get_current_type()).unpaid_blocks++;
             });
@@ -54,12 +67,7 @@ namespace eosiosystem {
 
       /// only update block producers once every minute, block_timestamp is in half seconds
       if( timestamp.slot - _gstate.last_producer_schedule_update.slot > 120 ) {
-         uint16_t _;
-         checksum256 previous; 
-
-         _ds >> _ >> previous;
-
-         update_elected_producers( timestamp, previous );
+            update_elected_producers( timestamp, previous );
 
          if( (timestamp.slot - _gstate.last_name_close.slot) > blocks_per_day ) {
             name_bid_table bids(get_self(), get_self().value);
