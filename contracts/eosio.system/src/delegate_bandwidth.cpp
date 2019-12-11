@@ -437,6 +437,11 @@ namespace eosiosystem {
       if( voter_itr->producers.size() || voter_itr->proxy ) {
          update_votes( voter, voter_itr->proxy, voter_itr->producers, false );
       }
+
+      auto wps_voter_itr = _wpsvoters.find( voter.value );
+      if(wps_voter_itr != _wpsvoters.end()){
+         update_wps_votes( voter, wps_voter_itr->proposals);
+      }
    }
 
    void system_contract::send_genesis_token( name from, name receiver, const asset tokens, bool add_backward_rewards ){

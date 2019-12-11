@@ -36,8 +36,10 @@ After build:
 * The contracts are built into a _bin/\<contract name\>_ folder in their respective directories.
 * Finally, simply use __cleos__ to _set contract_ by pointing to the previously mentioned directory.
 
-Misc:
-* Run a single test: `make compile && ./build/tests/unit_test --log_level=all --run_test=eosio_system_tests/claim_once_a_day_during_3_years`
+Run interactive tests:
+1. Start the interactive shell: `make dev-docker-start`
+1. Run all the tests: `make test`
+1. Run a single test: `make compile && ./build/tests/unit_test --log_level=all --run_test=eosio_wps_tests/committee_reg_edit_rmv`
 
 ### License
 [MIT](https://github.com/worldwide-asset-exchange/wax-eos-contracts/blob/master/LICENSE)

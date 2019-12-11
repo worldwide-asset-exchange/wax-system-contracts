@@ -6,9 +6,10 @@ This contract provides multiple functionalities:
 - Producers register in order to be voted for, and can claim per-block and per-vote rewards.
 - Users can buy and sell RAM at a market-determined price.
 - Users can bid on premium names.
+- The WAX Worker Proposal System to vote for and fund projects beneficial to the overall ecosystem
 - A resource exchange system (REX) allows token holders to lend their tokens, and users to rent CPU and Network resources in return for a market-determined fee. 
 
-Actions:
+# Actions:
 The naming convention is codeaccount::actionname followed by a list of paramters.
 
 ## eosio::regproducer producer producer_key url location
@@ -53,133 +54,174 @@ The naming convention is codeaccount::actionname followed by a list of paramters
 
 ## eosio::claimrewards producer
    - **producer** producer account claiming per-block and per-vote rewards
-   
-## eosio::deposit owner amount
-   - Deposits tokens to user REX fund
-   - **owner** REX fund owner account
-   - **amount** amount of tokens to be deposited
-   - An inline transfer from 'owner' liquid balance is executed.
-   - All REX-related costs and proceeds are deducted from and added to 'owner' REX fund, with one exception being buying REX using staked tokens.
-   - Storage change is billed to 'owner'.
 
-## eosio::withdraw owner amount
-   - Withdraws tokens from user REX fund
-   - **owner** REX fund owner account
-   - **amount** amount of tokens to be withdrawn
-   - An inline transfer to 'owner' liquid balance is executed.
+## eosio::setwpsenv
 
-## eosio::buyrex from amount
-   - Buys REX in exchange for tokens taken out of user REX fund
-   - **from** owner account name
-   - **amount** amount of tokens to be used for purchase
-   - 'amount' tokens are taken out of 'from' REX fund.
-   - User must vote for at least 21 producers or delegate vote to proxy before buying REX.
-   - Tokens used in purchase are added to user's voting power.
-   - Bought REX cannot be sold before 4 days counting from end of day of purchase.
-   - Storage change is billed to 'from' account.
-   - By buying REX, user is lending tokens in order to be rented as CPU or NET resourses.
+Required authority: `_self`
 
-## eosio::unstaketorex owner receiver from\_net from\_cpu
-   - Buys REX using staked tokens
-   - **owner** owner of staked tokens
-   - **receiver** account name that tokens have previously been staked to
-   - **from_net** amount of tokens to be unstaked from NET bandwidth and used for REX purchase
-   - **from_cpu** amount of tokens to be unstaked from CPU bandwidth and used for REX purchase
-   - User must vote for at least 21 producers or delegate vote to proxy before buying REX.
-   - Tokens used in purchase are added to user's voting power.
-   - Bought REX cannot be sold before 4 days counting from end of day of purchase.
-   - Storage change is billed to 'owner' account.
+Description: Sets up the global WPS parameters, which includes vote participation required (in percentage of `total_activated_stake`), expiry time for proposals on vote, and maximum duration of a project. The default values proposed when the WPS is ratified will be 5, 30, and 180, respectively.
 
-## eosio::sellrex from rex
-   - Sells REX in exchange for core tokens
-   - **from** owner account of REX
-   - **rex** amount of REX to be sold
-   - Proceeds are deducted from user's voting power.
-   - If cannot be processed immediately, sell order is added to a queue and will be processed within 30 days at most.
-   - In case sell order is queued, storage change is billed to 'from' account.
+## eosio::regproposer
 
-## eosio::cnclrexorder owner
-   - Cancels unfilled REX sell order by owner if one exists.
-   - **owner** owner account name
+Required authority: Account owner
 
-## eosio::mvtosavings owner rex
-   - Moves REX to owner's REX savings bucket
-   - REX held in savings bucket does not mature and cannot be sold directly
-   - REX is moved out from the owner's maturity buckets as necessary starting with the bucket with furthest maturity date
-   - **owner** owner account of REX
-   - **rex** amount of REX to be moved to savings bucket
+Description: Register an account as a proposer. All fields required. RAM is billed to the registrant's account. Account is added to the proposers table.
 
-## eosio::mvfrsavings owner rex
-   - Moves REX from owner's savings bucket to a bucket with a maturity date that is 4 days after the end of the day
-   - This action is required if the owner wants to sell REX held in savings bucket
-   - **owner** owner account of REX
-   - **rex** amount of REX to be moved from savings bucket
+## eosio::editproposer
 
-## eosio::rentcpu from receiver loan\_payment loan\_fund
-   - Rents CPU resources for 30 days in exchange for market-determined price
-   - **from** account creating and paying for CPU loan
-   - **receiver** account receiving rented CPU resources
-   - **loan_payment** tokens paid for the loan
-   - **loan_fund** additional tokens (can be zero) added to loan fund and used later for loan renewal
-   - Rents as many core tokens as determined by market price and stakes them for CPU bandwidth for the benefit of `receiver` account.
-   - `loan_payment` is used for renting, it has to be greater than zero. Amount of rented resources is calculated from `loan_payment`.
-   - After 30 days the rented core delegation of CPU will expire or be renewed at new market price depending on available loan fund.
-   - `loan_fund` can be zero, and is added to loan balance. Loan balance represents a reserve that is used at expiration for automatic loan renewal.
-   - 'from' account can add tokens to loan balance using action `fundcpuloan` and withdraw from loan balance using `defcpuloan`.
-   - At expiration, if balance is greater than or equal to `loan_payment`, `loan_payment` is taken out of loan balance and used to renew the loan. Otherwise, the loan is closed and user is refunded any remaining balance.
-   
-## eosio::rentnet from receiver loan\_payment loan\_fund
-   - Rents Network resources for 30 days in exchange for market-determined price
-   - **from** account creating and paying for Network loan
-   - **receiver** account receiving rented Network resources
-   - **loan_payment** tokens paid for the loan
-   - **loan_fund** additional tokens (can be zero) added to loan fund and used later for loan renewal
-   - Rents as many core tokens as determined by market price and stakes them for Network bandwidth for the benefit of `receiver` account.
-   - `loan_payment` is used for renting, it has to be greater than zero. Amount of rented resources is calculated from `loan_payment`.
-   - After 30 days the rented core delegation of Network will expire or be renewed at new market price depending on available loan fund.
-   - `loan_fund` can be zero, and is added to loan balance. Loan balance represents a reserve that is used at expiration for automatic loan renewal.
-   - 'from' account can add tokens to loan balance using action `fundnetloan` and withdraw from loan balance using `defnetloan`.
-   - At expiration, if balance is greater than or equal to `loan_payment`, `loan_payment` is taken out of loan balance and used to renew the loan. Otherwise, the loan is closed and user is refunded any remaining balance.
+Required authority: Account owner
 
-## eosio::fundcpuloan from loan\_num payment
-   - Transfers tokens from REX fund to the fund of a specific CPU loan in order to be used for loan renewal at expiry
-   - **from** loan creator account
-   - **loan_num** loan id
-   - **payment** tokens transfered from REX fund to loan fund
+Description: Edit proposer info. All fields required.
 
-## eosio::fundnetloan from loan\_num payment
-   - Transfers tokens from REX fund to the fund of a specific Network loan in order to be used for loan renewal at expiry
-   - **from** loan creator account
-   - **loan_num** loan id
-   - **payment** tokens transfered from REX fund to loan fund
+## eosio::rmvproposer
 
-## eosio::defcpuloan from loan\_num amount
-   - Withdraws tokens from the fund of a specific CPU loan and adds them to REX fund
-   - **from** loan creator account
-   - **loan_num** loan id
-   - **amount** tokens transfered from CPU loan fund to REX fund
+Required authority: Account owner
 
-## eosio::defcpuloan from loan\_num amount
-   - Withdraws tokens from the fund of a specific CPU loan and adds them to REX fund
-   - **from** loan creator account
-   - **loan_num** loan id
-   - **amount** tokens transfered from NET loan fund to REX fund
+Description: Remove account from the proposers table.
 
-## eosio::updaterex owner
-   - Updates REX owner vote weight to current value of held REX
-   - **owner** REX owner account
+## eosio::regproposal
 
-## eosio::rexexec user max
-   - Performs REX maintenance by processing a specified number of REX sell orders and expired loans
-   - **user** any account can execute this action
-   - **max** number of each of CPU loans, NET loans, and sell orders to be processed
+Required authority: Proposer
 
-## eosio::consolidate owner
-   - Consolidates REX maturity buckets into one bucket that cannot be sold before 4 days
-   - **owner** REX owner account name
 
-## eosio::closerex owner
-   - Deletes unused REX-related database entries and frees occupied RAM
-   - **owner** user account name
-   - If owner has a non-zero REX balance, the action fails; otherwise, owner REX balance entry is deleted.
-   - If owner has no outstanding loans and a zero REX fund balance, REX fund entry is deleted.
+Description: Register a proposal. Account must be on the proposers table. All fields required. RAM is billed to the proposer's account. Proposal is added to the proposals table. One proposer can register only one proposal at a time.
+
+## eosio::editproposal
+
+Required authority: Proposer
+
+
+Description: Edit proposal info. All fields required.
+
+## eosio::rmvproposal
+
+Required authority: Proposer
+
+Description: Delete proposal from the proposals table.
+
+## eosio::regcommittee
+
+Required authority: `_self`
+
+Description: Register a committee responsible for a certain category. The account is added to the committees table. RAM is billed to the contract's account. All fields are required. Oversight power is given to the oversight committee. Committees can only be registered using `eosio` permissions.
+
+## eosio::edcommittee
+
+Required authority: `_self`
+
+Description: Edit committee information. All fields required.
+
+## eosio::rmvcommittee
+
+Required authority: `_self`
+
+Description: Remove committee from the committees table.
+
+## eosio::regreviewer
+
+Required authority: Committee
+
+Description: Register account as a reviewer. All fields required. RAM billed to committee account. Reviewer is added to reviewers table, with the committee that the account is associated with.
+
+## eosio::editreviewer
+
+Required authority: Committee
+
+Description: Edit reviewer information. All fields required.
+
+## eosio::rmvreviewer
+
+Required authority: Committee
+
+Description: Remove reviewer from the reviewers table.
+
+## eosio::acceptprop
+
+Required authority: Reviewer
+
+Description: Accept a proposal with PENDING status. Change its status to ON VOTE. All fields required.
+
+## eosio::rejectprop
+
+Required authority: Reviewer
+
+Description: Reject a proposal with PENDING status. Change its status to REJECTED. Move proposal to the rejected proposals table. All fields required.
+
+## eosio::approve
+
+Required authority: Reviewer
+
+Description: Approve funding for proposals with the CHECKED VOTES status. Proposal status changes to APPROVED. All fields required.
+
+## eosio::claimfunds
+
+Required authority: Proposer
+
+Description: Claim funding for a proposal with the APPROVED status. The proposer can claim a portion of the funds for each iteration of the project's duration. When all iterations have been completed, the proposal status changes to COMPLETED. It is then transferred to the completed proposals table. All fields required.
+
+## eosio::rmvreject
+
+Required authority: Reviewer
+
+Description: Clear a proposal on the rejected proposals table when it is no longer needed there.
+
+## eosio::rmvcompleted
+
+Required authority: Reviewer
+
+Description: Clear a proposal on the completed proposals table when it is no longer needed there.
+
+## eosio::voteproposal
+
+Required authority: Account owner
+
+Description: Vote for a proposal. Each account is limited to one vote. Vote weight is determined by the amount of WAX staked. Voting for another proposal will take away the votes of an earlier proposal. All fields required.
+
+## eosio::rejectfund
+
+Required authority: Committee (oversight)
+
+Description: Reject a proposal with APPROVED status being funded. The proposal is transferred to the rejected proposals table. All fiels required.
+
+# Tables
+
+You can find information on the tables directly using `cleos`:
+```console
+cleos get table eosio eosio <table name>
+```
+
+## proposals
+
+Description: Table of ongoing proposals. Indexed by proposer account name and proposal id.
+
+Code: `_self`
+
+Scope: `_self`
+
+## proposers
+
+Description: Table of proposers. Indexed by account name.
+
+Code: `_self`
+
+Scope: `_self`
+
+## reviewers
+
+Description: Table of reviewers. Indexed by account name.
+
+Code: `_self`
+
+Scope: `_self`
+
+## committees
+
+Description: Table of committees. Indexed by account name.
+
+Code: `_self`
+
+Scope: `_self`
+
+## wpsglobal
+
+Description: Table of WPS global environment variables.
