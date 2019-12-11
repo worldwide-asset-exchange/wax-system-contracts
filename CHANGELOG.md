@@ -10,6 +10,17 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+## wax-1.7.0-2.0.0
+
+BREAKING CHANGES:
+
+FEATURES:
+- Worker proposal system
+
+IMPROVEMENTS:
+
+BUG FIXES:
+
 ## (wax-1.7.0-1.3.0)
 
 BREAKING CHANGES:
