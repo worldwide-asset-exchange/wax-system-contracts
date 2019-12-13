@@ -161,11 +161,24 @@ namespace eosiosystem {
       });
 
       if( producer_per_block_pay > 0 ) {
+       	 asset prod_per_block_pay(producer_per_block_pay, core_symbol());
          if(as_gbm){
-            send_genesis_token( bpay_account, owner, asset(producer_per_block_pay, core_symbol()));
+            send_genesis_token( bpay_account, owner, prod_per_block_pay );
          }else {
             token::transfer_action transfer_act{ token_account, { {bpay_account, active_permission}, {owner, active_permission} } };
-            transfer_act.send( bpay_account, owner, asset(producer_per_block_pay, core_symbol()), "producer block pay" );
+            transfer_act.send( bpay_account, owner, prod_per_block_pay, "producer block pay" );
+
+            const auto unstake_time = std::min(current_time_point(), gbm_final_time);
+            const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
+            int64_t to_burn_amount = static_cast<int64_t>(prod_per_block_pay.amount * (delta_time_usec / double(useconds_in_gbm_period)));
+     
+            if (to_burn_amount > 0) {
+              const asset to_burn(to_burn_amount, core_symbol());
+              token::transfer_action transfer_act{ token_account, { {genesis_account, active_permission} } };
+              transfer_act.send(genesis_account, get_self(), to_burn, "transfering back to eosio to burn pre-minted tokens from unstaking.");
+              token::retire_action retire_act{ token_account, { {get_self(), active_permission} } };
+              retire_act.send(to_burn, "to burn pre-minted tokens from unstaking.");
+            }
          }
       }
    }
