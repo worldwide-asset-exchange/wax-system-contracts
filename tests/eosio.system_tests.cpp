@@ -2130,8 +2130,8 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
       const uint32_t tot_unpaid_blocks = global_state["total_unpaid_blocks"].as<uint32_t>();
 
       prod = get_producer_info("defproducera");
-      // BOOST_REQUIRE_EQUAL(1, prod["unpaid_blocks"].as<uint32_t>());
-      // BOOST_REQUIRE_EQUAL(1, tot_unpaid_blocks);
+      BOOST_REQUIRE_EQUAL(1, prod["unpaid_blocks"].as<uint32_t>());
+      BOOST_REQUIRE_EQUAL(1, tot_unpaid_blocks);
       const asset supply  = get_token_supply();
       const asset balance = get_balance(N(defproducera));
 
@@ -2141,34 +2141,11 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
       int32_t secs_between_fills = usecs_between_fills/1000000;
       uint64_t new_tokens = (initial_supply.get_amount() * double(secs_between_fills) * continuous_rate) / secs_per_year;
 
-      /* from producer_pay.cpp */
-      /* 
-      const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
-      producer_per_block_pay = (static_cast<double>(_gstate.perblock_bucket) * prod.unpaid_blocks) / _gstate.total_unpaid_blocks;
-      uint64_t to_burn_amount = static_cast<int64_t>(prod_per_block_pay.amount * (delta_time_usec / double(useconds_in_gbm_period)));
-      */
-
-      double prod_per_block_pay = (static_cast<double>(perblock_bucket) * prod["unpaid_blocks"].as<uint32_t>()) / tot_unpaid_blocks;
-
-      uint32_t seconds_per_day       = 24 * 3600;
-      int64_t  useconds_per_day      = int64_t(seconds_per_day) * 1000'000ll;
-      uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022
-      time_point gbm_initial_time(seconds(1561939200));     	   // July 1st 2019 00:00:00
-      time_point gbm_final_time = gbm_initial_time + microseconds(useconds_in_gbm_period);
-
-      const int64_t delta_time_usec = (gbm_final_time - time_point(microseconds(claim_time))).count();
-      uint64_t burnt_tokens = static_cast<int64_t>(prod_per_block_pay * (delta_time_usec / double(useconds_in_gbm_period)));
+      uint64_t burnt_tokens = calc_producer_burn(time_point(microseconds(claim_time)), new_tokens / 5, unpaid_blocks, initial_tot_unpaid_blocks);
 
       BOOST_REQUIRE_EQUAL(0, initial_savings);
       BOOST_REQUIRE_EQUAL(0, initial_perblock_bucket);
       BOOST_REQUIRE_EQUAL(0, initial_pervote_bucket);
-
-      // BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount()); // ERROR HERE
-      // All 4 following checks are for finding which one is the root cause for burnt_tokens == 0.
-      BOOST_REQUIRE_EQUAL(perblock_bucket, 15);
-      BOOST_REQUIRE_EQUAL(prod["unpaid_blocks"].as<uint32_t>(),15);
-      BOOST_REQUIRE_EQUAL(prod_per_block_pay, 14);
-      BOOST_REQUIRE_EQUAL(burnt_tokens, 14);
 
       // Intended Fix
       BOOST_REQUIRE_EQUAL(add_gbm(new_tokens) - burnt_tokens, supply.get_amount() - initial_supply.get_amount());

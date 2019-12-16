@@ -733,6 +733,18 @@ public:
       return to_tokens + (to_tokens / 5) * 2 * (delta_time_usec / double(useconds_in_gbm_period));
    }
 
+   int64_t calc_producer_burn(time_point claim_time, int64_t per_block_bucket, int64_t producer_unpaid_blocks, uint32_t total_unpaid_blocks) {
+     uint32_t seconds_per_day       = 24 * 3600;
+     int64_t  useconds_per_day      = int64_t(seconds_per_day) * 1000'000ll;
+     uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022
+     time_point gbm_initial_time(seconds(1561939200));     	   // July 1st 2019 00:00:00
+     time_point gbm_final_time = gbm_initial_time + microseconds(useconds_in_gbm_period);
+     double producer_per_block_pay = (static_cast<double>(per_block_bucket) * producer_unpaid_blocks) / total_unpaid_blocks;
+
+     const int64_t delta_time_usec = (gbm_final_time - claim_time).count();
+     return static_cast<int64_t>(producer_per_block_pay * (delta_time_usec / double(useconds_in_gbm_period)));
+   }
+
    asset get_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
       vector<char> data = get_row_by_account( N(eosio.token), act, N(accounts), balance_symbol.to_symbol_code().value );
       return data.empty() ? asset(0, balance_symbol) : token_abi_ser.binary_to_variant("account", data, abi_serializer_max_time)["balance"].as<asset>();
