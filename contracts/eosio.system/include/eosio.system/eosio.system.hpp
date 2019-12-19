@@ -71,7 +71,7 @@ namespace eosiosystem {
    static constexpr int64_t  inflation_pay_factor  = 5;                // 20% of the inflation
    static constexpr int64_t  votepay_factor        = 4;                // 25% of the producer pay
    static constexpr uint32_t refund_delay_sec      = 3 * seconds_per_day;
-   static constexpr uint32_t num_standbys          = 36;  
+   static constexpr uint32_t max_standbys          = 36;
    static constexpr double   producer_perc_reward  = 0.60;
    static constexpr double   standby_perc_reward   = 1 - producer_perc_reward;
 

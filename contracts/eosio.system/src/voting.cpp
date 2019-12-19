@@ -193,20 +193,20 @@ namespace eosiosystem {
 
       constexpr uint64_t total_weight = 1'000'000;
       constexpr double   one_percent_weight = total_weight * 0.01;
-      constexpr double   standby_weight = one_percent_weight / num_standbys;
+      constexpr double   standby_weight = 21 * one_percent_weight / max_standbys;
 
       const uint64_t selected_weight = to_int(previous_block_hash) % total_weight;
-      const uint64_t standby_index = 10 * selected_weight / standby_weight;
+      const uint64_t standby_index = selected_weight / standby_weight;
 
       prod_vec_t top_producers;
       top_producers.reserve(21);
 
       // Is it time to select a standby to produce blocks?
-      if (standby_index < num_standbys) {
-         prod_vec_t standbys; standbys.reserve(num_standbys);
+      if (standby_index < max_standbys) {
+         prod_vec_t standbys; standbys.reserve(max_standbys);
 
          // Pick the current 36 standbys
-         select_producers_into(21, num_standbys, reward_type::standby, standbys);
+         select_producers_into(21, max_standbys, reward_type::standby, standbys);
 
          if (standbys.size() > standby_index) {
             // Add the selected standby as an elected top producer
@@ -239,6 +239,7 @@ namespace eosiosystem {
       if (auto version = set_proposed_producers(producers); version >= 0) {
          if (_greward.proposed_schedule_version != eosiosystem::eosio_global_reward::no_pending_schedule) {
             /// @todo Proposed schedule will be overwritten
+            return;
          }
 
          _greward.proposed_schedule_version = *version;
