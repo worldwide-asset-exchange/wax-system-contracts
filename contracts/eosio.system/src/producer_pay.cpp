@@ -44,7 +44,7 @@ namespace eosiosystem {
 
          // Counts blocks according to producer type
          if (auto it = _rewards.find( producer.value ); it != _rewards.end() ) {
-            _greward.get_counters(it->get_current_type()).total_unpaid_blocks++;
+            _greward.new_unpaid_block(it->get_current_type(), timestamp);
 
             _rewards.modify( it, same_payer, [&](auto& rec ) {
                rec.get_counters(it->get_current_type()).unpaid_blocks++;

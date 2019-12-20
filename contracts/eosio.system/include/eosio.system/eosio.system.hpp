@@ -171,7 +171,7 @@ namespace eosiosystem {
       block_timestamp      last_producer_schedule_update;
       time_point           last_pervote_bucket_fill;
       int64_t              pervote_bucket = 0;
-      int64_t              perblock_bucket = 0;
+      int64_t              perblock_bucket = 0; /// @deprecated Deprecated once standby reward will be activated. See eosio_global_reward
       int64_t              voters_bucket = 0;
       double               total_voteshare_change_rate = 0;
       double               total_unpaid_voteshare = 0;   // Common fund to pay voters.
@@ -224,25 +224,28 @@ namespace eosiosystem {
     * Global counters for producer/standby rewards
     */
    struct [[eosio::table("glbreward"), eosio::contract("eosio.system")]] eosio_global_reward {
-      static constexpr uint64_t no_pending_schedule = std::numeric_limits<uint64_t>::max();
-
       // A unique name is needed in order to avoid problems with ABI generator
       // which doesn't understand scopes (see rewards_info table)
       struct global_rewards_counter_type {
-         uint64_t total_unpaid_blocks = 0;
-         int64_t  perblock_bucket = 0;
+         uint64_t              total_unpaid_blocks = 0;
+         int64_t               perblock_bucket = 0;
+         std::vector<uint64_t> unpaid_blocks_per_hour;
       };
 
       bool activated = false;  // Producer/standby rewards activated 
       std::map<uint32_t /*reward_type*/, global_rewards_counter_type> counters;
+      std::map<uint64_t /*version*/,     top_prod_vec_t> proposed_top_producers;
 
-      uint64_t proposed_schedule_version = no_pending_schedule;
-      top_prod_vec_t proposed_top_producers;
+      uint8_t current_hour = 0;
 
       eosio_global_reward() {
-         counters.emplace(enum_cast(reward_type::none), global_rewards_counter_type());
-         counters.emplace(enum_cast(reward_type::producer), global_rewards_counter_type());
-         counters.emplace(enum_cast(reward_type::standby), global_rewards_counter_type());
+         for (auto type: { reward_type::none, reward_type::producer, reward_type::standby }) {
+            counters.emplace(enum_cast(type), global_rewards_counter_type());
+
+            // This is necessary because adding a ctor to global_rewards_counter_type
+            // (to initialize the vector) produces a wasm runtime error (Exceeded call depth maximum)
+            counters[enum_cast(type)].unpaid_blocks_per_hour.resize(24);
+         }
       }
 
       const auto& get_counters(reward_type type) const {
@@ -257,7 +260,27 @@ namespace eosiosystem {
          return it->second;
       }
 
-      EOSLIB_SERIALIZE( eosio_global_reward, (activated)(counters)(proposed_schedule_version)(proposed_top_producers))
+      void new_unpaid_block(reward_type type, const eosio::block_timestamp& tm) {
+         auto& counters = get_counters(type);
+
+         counters.total_unpaid_blocks++;
+
+         // Get the hour of the day of the provided timestamp
+         uint8_t hour = static_cast<uint8_t>(
+            ((tm.to_time_point().time_since_epoch().count() - eosio::block_timestamp::block_timestamp_epoch) /
+               eosio::hours(1).count()) % 24);
+
+         // Is it time to reset the hour bucket?
+         if (hour != current_hour) {
+            counters.unpaid_blocks_per_hour[hour] = 1;
+            current_hour = hour;
+         }
+         else
+            counters.unpaid_blocks_per_hour[hour]++;
+      }
+
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE( eosio_global_reward, (activated)(counters)(proposed_top_producers)(current_hour))
    };
 
    /**
@@ -269,7 +292,7 @@ namespace eosiosystem {
       eosio::public_key     producer_key; /// a packed public key object
       bool                  is_active = true;
       std::string           url;
-      uint32_t              unpaid_blocks = 0;  /// @todo Possibly deprecated in future version due to standby rewards, see voter_info table
+      uint32_t              unpaid_blocks = 0;  /// @deprecated Deprecated once standby reward will be activated. See reward_info table
       time_point            last_claim_time;
       uint16_t              location = 0;
 
@@ -1106,6 +1129,7 @@ namespace eosiosystem {
                                             double additional_shares_delta = 0.0, double shares_rate_delta = 0.0 );
 
          void select_producers_into( uint64_t begin, uint64_t count, reward_type type, prod_vec_t& result );
+         bool is_it_time_to_select_a_standby() const;
 
          template <auto system_contract::*...Ptrs>
          class registration {
