@@ -2203,7 +2203,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
       const asset initial_supply  = get_token_supply();
       const asset initial_balance = get_balance(N(defproducera));
 
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(defproducera), N(claimrewards), mvo()("owner", "defproducera"))); // <- CHECK_THIS
+      BOOST_REQUIRE_EQUAL(success(), push_action(N(defproducera), N(claimrewards), mvo()("owner", "defproducera")));
 
       const auto global_state          = get_global_state();
       const uint64_t claim_time        = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
@@ -2221,14 +2221,14 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
       BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
       auto usecs_between_fills = claim_time - initial_claim_time;
       int32_t secs_between_fills = usecs_between_fills/1000000;
-      uint64_t new_tokens = (initial_supply.get_amount() * double(secs_between_fills) * continuous_rate) / secs_per_year;
+      uint64_t new_tokens = (initial_supply.get_amount() * double(usecs_between_fills) * continuous_rate) / usecs_per_year;
       uint64_t burnt_tokens = calc_producer_burn(time_point(microseconds(claim_time)), new_tokens / 5, unpaid_blocks, initial_tot_unpaid_blocks);
 
       BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year ) ))
-                           - burnt_tokens, supply.get_amount() - initial_supply.get_amount()); // <- FAILS
+                           - burnt_tokens, supply.get_amount() - initial_supply.get_amount());
 
-      // BOOST_REQUIRE(5 > ((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 5) * 2) -
-      //                     add_gbm(savings - initial_savings)); // <- FAILS
+      BOOST_REQUIRE(5 > ((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 5) * 2) -
+                           add_gbm(savings - initial_savings)); // <- FAILS
 
       int64_t to_producer        = int64_t( (double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate) / usecs_per_year ) / 5;
       int64_t to_perblock_bucket = to_producer;
@@ -2552,6 +2552,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
    }
 
    {
+      const double continuous_rate = 0.04879;
       const uint32_t prod_index = 2;
       const auto prod_name = producer_names[prod_index];
 
@@ -2583,7 +2584,10 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
       const int32_t secs_between_fills = static_cast<int32_t>(usecs_between_fills / 1000000);
 
       const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * cont_rate / usecs_per_year;
-      BOOST_REQUIRE_EQUAL( add_gbm(int64_t(expected_supply_growth)), supply.get_amount() - initial_supply.get_amount() );
+      uint64_t new_tokens = (initial_supply.get_amount() * double(usecs_between_fills) * continuous_rate) / usecs_per_year;
+
+      uint64_t burnt_tokens = calc_producer_burn(time_point(microseconds(claim_time)), new_tokens / 5, initial_unpaid_blocks, initial_tot_unpaid_blocks);
+      BOOST_REQUIRE( 1 <= abs(int32_t(add_gbm(int64_t(expected_supply_growth)) - burnt_tokens) - int32_t(supply.get_amount() - initial_supply.get_amount())) );
 
       BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth)/5 * 2), savings - initial_savings );
 
@@ -2625,6 +2629,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
    produce_block(fc::seconds(23 * 3600));
 
    {
+      const double continuous_rate = 0.04879;
       const uint32_t prod_index = 15;
       const auto prod_name = producer_names[prod_index];
 
@@ -2655,7 +2660,10 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
       const uint64_t usecs_between_fills = claim_time - initial_claim_time;
 
       const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * cont_rate / usecs_per_year;
-      BOOST_REQUIRE_EQUAL( add_gbm(int64_t(expected_supply_growth)), supply.get_amount() - initial_supply.get_amount() );
+      uint64_t new_tokens = (initial_supply.get_amount() * double(usecs_between_fills) * continuous_rate) / usecs_per_year;
+      uint64_t burnt_tokens = calc_producer_burn(time_point(microseconds(claim_time)), new_tokens / 5, initial_unpaid_blocks, initial_tot_unpaid_blocks);
+
+      BOOST_REQUIRE_EQUAL( add_gbm(int64_t(expected_supply_growth)) - int64_t(burnt_tokens), supply.get_amount() - initial_supply.get_amount() ); // <- FAILS
       BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth) / 5 * 2), savings - initial_savings );
 
       const int64_t expected_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (cont_rate/ 5.) / usecs_per_year )

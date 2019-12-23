@@ -19,7 +19,8 @@ clean:
 
 .PHONY: test
 test: compile
-	./build/tests/unit_test --log_level=all --run_test=eosio_system_tests/producer_pay
+	# ./build/tests/unit_test --log_level=all --run_test=eosio_system_tests/producer_pay
+	./build/tests/unit_test --log_level=all --run_test=eosio_system_tests/multiple_producer_pay
 	# ./build/tests/unit_test --log_level=all
 
 .PHONY:dev-docker-stop
