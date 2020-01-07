@@ -255,6 +255,8 @@ namespace eosiosystem {
 
       // Proposes a new list
       if (auto version = set_proposed_producers(producers); version.has_value()) {
+         _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
+
          if (auto it = _greward.proposed_top_producers.find(*version); it != _greward.proposed_top_producers.end())
             return;
 
