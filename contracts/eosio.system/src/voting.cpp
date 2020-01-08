@@ -51,7 +51,7 @@ namespace eosiosystem {
             // they will have to wait to be selected
             /// @todo It's necessary to check for "active" producers.
             if (std::distance(_producers.cbegin(), _producers.cend()) <= 21)
-               info.select(reward_type::producer);
+               info.set_current_type(reward_type::producer);
          });
       };
 
@@ -171,7 +171,7 @@ namespace eosiosystem {
                if (auto reward_it = _rewards.find(prod_name.value); reward_it != _rewards.end()) {
                   // [type = type] => workaround for a limitation of capturing structured bindings
                   _rewards.modify(reward_it, same_payer, [type = type](auto& rec) {
-                     rec.select(static_cast<reward_type>(type));
+                     rec.current_type = type; // raw uint32 type
                   });
                }
             }

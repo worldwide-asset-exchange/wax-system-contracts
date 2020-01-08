@@ -204,8 +204,8 @@ namespace eosiosystem {
             auto& curr_cnt = reward.get_counters(type);
 
             if (auto total_unpaid_blocks = curr_gcnt.total_unpaid_blocks; total_unpaid_blocks > 0) {
-               if (curr_cnt.selection > 0 && curr_cnt.unpaid_blocks > 0) {
-                  curr_info.per_block_pay +=
+               if (curr_cnt.unpaid_blocks > 0) {
+                 curr_info.per_block_pay +=
                      curr_gcnt.perblock_bucket * curr_cnt.unpaid_blocks / total_unpaid_blocks;
                }
             }
@@ -242,6 +242,7 @@ namespace eosiosystem {
          _rewards.modify( reward, same_payer, [&](auto& rec) {
             rec.reset_counters();
          });
+
       }
       else {
          int64_t per_block_pay = 0;

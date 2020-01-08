@@ -390,7 +390,7 @@ namespace eosiosystem {
          for (const auto& producer: _producers) {
             if (auto it = _rewards.find(producer.owner.value); it != _rewards.end()) {
                _rewards.modify(it, same_payer, [&](reward_info& info) {
-                  info.select(reward_type::producer);
+                  info.set_current_type(reward_type::producer);
                });
             }
          }
@@ -406,7 +406,7 @@ namespace eosiosystem {
          {
             if (auto it_rwd = _rewards.find(it->owner.value); it_rwd != _rewards.end()) {
                _rewards.modify(it_rwd, same_payer, [&](reward_info& info) {
-                  info.select(reward_type::producer);
+                  info.set_current_type(reward_type::producer);
                });
             }
          }

@@ -380,7 +380,8 @@ namespace eosiosystem {
       // which doesn't understand scopes (see eosio_global_reward)
       struct reward_info_counter_type {
          uint64_t unpaid_blocks = 0;  // # of blocks produced
-         uint64_t selection     = 0;  // # of times a 'producer' was selected to produce
+
+         /// @todo Add other counters here
       };
 
       name                                         owner;
@@ -421,16 +422,9 @@ namespace eosiosystem {
          return it->second;
       }
 
-      void select(reward_type type) {
-         set_current_type(type);
-         get_counters(type).selection++;
-      }
-
       void reset_counters() {
-         for (auto& counter: counters) {
+         for (auto& counter: counters)
             counter.second.unpaid_blocks = 0;
-            counter.second.selection = 0;
-         }
       }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time

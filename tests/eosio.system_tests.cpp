@@ -14,7 +14,7 @@
 #include "eosio.system_tester.hpp"
 
 /// percent expressed as a float number between 0 and 1
-/// @todo Float comparissons can be a problem!
+/// @todo Float comparisons can be a problem!
 #define BOOST_REQUIRE_APROX(R, L, percent) \
    do { \
       if (R != 0.0 && L != 0.0) { \
@@ -27,31 +27,6 @@
          BOOST_REQUIRE_EQUAL(R, L); \
    } while (false)
 
-////////////////////////////////////////////////////////////////////////////////
-/// Temporary section
-/// @todo This piece of code will be removed soon
-#include <chrono>
-class lap_measure {
-   std::string msg_;
-   std::chrono::high_resolution_clock::time_point start_;
-
-public:
-   lap_measure(const std::string& msg)
-      : msg_(msg)
-      , start_(std::chrono::high_resolution_clock::now())
-   {
-   }
-
-   ~lap_measure() {
-      std::chrono::duration<double> elapsed =
-         std::chrono::high_resolution_clock::now() - start_;
-
-      BOOST_TEST_MESSAGE(msg_ << elapsed.count());
-   }
-};
-
-// End of temporary section
-////////////////////////////////////////////////////////////////////////////////
 
 struct _abi_hash {
    name owner;
@@ -806,12 +781,9 @@ BOOST_FIXTURE_TEST_CASE( producer_register_unregister, eosio_system_tester ) try
    BOOST_REQUIRE_EQUAL( "alice1111111", reward_info["owner"].as_string() );
    BOOST_REQUIRE_EQUAL( rewProducer, reward_info["current_type"].as<uint32_t>() );
    BOOST_REQUIRE_EQUAL( 0, vo2map(reward_info["counters"])[rewProducer]["unpaid_blocks"].as<uint32_t>() );
-   BOOST_REQUIRE_EQUAL( 1, vo2map(reward_info["counters"])[rewProducer]["selection"].as<uint32_t>() );
    BOOST_REQUIRE_EQUAL( 0, vo2map(reward_info["counters"])[rewStandby]["unpaid_blocks"].as<uint32_t>() );
-   BOOST_REQUIRE_EQUAL( 0, vo2map(reward_info["counters"])[rewStandby]["selection"].as<uint32_t>() );
 
    /// @todo Test registration of more than 21 producers
-
 
    //change parameters one by one to check for things like #3783
    //fc::variant params2 = producer_parameters_example(2);
@@ -1547,10 +1519,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_gstate_consistency, eosio_system_tester, * boo
 
 BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
 
-   const double continuous_rate = 0.0582689;
-   const double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
-   const double secs_per_year   = 52 * 7 * 24 * 3600;
-
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
    create_account_with_resources( N(producvoterb), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -1720,9 +1688,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
-   const double continuous_rate = 0.0582689;
-   const double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
-   const double secs_per_year   = 52 * 7 * 24 * 3600;
 
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources(N(voter1), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
@@ -1887,10 +1852,6 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
-
-   const double continuous_rate = 0.0582689;
-   const double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
-   const double secs_per_year   = 52 * 7 * 24 * 3600;
 
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -2139,10 +2100,6 @@ BOOST_FIXTURE_TEST_CASE(gbm_burning_preminted_invalid_values, eosio_system_teste
 
 BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
 
-   const double continuous_rate = 0.0582689;
-   const double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
-   const double secs_per_year   = 52 * 7 * 24 * 3600;
-
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(defproducera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
    create_account_with_resources( N(defproducerb), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -2329,10 +2286,6 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
 
 BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
 
-   const double continuous_rate = 0.0582689;
-   const double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
-   const double producer_perc_reward = 0.6;
-
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(defproducera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
    create_account_with_resources( N(defproducerb), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -2515,10 +2468,17 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
 
       BOOST_REQUIRE_EQUAL(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year ) ),
                           supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL( (supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 6) * 3,
+
+      BOOST_REQUIRE_EQUAL((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 6) * 3,
                           savings - initial_savings);
 
-      int64_t to_producer = int64_t( (double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate) / usecs_per_year ) / 6.;
+      BOOST_TEST_MESSAGE("Initial supply = " << initial_supply.get_amount());
+      BOOST_TEST_MESSAGE("Supply = " << supply.get_amount());
+
+
+      int64_t to_producer = int64_t( initial_supply.get_amount() * double(usecs_between_fills) * (continuous_rate / 6.0) * producer_perc_reward / usecs_per_year ) ;
+      //int64_t to_producer = int64_t( (double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate) / usecs_per_year ) / 6.;
+
       int64_t to_perblock_bucket = to_producer;
       int64_t to_pervote_bucket  = 0;
 
@@ -2569,11 +2529,6 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
 BOOST_FIXTURE_TEST_CASE(producer_standby_pay_reward, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
 
    using prod_vec_t = std::vector<account_name>;
-
-   constexpr double continuous_rate = 0.0582689;
-   constexpr double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
-   constexpr double producer_perc_reward = 0.60;
-   constexpr double standby_perc_reward  = 1 - producer_perc_reward;
 
    const asset large_asset = core_sym::from_string("80.0000");
 
@@ -2698,7 +2653,6 @@ BOOST_FIXTURE_TEST_CASE(producer_standby_pay_reward, eosio_system_tester, * boos
 
    // Produce enough blocks to allow standby selections
    {
-      lap_measure lap("Producing block time: ");
       produce_blocks(5000);
       //produce_blocks(100000);
       //produce_blocks(30000);
@@ -2713,7 +2667,7 @@ BOOST_FIXTURE_TEST_CASE(producer_standby_pay_reward, eosio_system_tester, * boos
          BOOST_TEST_MESSAGE("\nReward info prod (" << prod.to_string() << "): " << get_reward_info(prod));
 
          prod_blocks += vo2map(get_reward_info(prod)["counters"])[rewProducer]["unpaid_blocks"].as_uint64();
-         prod_none += vo2map(get_reward_info(prod)["counters"])[rewNone]["selection"].as_uint64();
+         prod_none += vo2map(get_reward_info(prod)["counters"])[rewNone]["unpaid_blocks"].as_uint64();
       }
 
       BOOST_TEST_MESSAGE("\nProducer unpaid blocks = " << prod_blocks << ", none = " << prod_none);
@@ -2724,7 +2678,7 @@ BOOST_FIXTURE_TEST_CASE(producer_standby_pay_reward, eosio_system_tester, * boos
          BOOST_TEST_MESSAGE("\nReward info stb (" << prod.to_string() << "): " << get_reward_info(prod));
 
          stb_blocks += vo2map(get_reward_info(prod)["counters"])[rewStandby]["unpaid_blocks"].as_uint64();
-         stb_none += vo2map(get_reward_info(prod)["counters"])[rewNone]["selection"].as_uint64();
+         stb_none += vo2map(get_reward_info(prod)["counters"])[rewNone]["unpaid_blocks"].as_uint64();
       }
 
       BOOST_TEST_MESSAGE("\nStandby unpaid blocks = " << stb_blocks << ", none = " << stb_none);

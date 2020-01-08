@@ -32,6 +32,12 @@ enum reward_type {
    rewStandby
 };
 
+constexpr double continuous_rate = 0.0582689;
+constexpr double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
+constexpr double secs_per_year   = 52 * 7 * 24 * 3600;
+constexpr double producer_perc_reward = 0.60;
+constexpr double standby_perc_reward  = 1 - producer_perc_reward;
+
 
 class eosio_system_tester : public TESTER {
 public:
