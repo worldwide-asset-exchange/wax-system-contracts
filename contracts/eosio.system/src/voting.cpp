@@ -186,8 +186,12 @@ namespace eosiosystem {
          }
       }
 
-      // Top producer status applied, remove information
-      _greward.proposed_top_producers.erase(it_ver);
+      do {
+        // Top producer status applied, remove information
+        _greward.proposed_top_producers.erase(it_ver);
+        // In the odd case that we skip a version, erase previous adjacent versions...
+      }
+      while (--schedule_version >= 0 && (it_ver = _greward.proposed_top_producers.find(schedule_version)) != _greward.proposed_top_producers.end());
    }
 
    /**
