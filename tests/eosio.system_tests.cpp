@@ -2355,6 +2355,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
 
       prod = get_producer_info("defproducera");
       reward_info = get_reward_info("defproducera");
+      // Why are unpaid_blocks and tot_unpaid_blocks_prod == 1? Because an onblock call is implicitly made via push_action above
       BOOST_REQUIRE_EQUAL(1, vo2map(reward_info["counters"])[rewProducer]["unpaid_blocks"].as<uint32_t>());
       BOOST_REQUIRE_EQUAL(0, vo2map(reward_info["counters"])[rewStandby]["unpaid_blocks"].as<uint32_t>());
       BOOST_REQUIRE_EQUAL(1, tot_unpaid_blocks_prod);
@@ -2455,6 +2456,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
       BOOST_TEST_MESSAGE("After claim, producer info: " << prod << '\n');
       BOOST_TEST_MESSAGE("After claim, reward info: " << reward_info << '\n');
 
+      // Why are unpaid_blocks and tot_unpaid_blocks_prod == 1? Because an onblock call is implicitly made via push_action above
       BOOST_REQUIRE_EQUAL(1, vo2map(reward_info["counters"])[rewProducer]["unpaid_blocks"].as<uint32_t>());
       BOOST_REQUIRE_EQUAL(0, vo2map(reward_info["counters"])[rewStandby]["unpaid_blocks"].as<uint32_t>());
       BOOST_REQUIRE_EQUAL(1, tot_unpaid_blocks_prod);
