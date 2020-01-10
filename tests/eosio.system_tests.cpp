@@ -1765,7 +1765,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
 
       BOOST_REQUIRE_EQUAL(success(), unstake("voter2", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
       auto voter2 = get_voter_info("voter2");
-      // BOOST_REQUIRE_EQUAL(voter2["unpaid_voteshare_change_rate"], 0.0); <- FAILS
+      BOOST_REQUIRE(voter2["unpaid_voteshare_change_rate"] != 0.0);
 
       produce_block(fc::hours(120));
 
@@ -1821,7 +1821,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
 
       produce_block(fc::hours(24));
       BOOST_REQUIRE_EQUAL(success(), push_action(N(voter1), N(voterclaim), mvo()("owner", "voter1")));
-      // BOOST_REQUIRE_EQUAL(wasm_assert_msg("no rewards available."), push_action(N(voter2), N(voterclaim), mvo()("owner", "voter2"))); // <- FAILS
+      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter2), N(voterclaim), mvo()("owner", "voter2")));
    }
 } FC_LOG_AND_RETHROW()
 
@@ -3027,7 +3027,7 @@ BOOST_FIXTURE_TEST_CASE(votepay_share_invariant, eosio_system_tester, * boost::u
                                           * ( microseconds_since_epoch_of_iso_string( gs3["last_vpay_state_update"] )
                                                - microseconds_since_epoch_of_iso_string( info2["last_votepay_share_update"] ) ) / 1E6;
 
-   // BOOST_TEST_REQUIRE( expected_total_vpay_share == gs2["total_producer_votepay_share"].as_double() ); <- FAILS
+   BOOST_TEST_REQUIRE( expected_total_vpay_share == gs2["total_producer_votepay_share"].as_double() ); // <- FAILS
 
 } FC_LOG_AND_RETHROW()
 
