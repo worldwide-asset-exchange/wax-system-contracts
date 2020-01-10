@@ -144,47 +144,23 @@ namespace eosiosystem {
          // "status" by version was already applied, nothing to do
          return;
 
-      auto comp = [](const top_prod_vec_t::value_type& prod, const name& owner) {
-         return prod.first < owner;
-      };
-
-      auto comp_rev = [](const name& owner, const top_prod_vec_t::value_type& prod) {
-         return owner < prod.first;
-      };
-
-      for (auto prod: _producers) {
-         if (prod.is_active) {
-            auto first_it = std::lower_bound(
-               it_ver->second.begin(),
-               it_ver->second.end(),
-               prod.owner,
-               comp);
-
-            auto prod_it =
-               first_it != it_ver->second.end() && !comp_rev(prod.owner, *first_it)
-                  ? first_it
-                  : it_ver->second.end();
-
-            if (prod_it != it_ver->second.end()) {
-               const auto& [ prod_name, type ] = *prod_it;
-
-               if (auto reward_it = _rewards.find(prod_name.value); reward_it != _rewards.end()) {
-                  // [type = type] => workaround for a limitation of capturing structured bindings
-                  _rewards.modify(reward_it, same_payer, [type = type](auto& rec) {
-                     rec.current_type = type; // raw uint32 type
-                  });
-               }
-            }
-            else {
-               if (auto reward_it = _rewards.find(prod.owner.value); reward_it != _rewards.end()) {
-                  _rewards.modify(reward_it, same_payer, [&](auto& rec) {
-                     rec.set_current_type(reward_type::none);
-                  });
-               }
-            }
-
+      for(const auto& old_top_prod: _greward.current_producers) {
+         if (auto reward_it = _rewards.find(old_top_prod.first.value); reward_it != _rewards.end()) {
+            _rewards.modify(reward_it, same_payer, [&](auto& rec) {
+               rec.set_current_type(reward_type::none);
+            });
          }
       }
+
+      for(const auto& new_top_prod: it_ver->second) {
+         if (auto reward_it = _rewards.find(new_top_prod.first.value); reward_it != _rewards.end()) {
+            _rewards.modify(reward_it, same_payer, [&](auto& rec) {
+               rec.current_type = new_top_prod.second; // raw uint32 type
+            });
+         }
+      }
+
+      _greward.current_producers = it_ver->second;
 
       do {
         // Top producer status applied, remove information

@@ -107,6 +107,7 @@ namespace eosiosystem {
    };
 
    using prod_vec_t = std::vector<std::tuple<eosio::producer_key, uint16_t /* location */, reward_type>>;
+   // Note: we use uint32_t rather than reward_type because enum's cannot be serialized
    using top_prod_vec_t = std::vector<std::pair<eosio::name /* owner */, uint32_t /* reward_type */ >>;
 
    /**
@@ -235,6 +236,7 @@ namespace eosiosystem {
       bool activated = false;  // Producer/standby rewards activated 
       std::map<uint32_t /*reward_type*/, global_rewards_counter_type> counters;
       std::map<uint64_t /*version*/,     top_prod_vec_t> proposed_top_producers;
+      top_prod_vec_t current_producers;
 
       uint8_t current_hour = 0;
 
@@ -280,7 +282,7 @@ namespace eosiosystem {
       }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( eosio_global_reward, (activated)(counters)(proposed_top_producers)(current_hour))
+      EOSLIB_SERIALIZE( eosio_global_reward, (activated)(counters)(proposed_top_producers)(current_producers)(current_hour))
    };
 
    /**
