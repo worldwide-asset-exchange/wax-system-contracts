@@ -29,26 +29,45 @@ namespace eosiosystem {
       if( _gstate.last_pervote_bucket_fill == time_point() )  /// start the presses
          _gstate.last_pervote_bucket_fill = current_time_point();
 
-      /**
-       * At startup the initial producer may not be one that is registered / elected
-       * and therefore there may be no producer object for them.
-       */
-      auto prod = _producers.find( producer.value );
-      if ( prod != _producers.end() ) {
-         _gstate.total_unpaid_blocks++;
-         _producers.modify( prod, same_payer, [&](auto& p ) {
-               p.unpaid_blocks++;
-         });
+      uint16_t    ignored1;
+      checksum256 previous;
+
+      _ds >> ignored1 >> previous;
+
+      if (_greward.activated) {
+         checksum256 ignored2;
+         uint32_t schedule_version;
+
+         _ds >> ignored2 >> ignored2 >> schedule_version;
+
+         update_producer_reward_status(schedule_version);
+
+         // Counts blocks according to producer type
+         if (auto it = _rewards.find( producer.value ); it != _rewards.end() ) {
+            _greward.new_unpaid_block(it->get_current_type(), timestamp);
+
+            _rewards.modify( it, same_payer, [&](auto& rec ) {
+               rec.get_counters(it->get_current_type()).unpaid_blocks++;
+            });
+         }
       }
-   
+      else {
+         /**
+         * At startup the initial producer may not be one that is registered / elected
+         * and therefore there may be no producer object for them.
+         */
+         auto prod = _producers.find( producer.value );
+         if ( prod != _producers.end() ) {
+            _gstate.total_unpaid_blocks++;
+            _producers.modify( prod, same_payer, [&](auto& p ) {
+               p.unpaid_blocks++;
+            });
+         }
+      }
+
       /// only update block producers once every minute, block_timestamp is in half seconds
       if( timestamp.slot - _gstate.last_producer_schedule_update.slot > 120 ) {
-         uint16_t _;
-         checksum256 previous; 
-
-         _ds >> _ >> previous;
-
-         update_elected_producers( timestamp, previous );
+            update_elected_producers( timestamp, previous );
 
          if( (timestamp.slot - _gstate.last_name_close.slot) > blocks_per_day ) {
             name_bid_table bids(get_self(), get_self().value);
@@ -79,12 +98,16 @@ namespace eosiosystem {
          const auto unstake_time = std::min(current_time_point(), gbm_final_time);
          const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
          auto new_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
-         // needs to be 1/2 Savings, 1/5 Voters, GBM receives a linearly deflating share over three years
-         auto to_voters        = new_tokens / 5;
-         auto to_per_block_pay = to_voters;
-         auto to_savings       = new_tokens - (to_voters + to_per_block_pay);
-         auto to_gbm           = to_voters * 2 * (delta_time_usec / double(useconds_in_gbm_period));
-         new_tokens           += to_gbm;
+
+         // needs to be 1/2 Savings, 1/5 Voters, 1/5 Producers (60% to producers, 40% to standbys),
+         // GBM receives a linearly deflating share over three years
+         auto to_voters             = new_tokens / 5;
+         auto to_per_block_pay      = to_voters;
+         auto to_per_block_pay_prod = to_voters * producer_perc_reward;
+         auto to_per_block_pay_stb  = to_voters * standby_perc_reward;
+         auto to_gbm                = to_voters * 2 * (delta_time_usec / double(useconds_in_gbm_period));
+         auto to_savings            = new_tokens - (to_voters + to_per_block_pay);
+         new_tokens                += to_gbm;
 
          {
             token::issue_action issue_act{ token_account, { {get_self(), active_permission} } };
@@ -94,14 +117,26 @@ namespace eosiosystem {
             token::transfer_action transfer_act{ token_account, { {get_self(), active_permission} } };
             transfer_act.send( get_self(), saving_account, asset(to_savings, core_symbol()), "unallocated inflation" );
             transfer_act.send( get_self(), voters_account, asset(to_voters, core_symbol()), "fund voters bucket" );
-            transfer_act.send( get_self(), bpay_account, asset(to_per_block_pay, core_symbol()), "fund bpay bucket" );
-            if (to_gbm > 0) {
-               transfer_act.send( get_self(), genesis_account, asset(to_gbm, core_symbol()), "fund gbm rewards bucket" );
+
+            if (to_gbm > 0)
+               transfer_act.send( get_self(), genesis_account, asset(to_gbm, core_symbol()), "fund gbm bucket" );
+
+            if (_greward.activated) {
+               transfer_act.send( get_self(), bpay_account, asset(to_per_block_pay_prod, core_symbol()), "fund bps bucket" );
+               transfer_act.send( get_self(), spay_account, asset(to_per_block_pay_stb, core_symbol()), "fund sps bucket" );
             }
+            else
+               transfer_act.send( get_self(), bpay_account, asset(to_per_block_pay, core_symbol()), "fund bps bucket" );
          }
 
-         _gstate.perblock_bucket    += to_per_block_pay;
-         _gstate.voters_bucket      += to_voters;
+         if (_greward.activated) {
+            _greward.get_counters(reward_type::producer).perblock_bucket += to_per_block_pay_prod;
+            _greward.get_counters(reward_type::standby).perblock_bucket += to_per_block_pay_stb;
+         }
+         else
+            _gstate.perblock_bucket += to_per_block_pay;
+
+         _gstate.voters_bucket += to_voters;
          _gstate.last_pervote_bucket_fill = ct;
       }
    }
@@ -143,34 +178,111 @@ namespace eosiosystem {
       // This is okay because in this case the producer will not get paid anything either way.
       // In fact it is desired behavior because the producers votes need to be counted in the global total_producer_votepay_share for the first time.
 
-      int64_t producer_per_block_pay = 0;
-      if( _gstate.total_unpaid_blocks > 0 ) {
-         producer_per_block_pay = (static_cast<double>(_gstate.perblock_bucket) * prod.unpaid_blocks) / _gstate.total_unpaid_blocks;
-         check( producer_per_block_pay >= 0, "producer per block pay must be greater or equal to 0" );
+      if (_greward.activated) {
+          struct data {
+            int64_t     per_block_pay = 0;
+            eosio::name account;
+            std::string check_msg;
+            std::string tx_msg;
+         };
+
+         std::map<reward_type, data> info {
+            {  reward_type::producer,
+               { 0,
+                 bpay_account,
+                 "producer per block pay must be greater or equal to 0",
+                 "producer block pay"
+               }
+            },
+            {  reward_type::standby,
+               { 0,
+                 spay_account,
+                 "standby per block pay must be greater or equal to 0",
+                 "standby block pay"
+               }
+            }
+         };
+
+         const auto& reward = _rewards.get(owner.value);
+
+         for (auto type: { reward_type::producer, reward_type::standby }) {
+            auto& curr_info = info[type];
+            auto& curr_gcnt = _greward.get_counters(type);
+            auto& curr_cnt = reward.get_counters(type);
+
+            if (auto total_unpaid_blocks = curr_gcnt.total_unpaid_blocks; total_unpaid_blocks > 0) {
+               if (curr_cnt.unpaid_blocks > 0) {
+                 curr_info.per_block_pay +=
+                     curr_gcnt.perblock_bucket * curr_cnt.unpaid_blocks / total_unpaid_blocks;
+               }
+            }
+
+            check(curr_info.per_block_pay >= 0, curr_info.check_msg);
+
+            curr_gcnt.perblock_bucket -= curr_info.per_block_pay;
+            curr_gcnt.total_unpaid_blocks -= curr_cnt.unpaid_blocks;
+
+            if (curr_info.per_block_pay > 0) {
+               if (as_gbm)
+                  send_genesis_token( curr_info.account, owner, asset(curr_info.per_block_pay, core_symbol()));
+               else {
+                  token::transfer_action transfer_act{ token_account, { {curr_info.account, active_permission}, {owner, active_permission} } };
+                  transfer_act.send(curr_info.account, owner, asset(curr_info.per_block_pay, core_symbol()), curr_info.tx_msg );
+               }
+            }
+         }
+
+         double new_votepay_share = update_producer_votepay_share(
+            prod2,
+            ct,
+            updated_after_threshold ? 0.0 : prod.total_votes,
+            true); // reset votepay_share to zero after updating
+
+         update_total_votepay_share(
+            ct, -new_votepay_share, (updated_after_threshold ? prod.total_votes : 0.0) );
+
+         _producers.modify( prod, same_payer, [&](auto& p) {
+            p.last_claim_time = ct;
+            //p.unpaid_blocks   = 0;
+         });
+
+         _rewards.modify( reward, same_payer, [&](auto& rec) {
+            rec.reset_counters();
+         });
+
       }
+      else {
+         int64_t per_block_pay = 0;
 
-      double new_votepay_share = update_producer_votepay_share( prod2,
-                                    ct,
-                                    updated_after_threshold ? 0.0 : prod.total_votes,
-                                    true // reset votepay_share to zero after updating
-                                 );
+         if (_gstate.total_unpaid_blocks > 0)
+            per_block_pay = (static_cast<double>(_gstate.perblock_bucket) * prod.unpaid_blocks) / _gstate.total_unpaid_blocks;
 
-      _gstate.perblock_bucket     -= producer_per_block_pay;
-      _gstate.total_unpaid_blocks -= prod.unpaid_blocks;
+         check( per_block_pay >= 0, "producer per block pay must be greater or equal to 0" );
 
-      update_total_votepay_share( ct, -new_votepay_share, (updated_after_threshold ? prod.total_votes : 0.0) );
+         double new_votepay_share = update_producer_votepay_share( prod2,
+                                       ct,
+                                       updated_after_threshold ? 0.0 : prod.total_votes,
+                                       true // reset votepay_share to zero after updating
+                                    );
 
-      _producers.modify( prod, same_payer, [&](auto& p) {
-         p.last_claim_time = ct;
-         p.unpaid_blocks   = 0;
-      });
+         _gstate.perblock_bucket     -= per_block_pay;
+         _gstate.total_unpaid_blocks -= prod.unpaid_blocks;
 
-      if( producer_per_block_pay > 0 ) {
-         if(as_gbm){
-            send_genesis_token( bpay_account, owner, asset(producer_per_block_pay, core_symbol()));
-         }else {
-            token::transfer_action transfer_act{ token_account, { {bpay_account, active_permission}, {owner, active_permission} } };
-            transfer_act.send( bpay_account, owner, asset(producer_per_block_pay, core_symbol()), "producer block pay" );
+         update_total_votepay_share( ct, -new_votepay_share, (updated_after_threshold ? prod.total_votes : 0.0) );
+
+         _producers.modify( prod, same_payer, [&](auto& p) {
+            p.last_claim_time = ct;
+            p.unpaid_blocks   = 0;
+         });
+
+         if( per_block_pay > 0 ) {
+            if(as_gbm){
+               send_genesis_token( bpay_account, owner, asset(per_block_pay, core_symbol()));
+            }
+            else {
+               token::transfer_action transfer_act{ token_account, { {bpay_account, active_permission}, {owner, active_permission} } };
+               transfer_act.send( bpay_account, owner, asset(per_block_pay, core_symbol()), "producer block pay" );
+            }
          }
       }
    }

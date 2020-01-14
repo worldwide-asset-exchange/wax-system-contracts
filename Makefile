@@ -36,4 +36,14 @@ dev-docker-all: dev-docker-stop
         rm -rf build && \
         cmake . -B./build -GNinja && \
         cmake --build ./build && \
-		build/tests/unit_test --show_progress"
+        build/tests/unit_test --show_progress"
+
+
+dev-build: dev-docker-stop
+	docker run --user $(shell id -u):$(shell id -g) $(DOCKER_COMMON) bash -c "\
+        cmake . -B./build -GNinja && \
+        cmake --build ./build"
+
+dev-test: dev-docker-stop
+	docker run --user $(shell id -u):$(shell id -g) $(DOCKER_COMMON) bash -c "\
+        build/tests/unit_test --run_test=eosio_system_tests/producer_pay --log_level=all -- --verbose"

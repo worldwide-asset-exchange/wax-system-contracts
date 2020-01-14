@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numeric>
 
 namespace {
    uint64_t to_int(const eosio::checksum256& value) {
@@ -42,6 +43,18 @@ namespace eosiosystem {
       auto prod = _producers.find( producer.value );
       const auto ct = current_time_point();
 
+      auto add_reward_info = [&]() {
+         _rewards.emplace( producer, [&]( reward_info& info ){
+            info.init(producer);
+
+            // If we only have 21 producers or less they are ready to produce, otherwise
+            // they will have to wait to be selected
+            /// @todo It's necessary to check for "active" producers.
+            if (std::distance(_producers.cbegin(), _producers.cend()) <= 21)
+               info.set_current_type(reward_type::producer);
+         });
+      };
+
       if ( prod != _producers.end() ) {
          _producers.modify( prod, producer, [&]( producer_info& info ){
             info.producer_key = producer_key;
@@ -61,6 +74,13 @@ namespace eosiosystem {
             update_total_votepay_share( ct, 0.0, prod->total_votes );
             // When introducing the producer2 table row for the first time, the producer's votes must also be accounted for in the global total_producer_votepay_share at the same time.
          }
+
+         if (_greward.activated) {
+            if (auto it = _rewards.find(producer.value); it == _rewards.end())
+               add_reward_info();
+         }
+
+
       } else {
          _producers.emplace( producer, [&]( producer_info& info ){
             info.owner           = producer;
@@ -71,10 +91,14 @@ namespace eosiosystem {
             info.location        = location;
             info.last_claim_time = ct;
          });
+
          _producers2.emplace( producer, [&]( producer_info2& info ){
             info.owner                     = producer;
             info.last_votepay_share_update = ct;
          });
+
+         if (_greward.activated)
+            add_reward_info();
       }
 
    }
@@ -88,7 +112,72 @@ namespace eosiosystem {
       });
    }
 
-   void system_contract::select_producers_into( uint64_t begin, uint64_t count, prod_vec_t& result ) {
+   /**
+    * Returns true when the percent (in the last 24 hours) of standby produced
+    * blocks is less than 1% otherwise returns false
+    */
+   bool system_contract::is_it_time_to_select_a_standby() const {
+      auto& stb_cnt = _greward.get_counters(reward_type::standby);
+      auto& pro_cnt = _greward.get_counters(reward_type::producer);
+
+      uint64_t stb_total = std::accumulate(
+         stb_cnt.unpaid_blocks_per_hour.begin(), stb_cnt.unpaid_blocks_per_hour.end(), 0);
+
+      uint64_t total = stb_total + std::accumulate(
+         pro_cnt.unpaid_blocks_per_hour.begin(), pro_cnt.unpaid_blocks_per_hour.end(), 0);
+
+      if (total > 0) {
+         double percent = 100.0 * stb_total / total;
+         return percent < 1.0;
+      }
+
+      return false;
+   }
+
+   /**
+    * Updates the reward status of all producers (including those that are not top producers)
+    */
+   void system_contract::update_producer_reward_status(int64_t schedule_version) {
+      auto it_ver = _greward.proposed_top_producers.find(schedule_version);
+
+      if (it_ver == _greward.proposed_top_producers.end())
+         // "status" by version was already applied, nothing to do
+         return;
+
+      for(const auto& old_top_prod: _greward.current_producers) {
+         if (auto reward_it = _rewards.find(old_top_prod.first.value); reward_it != _rewards.end()) {
+            _rewards.modify(reward_it, same_payer, [&](auto& rec) {
+               rec.set_current_type(reward_type::none);
+            });
+         }
+      }
+
+      for(const auto& new_top_prod: it_ver->second) {
+         if (auto reward_it = _rewards.find(new_top_prod.first.value); reward_it != _rewards.end()) {
+            _rewards.modify(reward_it, same_payer, [&](auto& rec) {
+               rec.current_type = new_top_prod.second; // raw uint32 type
+            });
+         }
+      }
+
+      _greward.current_producers = it_ver->second;
+
+      do {
+        // Top producer status applied, remove information
+        _greward.proposed_top_producers.erase(it_ver);
+        // In the odd case that we skip a version, erase previous adjacent versions...
+      }
+      while (--schedule_version >= 0 && (it_ver = _greward.proposed_top_producers.find(schedule_version)) != _greward.proposed_top_producers.end());
+   }
+
+   /**
+    * Selects the specified producer range into the result vector. It also adds the
+    * provided status to that vector. 
+    */
+   void system_contract::select_producers_into( uint64_t begin, 
+                                                uint64_t count,
+                                                reward_type type, 
+                                                prod_vec_t& result ) {
       auto idx = _producers.get_index<"prototalvote"_n>();
       uint64_t i = 0;
 
@@ -98,7 +187,7 @@ namespace eosiosystem {
       {
          if (i >= begin)
             result.emplace_back(
-               prod_vec_t::value_type{{it->owner, it->producer_key}, it->location});
+               prod_vec_t::value_type{{it->owner, it->producer_key}, it->location, type});
       }
    }
 
@@ -106,33 +195,32 @@ namespace eosiosystem {
                                                    const eosio::checksum256& previous_block_hash ) {
       _gstate.last_producer_schedule_update = block_time;
 
-      auto constexpr total_weight = 1'000'000;
-      auto constexpr one_percent_weight = total_weight * 0.01;
-      auto constexpr num_standbys = 36;
-      auto constexpr standby_weight = 10 * one_percent_weight / num_standbys;
-
-      auto const selected_weight = to_int(previous_block_hash) % total_weight;
-      auto const standby_index = selected_weight / standby_weight;
-
       prod_vec_t top_producers;
       top_producers.reserve(21);
 
-      if (standby_index < num_standbys) {
-         prod_vec_t standbys;
-         standbys.reserve(num_standbys);
-         select_producers_into(21, num_standbys, standbys);
+      if (is_it_time_to_select_a_standby()) {
+         prod_vec_t standbys; standbys.reserve(max_standbys);
+
+         // Pick the current 36 standbys
+         select_producers_into(21, max_standbys, reward_type::standby, standbys);
+
+         const uint64_t standby_index = to_int(previous_block_hash) % max_standbys;
 
          if (standbys.size() > standby_index) {
+            // Add the selected standby as an elected top producer
             top_producers.emplace_back(standbys[standby_index]);
 
-            eosio::print_f("Standby producer '%' was selected\n", 
-               standbys[standby_index].first.producer_name.to_string());
+            /// @todo The following print statement isn't working. Check it.
+            //eosio::print_f("Selected standby producer: %\n",
+            //   std::get<0>(standbys[standby_index]).producer_name.to_string());
          }
       }
 
-      select_producers_into(0, 21 - top_producers.size(), top_producers);
+      // Add the rest of the elected top producers
+      select_producers_into(0, 21 - top_producers.size(), reward_type::producer, top_producers);
 
       if (top_producers.size() == 0 || top_producers.size() < _gstate.last_producer_schedule_size ) {
+         eosio::print("No top producers or they are less than the last scheduled");
          return;
       }
 
@@ -140,13 +228,32 @@ namespace eosiosystem {
       std::sort( top_producers.begin(), top_producers.end() );
 
       std::vector<eosio::producer_key> producers;
-
       producers.reserve(top_producers.size());
-      for( const auto& item : top_producers )
-         producers.push_back(item.first);
 
-      if( set_proposed_producers( producers ) >= 0 ) {
+      for( const auto& item : top_producers )
+         producers.push_back(std::get<0>(item));
+
+      // Proposes a new list
+      if (auto version = set_proposed_producers(producers); version.has_value()) {
          _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
+
+         if (auto it = _greward.proposed_top_producers.find(*version); it != _greward.proposed_top_producers.end())
+            return;
+
+         top_prod_vec_t new_top_producers;
+         new_top_producers.reserve(21);
+
+         // Map 'top_producers' to 'new_top_producers'
+         using namespace std;
+         transform(
+            top_producers.begin(),
+            top_producers.end(),
+            back_inserter(new_top_producers),
+            [](const auto& prod_tuple) {
+               return pair(get<0>(prod_tuple).producer_name, enum_cast(get<2>(prod_tuple)));
+            });
+
+         _greward.proposed_top_producers.emplace(*version, new_top_producers);
       }
    }
 

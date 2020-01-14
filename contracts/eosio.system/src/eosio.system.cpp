@@ -15,9 +15,11 @@ namespace eosiosystem {
     _wpsvoters(get_self(), get_self().value),
     _producers(get_self(), get_self().value),
     _producers2(get_self(), get_self().value),
+    _rewards(get_self(), get_self().value),
     _global(get_self(), get_self().value),
     _global2(get_self(), get_self().value),
     _global3(get_self(), get_self().value),
+    _globalreward(get_self(), get_self().value),
     _rammarket(get_self(), get_self().value),
     _proposers(get_self(), get_self().value),
     _proposals(get_self(), get_self().value),
@@ -30,6 +32,7 @@ namespace eosiosystem {
       _gstate2 = _global2.exists() ? _global2.get() : eosio_global_state2{};
       _gstate3 = _global3.exists() ? _global3.get() : eosio_global_state3{};
       _wps_state = _wps_global.exists() ? _wps_global.get() : wps_global_state{};
+      _greward = _globalreward.exists() ? _globalreward.get() : eosio_global_reward{};
    }
 
    eosio_global_state system_contract::get_default_parameters() {
@@ -48,6 +51,7 @@ namespace eosiosystem {
       _global2.set( _gstate2, get_self() );
       _global3.set( _gstate3, get_self() );
       _wps_global.set( _wps_state, get_self() );
+      _globalreward.set( _greward, get_self() );
    }
 
    void system_contract::setram( uint64_t max_ram_size ) {
@@ -365,6 +369,61 @@ namespace eosiosystem {
          m.quote.balance.amount = system_token_supply.amount / 1000;
          m.quote.balance.symbol = core;
       });
+   }
+
+   void system_contract::activaterewd() {
+      require_auth( get_self() );
+
+      check(!_greward.activated, "Standby rewards feature already activated");
+
+      auto& prod_counters = _greward.get_counters(reward_type::producer);
+      prod_counters.total_unpaid_blocks = _gstate.total_unpaid_blocks;
+      prod_counters.perblock_bucket = _gstate.perblock_bucket;
+
+      // Add reward information to all producers
+      for (const auto& producer: _producers) {
+         if (auto it = _rewards.find(producer.owner.value); it == _rewards.end()) {
+            _rewards.emplace(producer.owner, [&](auto& info) {
+               info.init(producer.owner);
+
+               if (producer.unpaid_blocks > 0)
+                  info.get_counters(reward_type::producer).unpaid_blocks = producer.unpaid_blocks;
+            });
+         }
+      }
+
+      // If we only have 21 producers or less they are ready to produce
+      if (std::distance(_producers.cbegin(), _producers.cend()) <= 21) {
+         for (const auto& producer: _producers) {
+            if (auto it = _rewards.find(producer.owner.value); producer.active() && it != _rewards.end()) {
+               _rewards.modify(it, same_payer, [&](reward_info& info) {
+                  info.set_current_type(reward_type::producer);
+               });
+               _greward.current_producers.emplace_back(top_prod_vec_t::value_type{producer.owner, enum_cast(reward_type::producer)});
+            }
+         }
+      }
+      else {
+         // Mark the first 21 ready (with votes and active) as "selected" to produce
+         auto idx = _producers.get_index<"prototalvote"_n>();
+         uint64_t i = 0;
+
+         for (auto it = idx.cbegin();
+              it != idx.cend() && i < 21 && 0 < it->total_votes && it->active();
+              ++it, ++i)
+         {
+            if (auto it_rwd = _rewards.find(it->owner.value); it_rwd != _rewards.end()) {
+               _rewards.modify(it_rwd, same_payer, [&](reward_info& info) {
+                  info.set_current_type(reward_type::producer);
+               });
+               _greward.current_producers.emplace_back(top_prod_vec_t::value_type{it->owner, enum_cast(reward_type::producer)});
+            }
+         }
+
+      }
+
+      _greward.activated = true;
+      eosio::print("Standby rewards feature activated\n");
    }
 
 } /// eosio.system
