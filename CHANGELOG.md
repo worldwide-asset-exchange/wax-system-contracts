@@ -9,6 +9,7 @@ FEATURES:
 IMPROVEMENTS:
 - Deployment script
 - [KEW-42] Proof of readiness scheduling
+- [KEW-43] Proof of readiness scheduling
 
 BUG FIXES:
 
