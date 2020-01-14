@@ -26,6 +26,19 @@ using mvo = fc::mutable_variant_object;
 
 namespace eosio_system {
 
+enum reward_type {
+   rewNone,
+   rewProducer,
+   rewStandby
+};
+
+constexpr double continuous_rate = 0.04879;
+constexpr double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
+constexpr double secs_per_year   = 52 * 7 * 24 * 3600;
+constexpr double producer_perc_reward = 0.60;
+constexpr double standby_perc_reward  = 1 - producer_perc_reward;
+
+
 class eosio_system_tester : public TESTER {
 public:
 
@@ -33,7 +46,7 @@ public:
       produce_blocks( 2 );
 
       create_accounts({ N(eosio.token), N(eosio.ram), N(eosio.ramfee), N(eosio.stake),
-               N(eosio.bpay), N(eosio.voters), N(eosio.saving), N(eosio.names), N(genesis.wax) });
+         N(eosio.bpay), N(eosio.spay), N(eosio.voters), N(eosio.saving), N(eosio.names), N(genesis.wax) });
 
 
       produce_blocks( 100 );
@@ -768,6 +781,11 @@ public:
       return abi_ser.binary_to_variant( "producer_info2", data, abi_serializer_max_time );
    }
 
+   fc::variant get_reward_info( const account_name& act ) {
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(rewards), act );
+      return abi_ser.binary_to_variant( "reward_info", data, abi_serializer_max_time );
+   }
+
    void create_currency( name contract, name manager, asset maxsupply ) {
       auto act =  mutable_variant_object()
          ("issuer",       manager )
@@ -828,7 +846,7 @@ public:
       return stake2votes( core_sym::from_string(s) );
    }
 
-   fc::variant get_stats( const string& symbolname ) {
+   fc::variant get_stats( const string& symbolname = "4," CORE_SYM_NAME) {
       auto symb = eosio::chain::symbol::from_string(symbolname);
       auto symbol_code = symb.to_symbol_code().value;
       vector<char> data = get_row_by_account( N(eosio.token), symbol_code, N(stat), symbol_code );
@@ -857,6 +875,11 @@ public:
    fc::variant get_global_state3() {
       vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(global3), N(global3) );
       return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state3", data, abi_serializer_max_time );
+   }
+
+   fc::variant get_global_reward() {
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(glbreward), N(glbreward) );
+      return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_reward", data, abi_serializer_max_time );
    }
 
    fc::variant get_refund_request( name account ) {
@@ -986,6 +1009,11 @@ public:
       }
    }
 
+   action_result activaterewd() {
+      return push_action(config::system_account_name, N(activaterewd), mvo());
+   }
+
+
    abi_serializer abi_ser;
    abi_serializer token_abi_ser;
 };
@@ -1018,4 +1046,100 @@ inline uint64_t M( const string& eos_str ) {
    return core_sym::from_string( eos_str ).get_amount();
 }
 
+
+/// Converts a fc::variant (of type fc::variant_object) into a std::map
+template<typename K = uint64_t>
+std::map<K, fc::variant> vo2map(const fc::variant& var)
+{
+   //BOOST_REQUIRE_EQUAL(var.get_type(), fc::variant::array_type);
+   std::map<K, fc::variant> result;
+
+   for (const auto& v: var.get_array()) {
+      //BOOST_REQUIRE_EQUAL(v.get_type(), fc::variant::object_type);
+      result.emplace(v["key"].as<K>(), v["value"]);
+   }
+   return result;
 }
+
+} // namespace eosio_system
+
+
+//
+// std::ostream print helpers
+//
+namespace std {
+
+   template<typename T>
+   inline std::ostream& operator<<(std::ostream& oss, const std::vector<T>& data)
+   {
+      oss << "vector{";
+      for (auto it = data.begin(); it != data.end(); ++it) {
+         oss << *it;
+         if (it != data.end() - 1) oss << ", ";
+      }
+      return oss << '}';
+   }
+
+   template<typename K, typename V>
+   std::ostream& operator<<(std::ostream& oss, const std::pair<K, V>& data)
+   {
+      return oss << data.first << ": " << data.second;
+   }
+
+   template<typename K, typename V>
+   std::ostream& operator<<(std::ostream& oss, const std::map<K, V>& data)
+   {
+      oss << "map{";
+      for (auto it = data.begin(); it != data.end(); ++it) {
+         oss << *it;
+         if (it != data.end() - 1) oss << ", ";
+      }
+      return oss << '}';
+   }
+
+   std::ostream& operator<<(std::ostream& oss, const fc::variant_object& var);
+
+   inline std::ostream& operator<<(std::ostream& oss, const fc::variant& var)
+   {
+      switch(var.get_type()) {
+         case fc::variant::null_type:   oss << "<null>";        break;
+         case fc::variant::int64_type:  oss << var.as_int64();  break;
+         case fc::variant::uint64_type: oss << var.as_uint64(); break;
+         case fc::variant::double_type: oss << var.as_double(); break;
+         case fc::variant::bool_type:   oss << var.as_bool();   break;
+         case fc::variant::string_type: oss << "'" << var.as_string() << "'"; break;
+         case fc::variant::blob_type:   oss << "<blob - todo>"; break;
+
+         case fc::variant::array_type:
+            {
+               const variants& vars = var.get_array();
+               oss << "varray{";
+               for (auto it = vars.begin(); it != vars.end(); ++it) {
+                  oss << *it;
+                  if (it != vars.end() - 1) oss << ", ";
+               }
+               oss << '}';
+            }
+            break;
+
+         case fc::variant::object_type:
+            oss << var.get_object();
+            break;
+
+         default:
+            oss << "<unknown>";
+      }
+      return oss;
+   }
+
+   inline std::ostream& operator<<(std::ostream& oss, const fc::variant_object& var)
+   {
+      oss << "vo{";
+      for (auto it = var.begin(); it != var.end(); it++) {
+         oss << it->key() << ": " << it->value();
+         if (it != var.end() - 1) oss << ", ";
+      }
+      return oss << '}';
+   }
+
+} // namespace std
