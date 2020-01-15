@@ -2373,11 +2373,11 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
       BOOST_REQUIRE_EQUAL(0, initial_perblock_bucket_prod);
       BOOST_REQUIRE_EQUAL(0, initial_pervote_bucket);
 
-      BOOST_REQUIRE_EQUAL(new_tokens, supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 6) * 3), savings - initial_savings);
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 6 * producer_perc_reward) , balance.get_amount() - initial_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5 * producer_perc_reward) , balance.get_amount() - initial_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 2), savings - initial_savings);
 
-      int64_t from_perblock_bucket = int64_t( initial_supply.get_amount() * double(usecs_between_fills) * (continuous_rate / 6.0) * producer_perc_reward / usecs_per_year ) ;
+      int64_t from_perblock_bucket = int64_t( initial_supply.get_amount() * double(usecs_between_fills) * (continuous_rate / 5.0) * producer_perc_reward / usecs_per_year ) ;
       int64_t from_pervote_bucket  = 0;
 
       if (from_pervote_bucket >= 100 * 10000) {
@@ -2468,19 +2468,17 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
       BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
       auto usecs_between_fills = claim_time - initial_claim_time;
 
-      BOOST_REQUIRE_EQUAL(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year ) ),
+      BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year )) ),
                           supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_GT(5, ((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 5) * 2) -
+                          add_gbm(savings - initial_savings));
 
-      BOOST_REQUIRE_EQUAL((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 6) * 3,
-                          savings - initial_savings);
 
       BOOST_TEST_MESSAGE("Initial supply = " << initial_supply.get_amount());
       BOOST_TEST_MESSAGE("Supply = " << supply.get_amount());
 
 
-      int64_t to_producer = int64_t( initial_supply.get_amount() * double(usecs_between_fills) * (continuous_rate / 6.0) * producer_perc_reward / usecs_per_year ) ;
-      //int64_t to_producer = int64_t( (double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate) / usecs_per_year ) / 6.;
-
+      int64_t to_producer = int64_t( initial_supply.get_amount() * double(usecs_between_fills) * (continuous_rate / 5.0) * producer_perc_reward / usecs_per_year ) ;
       int64_t to_perblock_bucket = to_producer;
       int64_t to_pervote_bucket  = 0;
 
@@ -2823,17 +2821,17 @@ BOOST_FIXTURE_TEST_CASE(producer_standby_pay_reward, eosio_system_tester, * boos
          auto usecs_between_fills = claim_time - initial_claim_time;
          uint64_t new_tokens = (initial_supply.get_amount() * double(usecs_between_fills) * continuous_rate) / usecs_per_year;
 
-         BOOST_REQUIRE_EQUAL(new_tokens, supply.get_amount() - initial_supply.get_amount());
-         BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 6) * 3), savings - initial_savings); // 3 for "gbm + to_voters + to_per_block_pay", all the same
+         BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());    
+         BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 2), savings - initial_savings);
 
          // When the 1st claim reward is made, variables "initial_perblock_bucket_prod"
          // and "initial_perblock_bucket_stb" are zero so it's necessary a manual calculation
 
          int64_t perblock_bucket_prod =
-            initial_perblock_bucket_prod != 0 ? initial_perblock_bucket_prod : (new_tokens / 6) * producer_perc_reward;
+            initial_perblock_bucket_prod != 0 ? initial_perblock_bucket_prod : (new_tokens / 5) * producer_perc_reward;
 
          int64_t perblock_bucket_stb =
-            initial_perblock_bucket_stb != 0 ? initial_perblock_bucket_stb : (new_tokens / 6) * standby_perc_reward;
+            initial_perblock_bucket_stb != 0 ? initial_perblock_bucket_stb : (new_tokens / 5) * standby_perc_reward;
 
          int64_t per_block_pay = 0;
          if (initial_tot_unpaid_blocks_prod > 0)
@@ -2987,7 +2985,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
 
       BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year )) ),
                           supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE(5 > ((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 5) * 2) -
+      BOOST_REQUIRE_GT(5, ((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 5) * 2) -
                           add_gbm(savings - initial_savings));
 
       int64_t to_producer        = int64_t( (double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate) / usecs_per_year ) / 5;
@@ -4007,7 +4005,7 @@ BOOST_FIXTURE_TEST_CASE(producers_upgrade_system_contract, eosio_system_tester) 
       const auto& t = std::get<0>(p);
       if( t->scheduled ) { trace = t; }
    } );
-
+      
    BOOST_REQUIRE_EQUAL(success(), push_action_msig( N(alice1111111), N(exec), mvo()
                                                     ("proposer",      "alice1111111")
                                                     ("proposal_name", "upgrade1")
