@@ -156,28 +156,6 @@ namespace eosiosystem {
 
       fill_buckets();
 
-      auto prod2 = _producers2.find( owner.value );
-
-      /// New metric to be used in pervote pay calculation. Instead of vote weight ratio, we combine vote weight and
-      /// time duration the vote weight has been held into one metric.
-      const auto last_claim_plus_3days = prod.last_claim_time + microseconds(3 * useconds_per_day);
-
-      bool crossed_threshold       = (last_claim_plus_3days <= ct);
-      bool updated_after_threshold = true;
-      if ( prod2 != _producers2.end() ) {
-         updated_after_threshold = (last_claim_plus_3days <= prod2->last_votepay_share_update);
-      } else {
-         prod2 = _producers2.emplace( owner, [&]( producer_info2& info  ) {
-            info.owner                     = owner;
-            info.last_votepay_share_update = ct;
-         });
-      }
-
-      // Note: updated_after_threshold implies cross_threshold (except if claiming rewards when the producers2 table row did not exist).
-      // The exception leads to updated_after_threshold to be treated as true regardless of whether the threshold was crossed.
-      // This is okay because in this case the producer will not get paid anything either way.
-      // In fact it is desired behavior because the producers votes need to be counted in the global total_producer_votepay_share for the first time.
-
       if (_greward.activated) {
           struct data {
             int64_t     per_block_pay = 0;
@@ -232,15 +210,6 @@ namespace eosiosystem {
             }
          }
 
-         double new_votepay_share = update_producer_votepay_share(
-            prod2,
-            ct,
-            updated_after_threshold ? 0.0 : prod.total_votes,
-            true); // reset votepay_share to zero after updating
-
-         update_total_votepay_share(
-            ct, -new_votepay_share, (updated_after_threshold ? prod.total_votes : 0.0) );
-
          _producers.modify( prod, same_payer, [&](auto& p) {
             p.last_claim_time = ct;
             //p.unpaid_blocks   = 0;
@@ -259,16 +228,8 @@ namespace eosiosystem {
 
          check( per_block_pay >= 0, "producer per block pay must be greater or equal to 0" );
 
-         double new_votepay_share = update_producer_votepay_share( prod2,
-                                       ct,
-                                       updated_after_threshold ? 0.0 : prod.total_votes,
-                                       true // reset votepay_share to zero after updating
-                                    );
-
          _gstate.perblock_bucket     -= per_block_pay;
          _gstate.total_unpaid_blocks -= prod.unpaid_blocks;
-
-         update_total_votepay_share( ct, -new_votepay_share, (updated_after_threshold ? prod.total_votes : 0.0) );
 
          _producers.modify( prod, same_payer, [&](auto& p) {
             p.last_claim_time = ct;
