@@ -714,15 +714,12 @@ namespace eosiosystem {
          voters_table            _voters;
          wps_voters_table        _wpsvoters;
          producers_table         _producers;
-         producers_table2        _producers2;
          rewards_table           _rewards;
          global_state_singleton  _global;
          global_state2_singleton _global2;
-         global_state3_singleton _global3;
          global_reward_singleton _globalreward;
          eosio_global_state      _gstate;
          eosio_global_state2     _gstate2;
-         eosio_global_state3     _gstate3;
          eosio_global_reward     _greward;
          rammarket               _rammarket;
          proposer_table          _proposers;
@@ -1396,11 +1393,6 @@ namespace eosiosystem {
          void update_elected_producers( const block_timestamp& timestamp, const eosio::checksum256& previous_block_hash);
          void update_votes( const name& voter, const name& proxy, const std::vector<name>& producers, bool voting );
          void propagate_weight_change( const voter_info& voter );
-         double update_producer_votepay_share( const producers_table2::const_iterator& prod_itr,
-                                               const time_point& ct,
-                                               double shares_rate, bool reset_to_zero = false );
-         double update_total_votepay_share( const time_point& ct,
-                                            double additional_shares_delta = 0.0, double shares_rate_delta = 0.0 );
 
          void select_producers_into( uint64_t begin, uint64_t count, reward_type type, prod_vec_t& result );
          bool is_it_time_to_select_a_standby() const;
