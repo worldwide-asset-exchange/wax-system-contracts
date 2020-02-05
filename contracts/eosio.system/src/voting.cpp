@@ -105,14 +105,10 @@ namespace eosiosystem {
       auto& stb_cnt = _greward.get_counters(reward_type::standby);
       auto& pro_cnt = _greward.get_counters(reward_type::producer);
 
-      uint64_t stb_total = std::accumulate(
-         stb_cnt.unpaid_blocks_per_hour.begin(), stb_cnt.unpaid_blocks_per_hour.end(), 0);
-
-      uint64_t total = stb_total + std::accumulate(
-         pro_cnt.unpaid_blocks_per_hour.begin(), pro_cnt.unpaid_blocks_per_hour.end(), 0);
+      uint64_t total = stb_cnt.block_count + pro_cnt.block_count;
 
       if (total > 0) {
-         double percent = 100.0 * stb_total / total;
+         double percent = 100.0 * stb_cnt.block_count / total;
          return percent < 1.0;
       }
 
@@ -183,30 +179,30 @@ namespace eosiosystem {
       prod_vec_t top_producers;
       top_producers.reserve(21);
 
-      if (is_it_time_to_select_a_standby()) {
+      select_producers_into(0, 21, reward_type::producer, top_producers);
+
+      if (top_producers.size() == 0 || top_producers.size() < _gstate.last_producer_schedule_size ) {
+         return;
+      }
+
+      bool select_a_standby = is_it_time_to_select_a_standby();
+
+      uint64_t previous_block_hash_int = to_int(previous_block_hash);
+      const uint64_t standby_index = (_greward.random_standby_selection ? previous_block_hash_int : _greward.last_standby_index + 1) % max_standbys;
+
+      if (select_a_standby) {
          prod_vec_t standbys; standbys.reserve(max_standbys);
 
          // Pick the current 36 standbys
          select_producers_into(21, max_standbys, reward_type::standby, standbys);
 
-         const uint64_t standby_index = to_int(previous_block_hash) % max_standbys;
+         // sort by producer name, if both are equal it will sort by location
+         std::sort( standbys.begin(), standbys.end() );
 
          if (standbys.size() > standby_index) {
-            // Add the selected standby as an elected top producer
-            top_producers.emplace_back(standbys[standby_index]);
-
-            /// @todo The following print statement isn't working. Check it.
-            //eosio::print_f("Selected standby producer: %\n",
-            //   std::get<0>(standbys[standby_index]).producer_name.to_string());
+            // Add the selected standby as an elected top producer.
+            top_producers[previous_block_hash_int % top_producers.size()] = standbys[standby_index];
          }
-      }
-
-      // Add the rest of the elected top producers
-      select_producers_into(0, 21 - top_producers.size(), reward_type::producer, top_producers);
-
-      if (top_producers.size() == 0 || top_producers.size() < _gstate.last_producer_schedule_size ) {
-         eosio::print("No top producers or they are less than the last scheduled");
-         return;
       }
 
       // sort by producer name, if both are equal it will sort by location
@@ -220,6 +216,9 @@ namespace eosiosystem {
 
       // Proposes a new list
       if (auto version = set_proposed_producers(producers); version.has_value()) {
+         if(select_a_standby) {
+           _greward.last_standby_index = standby_index;
+         }
          _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
 
          if (auto it = _greward.proposed_top_producers.find(*version); it != _greward.proposed_top_producers.end())
@@ -245,7 +244,7 @@ namespace eosiosystem {
    double stake2vote( int64_t staked ) {
       /// TODO subtract 2080 brings the large numbers closer to this decade
       double weight = int64_t( (current_time_point().sec_since_epoch() - (block_timestamp::block_timestamp_epoch / 1000)) / (seconds_per_day * 7) )  / double( 13 );
-      return double(staked) * std::pow( 2, weight );
+      return double(staked) * std::pow( 2., weight );
    }
 
    void system_contract::voteproducer( const name& voter_name, const name& proxy, const std::vector<name>& producers ) {
@@ -346,12 +345,14 @@ namespace eosiosystem {
          }
       }
 
+      double old_producers_performance = calculate_producers_performance(*voter);
+
       _voters.modify( voter, same_payer, [&]( auto& av ) {
          av.last_vote_weight = new_vote_weight;
          av.producers = producers;
          av.proxy     = proxy;
       });
-      update_voter_votepay_share(voter);
+      update_voter_votepay_share(voter, old_producers_performance);
    }
 
    void system_contract::regproxy( const name& proxy, bool isproxy ) {
@@ -405,7 +406,8 @@ namespace eosiosystem {
       _gstate.total_unpaid_voteshare_last_updated = ct;
       check(_gstate.total_unpaid_voteshare > 0, "no rewards available.");
 
-      double unpaid_voteshare = voter.unpaid_voteshare + voter.unpaid_voteshare_change_rate * double((ct - voter.unpaid_voteshare_last_updated).count() / 1E6);
+      double producers_performance = calculate_producers_performance(voter);
+      double unpaid_voteshare = voter.unpaid_voteshare + producers_performance * voter.unpaid_voteshare_change_rate * double((ct - voter.unpaid_voteshare_last_updated).count() / 1E6);
 
       int64_t reward = _gstate.voters_bucket * (unpaid_voteshare / _gstate.total_unpaid_voteshare);
       check(reward > 0, "no rewards available.");
@@ -415,6 +417,7 @@ namespace eosiosystem {
       }
 
       _gstate.voters_bucket -= reward;
+
       _gstate.total_unpaid_voteshare -= unpaid_voteshare;
       _voters.modify(voter, same_payer, [&]( auto& v ) {
          v.unpaid_voteshare = 0;
@@ -425,11 +428,66 @@ namespace eosiosystem {
       return reward;
    }
 
-   void system_contract::update_voter_votepay_share(const voters_table::const_iterator& voter_itr) {
+   double system_contract::calculate_producers_performance( const voter_info& voter ) {
+     if (_greward.activated) {
+       std::vector<double> producer_performances;
+       const auto& voter_or_proxy = voter.proxy
+         ? _voters.get( voter.proxy.value, "proxy not found" ) //data corruption
+         : voter;
+
+       auto idx = _producers.get_index<"prototalvote"_n>();
+       std::map<name, bool> producers;
+       std::map<name, bool> standbys;
+
+       uint64_t i = 0;
+
+       for (auto it = idx.cbegin(); it != idx.cend() && i < 57; ++it, ++i) {
+          if(i < 21) {
+            producers.emplace(it->owner, true);
+          } else {
+            standbys.emplace(it->owner, true);
+          }
+       }
+
+       for( const auto& producer : voter_or_proxy.producers ) {
+         auto rewards = _rewards.get( producer.value, "producer not found" );
+         reward_type type = reward_type::none;
+         if(producers.find(producer) != producers.end()) {
+           type = reward_type::producer;
+         } else if(standbys.find(producer) != standbys.end()) {
+           type = reward_type::standby;
+         }
+         double perf = rewards.get_performance(type, _gstate2.last_block_num);
+         if(perf == -1.) {
+           perf = _greward.average_producer_performances();
+         }
+         producer_performances.push_back(perf);
+       }
+
+       while(producer_performances.size() < num_performance_producers) {
+         producer_performances.push_back(_greward.average_producer_performances());
+       }
+
+       std::sort(producer_performances.begin(), producer_performances.end(), [&](double a, double b) {
+         return a > b;
+       });
+       if(producer_performances.size() > num_performance_producers) {
+         producer_performances.erase(producer_performances.begin() + num_performance_producers, producer_performances.end());
+       }
+
+       double performance = std::accumulate(producer_performances.begin(), producer_performances.end(), 0.) / num_performance_producers;
+       _greward.update_producer_performances(performance);
+       return performance;
+     }
+
+     return 1.;
+   }
+
+   void system_contract::update_voter_votepay_share(const voters_table::const_iterator& voter_itr, double old_producers_performance) {
       auto ct = current_time_point();
       double new_unpaid_voteshare = voter_itr->unpaid_voteshare;
       if (voter_itr->unpaid_voteshare_last_updated != time_point() && voter_itr->unpaid_voteshare_last_updated < current_time_point()) {
-         new_unpaid_voteshare += voter_itr->unpaid_voteshare_change_rate * double((ct - voter_itr->unpaid_voteshare_last_updated).count() / 1E6);
+         new_unpaid_voteshare += old_producers_performance * voter_itr->unpaid_voteshare_change_rate * double((ct - voter_itr->unpaid_voteshare_last_updated).count() / 1E6);
       }
       double new_change_rate{0};
       if(voter_itr->producers.size() >= 16 || voter_itr->proxy){
@@ -441,7 +499,6 @@ namespace eosiosystem {
          _gstate.total_unpaid_voteshare += _gstate.total_voteshare_change_rate * double((ct - _gstate.total_unpaid_voteshare_last_updated).count() / 1E6);
       }
 
-      eosio::print("Calculating _gstate.total_voteshare_change_rate: ", change_rate_delta);
       _gstate.total_voteshare_change_rate += change_rate_delta;
       _gstate.total_unpaid_voteshare_last_updated = ct;
 
