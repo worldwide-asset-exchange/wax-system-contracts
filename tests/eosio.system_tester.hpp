@@ -1013,6 +1013,34 @@ public:
       return push_action(config::system_account_name, N(activaterewd), mvo());
    }
 
+   action_result setrwrdsenv( account_name account, uint32_t producer_blocks_performance_window, uint32_t standby_blocks_performance_window, bool random_standby_selection ) {
+      return push_action(account, N(setrwrdsenv), mvo()
+                          ("producer_blocks_performance_window",     producer_blocks_performance_window)
+                          ("standby_blocks_performance_window",     standby_blocks_performance_window)
+                          ("random_standby_selection",     random_standby_selection));
+   }
+
+   void produce_blocks_up_to_producer(account_name name) {
+      while(true) {
+         if(control->head_block_producer() != name && control->pending_block_producer() == name) {
+           break;
+         }
+         produce_blocks(1);
+      }
+   }
+
+   void produce_blocks_skip_producer(uint32_t n, account_name name) {
+      uint32_t i = 0;
+      while(i < n) {
+         if(control->pending_block_producer() == name) {
+           produce_block(fc::milliseconds(500 * 13));
+           i += 13;
+         } else {
+           produce_blocks(1);
+           i++;
+         }
+      }
+   }
 
    abi_serializer abi_ser;
    abi_serializer token_abi_ser;

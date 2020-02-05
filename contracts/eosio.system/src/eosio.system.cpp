@@ -422,4 +422,13 @@ namespace eosiosystem {
       eosio::print("Standby rewards feature activated\n");
    }
 
+   void system_contract::setrwrdsenv(uint32_t producer_blocks_performance_window, uint32_t standby_blocks_performance_window, bool random_standby_selection){
+     require_auth( get_self() );
+     check(producer_blocks_performance_window > 0, "producer_blocks_performance_window must be > 0");
+     check(standby_blocks_performance_window > 0, "standby_blocks_performance_window must be > 0");
+     _greward.producer_blocks_performance_window = producer_blocks_performance_window;
+     _greward.standby_blocks_performance_window = standby_blocks_performance_window;
+     _greward.random_standby_selection = random_standby_selection;
+   }
+
 } /// eosio.system

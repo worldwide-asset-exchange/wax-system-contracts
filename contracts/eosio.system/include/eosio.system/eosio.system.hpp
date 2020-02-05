@@ -17,6 +17,8 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <cmath>
+
 
 namespace eosiosystem {
 
@@ -77,6 +79,8 @@ namespace eosiosystem {
    static constexpr uint32_t max_standbys          = 36;
    static constexpr double   producer_perc_reward  = 0.60;
    static constexpr double   standby_perc_reward   = 1 - producer_perc_reward;
+   static constexpr uint32_t num_performance_producers = 16;
+   static constexpr uint32_t producer_performances_window = 1000;
 
    static constexpr uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022
    static const time_point gbm_initial_time(eosio::seconds(1561939200));     // July 1st 2019 00:00:00
@@ -205,7 +209,7 @@ namespace eosiosystem {
 
       uint16_t          new_ram_per_block = 0;
       block_timestamp   last_ram_increase;
-      block_timestamp   last_block_num; /* deprecated */
+      block_timestamp   last_block_num;
       double            total_producer_votepay_share = 0;
       uint8_t           revision = 0; ///< used to track version updates in the future.
 
@@ -233,7 +237,7 @@ namespace eosiosystem {
       struct global_rewards_counter_type {
          uint64_t              total_unpaid_blocks = 0;
          int64_t               perblock_bucket = 0;
-         std::vector<uint64_t> unpaid_blocks_per_hour;
+         uint64_t              block_count = 0;
       };
 
       bool activated = false;  // Producer/standby rewards activated 
@@ -243,13 +247,24 @@ namespace eosiosystem {
 
       uint8_t current_hour = 0;
 
+      uint32_t producer_blocks_performance_window = 30 * 21 * 12 / 0.99; // default approx 1 hour worth of blocks
+      uint32_t standby_blocks_performance_window = 6 * 36 * 12 / 0.01; // default approx 36 hours worth of blocks
+      bool random_standby_selection = true; // turn randomized standby selection on/off
+      uint64_t last_standby_index = 0;
+
+      double rolling_producer_performances = producer_performances_window * 0.5;
+
+      void update_producer_performances(double new_performance) {
+        rolling_producer_performances += new_performance - rolling_producer_performances / producer_performances_window;
+      }
+
+      const double average_producer_performances() const {
+        return rolling_producer_performances / producer_performances_window;
+      }
+
       eosio_global_reward() {
          for (auto type: { reward_type::none, reward_type::producer, reward_type::standby }) {
             counters.emplace(enum_cast(type), global_rewards_counter_type());
-
-            // This is necessary because adding a ctor to global_rewards_counter_type
-            // (to initialize the vector) produces a wasm runtime error (Exceeded call depth maximum)
-            counters[enum_cast(type)].unpaid_blocks_per_hour.resize(24);
          }
       }
 
@@ -269,23 +284,11 @@ namespace eosiosystem {
          auto& counters = get_counters(type);
 
          counters.total_unpaid_blocks++;
-
-         // Get the hour of the day of the provided timestamp
-         uint8_t hour = static_cast<uint8_t>(
-            ((tm.to_time_point().time_since_epoch().count() - eosio::block_timestamp::block_timestamp_epoch) /
-               eosio::hours(1).count()) % 24);
-
-         // Is it time to reset the hour bucket?
-         if (hour != current_hour) {
-            counters.unpaid_blocks_per_hour[hour] = 1;
-            current_hour = hour;
-         }
-         else
-            counters.unpaid_blocks_per_hour[hour]++;
+         counters.block_count++;
       }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( eosio_global_reward, (activated)(counters)(proposed_top_producers)(current_producers)(current_hour))
+      EOSLIB_SERIALIZE( eosio_global_reward, (activated)(counters)(proposed_top_producers)(current_producers)(current_hour)(producer_blocks_performance_window)(standby_blocks_performance_window)(random_standby_selection)(last_standby_index)(rolling_producer_performances))
    };
 
    /**
@@ -518,6 +521,35 @@ namespace eosiosystem {
     typedef eosio::singleton< "wpsstate"_n, wps_global_state > wps_global_state_singleton;
 
    /**
+    * Simple sigmoid function for smoothing rolling block performance into (0, 1)
+    * 
+    * x is rolling block performance
+    * 
+    * speed moderates how quickly we transition through the S part of the sigmoid.
+    *   Examples:
+    *   sigmoid(0.9 * expected_blocks_produced, 5, expected_blocks_produced / 2.) = 0.9
+    *   sigmoid(0.8 * expected_blocks_produced, 20 / 3, expected_blocks_produced / 2.) = 0.9
+    * The speed value can be calculated with the following
+    *   speed = (2 * r - 1) / ((2 - 2 * r) * (2 * v - 1))
+    *   which will satisfy
+    *   v = sigmoid(r * expected_blocks_produced, speed, expected_blocks_produced / 2.)
+    *   where r, v are in (0, 1)
+    * Reducing r relative to v will cause the resulting sigmoid values to snap more quickly toward either
+    *   0 or 1 as we transition left or right through the vicinity of the x_translation point.
+    *
+    * x_translation is the centring point for the S curve.
+    *   By setting x_translation = expected_blocks_produced / 2. you centre the S part around the
+    *   midpoint of how many blocks you expect that producer to have produced in the interval, which
+    *   probably makes the most sense. Ie if a producer only averages half its expected block production,
+    *   it will receive a performance value (aka sigmoid value) of exactly 0.5.
+    */
+   inline double sigmoid(double x, double speed, double x_translation) {
+      auto s = speed / x_translation;
+      auto X = s * (x - x_translation);
+      return 0.5 * (1 + X / (1 + std::abs(X)));
+   }
+
+   /**
     * Producer reward information  
     */
    struct [[eosio::table, eosio::contract("eosio.system")]] reward_info {
@@ -526,7 +558,14 @@ namespace eosiosystem {
       struct reward_info_counter_type {
          uint64_t unpaid_blocks = 0;  // # of blocks produced
 
-         /// @todo Add other counters here
+         double rolling_blocks = 0.0;
+         uint32_t blocks_performance_window = 1; // to avoid div by 0, will get set on first pass through track_block;
+         block_timestamp last_block;
+
+         double roll_blocks(block_timestamp block_time) const {
+           auto blocks_elapsed = block_time.slot - last_block.slot;
+           return rolling_blocks * std::pow(1. - 1. / (double)blocks_performance_window, blocks_elapsed);
+         }
       };
 
       name                                         owner;
@@ -570,6 +609,41 @@ namespace eosiosystem {
       void reset_counters() {
          for (auto& counter: counters)
             counter.second.unpaid_blocks = 0;
+      }
+
+      auto& get_current_counter() {
+         auto it = counters.find(current_type);
+         check(it != counters.end(), "Cannot find counter data");
+         return it->second;
+      }
+
+      double get_performance(reward_type as_type, block_timestamp block_time) {
+        const auto &counter = get_counters(as_type);
+        double rolling_blocks = counter.roll_blocks(block_time);
+        switch(as_type) {
+          case reward_type::standby: {
+            double expected_blocks_produced = counter.blocks_performance_window * .01 * (1. / 36.);
+            return sigmoid(rolling_blocks, 5, expected_blocks_produced / 2.);
+          }
+          case reward_type::producer: {
+            double expected_blocks_produced = counter.blocks_performance_window * 0.99 * (1. / 21.);
+            return sigmoid(rolling_blocks, 5, expected_blocks_produced / 2.);
+          }
+          default:
+            return -1.;
+        }
+      }
+
+      void track_block(block_timestamp block_time, uint32_t blocks_performance_window) {
+        auto &counter = get_current_counter();
+        if(blocks_performance_window != counter.blocks_performance_window) {
+          counter.blocks_performance_window = blocks_performance_window;
+          counter.rolling_blocks = 0;
+        }
+
+        counter.rolling_blocks = 1. + counter.roll_blocks(block_time);
+        counter.last_block = block_time;
+        counter.unpaid_blocks++;
       }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
@@ -865,6 +939,15 @@ namespace eosiosystem {
           */
          [[eosio::action]]
          void activaterewd();
+
+         /**
+          * Configures producer/standby rewards
+          *
+          * @details
+          *
+          */
+         [[eosio::action]]
+         void setrwrdsenv(uint32_t producer_blocks_performance_window, uint32_t standby_blocks_performance_window, bool random_standby_selection);
 
          // functions defined in delegate_bandwidth.cpp
 
@@ -1385,7 +1468,7 @@ namespace eosiosystem {
          void update_voting_power( const name& voter, const asset& total_update );
 
          // defined in voting.cpp
-         void update_voter_votepay_share(const voters_table::const_iterator& voter_itr);
+         void update_voter_votepay_share(const voters_table::const_iterator& voter_itr, double old_producers_performance);
 
          // defined in voting.hpp
          void update_producer_reward_status(int64_t schedule_version);
@@ -1396,6 +1479,7 @@ namespace eosiosystem {
 
          void select_producers_into( uint64_t begin, uint64_t count, reward_type type, prod_vec_t& result );
          bool is_it_time_to_select_a_standby() const;
+         double calculate_producers_performance( const voter_info& voter );
 
          template <auto system_contract::*...Ptrs>
          class registration {

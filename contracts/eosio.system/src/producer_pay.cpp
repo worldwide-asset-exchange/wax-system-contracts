@@ -17,9 +17,6 @@ namespace eosiosystem {
 
       _ds >> timestamp >> producer;
 
-      // _gstate2.last_block_num is not used anywhere in the system contract code anymore.
-      // Although this field is deprecated, we will continue updating it for now until the last_block_num field
-      // is eventually completely removed, at which point this line can be removed.
       _gstate2.last_block_num = timestamp;
 
       /** until activated stake crosses this threshold no new rewards are paid */
@@ -44,10 +41,14 @@ namespace eosiosystem {
 
          // Counts blocks according to producer type
          if (auto it = _rewards.find( producer.value ); it != _rewards.end() ) {
-            _greward.new_unpaid_block(it->get_current_type(), timestamp);
+            const reward_type producer_type = it->get_current_type();
+            _greward.new_unpaid_block(producer_type, timestamp);
 
             _rewards.modify( it, same_payer, [&](auto& rec ) {
-               rec.get_counters(it->get_current_type()).unpaid_blocks++;
+              uint32_t blocks_performance_window = producer_type == reward_type::producer
+                  ? _greward.producer_blocks_performance_window
+                  : _greward.standby_blocks_performance_window;
+               rec.track_block(timestamp, blocks_performance_window);
             });
          }
       }
