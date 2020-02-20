@@ -41,9 +41,6 @@ namespace eosiosystem {
         check(img_url.size() > 0, "not a valid image URL");
         check(bio.size() > 0, "bio should be more than 0 characters long");
         check(country.size() > 0, "country name should be more than 0 characters long");
-        check(telegram.size() > 4, "not a valid Telegram username");
-        check(website.size() > 0, "not a valid website URL");
-        check(linkedin.size() > 0, "not a valid linkedin URL");
 
         //verify that the inputs aren't too long
         check(first_name.size() < 128, "first name should be shorter than 128 characters.");
@@ -220,7 +217,7 @@ namespace eosiosystem {
         check(roadmap.size() > 0, "roadmap should be more than 0 characters long");
         check(duration >= 30, "duration should be at least 30 days");
         check(members.size() > 0, "member should be more than 0");
-        check(total_iterations >= 3, "total number of iterations must be at least 3");
+        check(total_iterations >= 1, "total number of iterations must be at least 1");
 
         wps_env_singleton _wps_env(get_self(), get_self().value);
         auto env = _wps_env.get();
