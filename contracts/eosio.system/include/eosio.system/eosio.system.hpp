@@ -1237,5 +1237,7 @@ namespace eosiosystem {
          };
    };
 
+    double stake2vote( int64_t staked );
+
    /** @}*/ // end of @defgroup eosiosystem eosio.system
 } /// eosiosystem

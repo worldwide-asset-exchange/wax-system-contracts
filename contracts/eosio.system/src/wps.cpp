@@ -643,13 +643,6 @@ namespace eosiosystem {
         });
     }
 
-    double stake2vote_wps( int64_t staked ) {
-        // From voting.cpp
-        /// TODO subtract 2080 brings the large numbers closer to this decade
-        double weight = int64_t( (current_time_point().sec_since_epoch() - (block_timestamp::block_timestamp_epoch / 1000)) / (seconds_per_day * 7) )  / double( 13 );
-        return double(staked) * std::pow( 2, weight );
-    }
-
     void system_contract::voteproposal( const name& voter_name, const std::vector<name>& proposals ) {
         require_auth( voter_name );
         // vote_stake_updater( voter_name );
@@ -672,7 +665,7 @@ namespace eosiosystem {
         check( _gstate.total_activated_stake >= min_activated_stake,
                "cannot update wps votes until the chain is activated (at least 15% of all tokens participate in voting)" );
 
-        auto new_vote_weight = stake2vote_wps( voter->staked );
+        auto new_vote_weight = stake2vote( voter->staked );
         if( voter->is_proxy ) {
             check(false, "Proxies can't vote for worker proposals");
         }
