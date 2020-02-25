@@ -776,6 +776,8 @@ core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 issue_and_transfer( "bigvoter1111", core_sym::from_string("100000000.0000"),  config::system_account_name );
 BOOST_REQUIRE_EQUAL( success(), stake( "bigvoter1111", core_sym::from_string("50000.0000"), core_sym::from_string("50000.0000") ) );
 
+produce_blocks(1);
+
 create_account_with_resources(N(prodvoter111), config::system_account_name, core_sym::from_string("10000.0000"), false,
 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
@@ -807,7 +809,7 @@ BOOST_REQUIRE_EQUAL(wasm_assert_msg("Proposal::status is not PROPOSAL_STATUS::FI
 
 BOOST_REQUIRE_EQUAL( success(), stake( "bigvoter1111", core_sym::from_string("49950000.0000"), core_sym::from_string("49950000.0000") ) );
 
-produce_blocks(1);
+produce_blocks(5);
 
 BOOST_REQUIRE_EQUAL(success(),
         approve(N(reviewer1111), N(reviewer1111), N(proposer1111)));
