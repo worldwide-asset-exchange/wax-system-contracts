@@ -685,6 +685,7 @@ BOOST_REQUIRE_EQUAL(wasm_assert_msg("Proposal::status is not PROPOSAL_STATUS::AP
 } FC_LOG_AND_RETHROW()
 
 
+
 BOOST_FIXTURE_TEST_CASE(proposal_reject_fund, eosio_wps_tester) try {
 
 create_account_with_resources(N(committee111), config::system_account_name, core_sym::from_string("100.0000"), false,
@@ -749,6 +750,8 @@ BOOST_REQUIRE_EQUAL(wasm_assert_msg("Proposal::status is not PROPOSAL_STATUS::AP
 
 } FC_LOG_AND_RETHROW()
 
+
+
 BOOST_FIXTURE_TEST_CASE(proposal_vote_increase_stake, eosio_wps_tester) try {
 
 create_account_with_resources(N(committee111), config::system_account_name, core_sym::from_string("100.0000"), false,
@@ -809,12 +812,14 @@ BOOST_REQUIRE_EQUAL(wasm_assert_msg("Proposal::status is not PROPOSAL_STATUS::FI
 
 BOOST_REQUIRE_EQUAL( success(), stake( "bigvoter1111", core_sym::from_string("49950000.0000"), core_sym::from_string("49950000.0000") ) );
 
-produce_blocks(5);
+produce_blocks(100);
 
 BOOST_REQUIRE_EQUAL(success(),
         approve(N(reviewer1111), N(reviewer1111), N(proposer1111)));
 
 } FC_LOG_AND_RETHROW()
+
+
 
 BOOST_FIXTURE_TEST_CASE(proposal_vote_decrease_stake, eosio_wps_tester) try {
 
@@ -829,7 +834,7 @@ core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
 cross_15_percent_threshold();
 
-setwpsenv(config::system_account_name, 5, 30, 500, 6);
+setwpsenv(config::system_account_name, 35, 30, 500, 6);
 regcommittee(config::system_account_name, N(committee111), "categoryX", true);
 regreviewer(N(committee111), N(committee111), N(reviewer1111), "bob", "bob");
 regproposer(N(proposer1111), N(proposer1111), "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin");
@@ -843,6 +848,15 @@ core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 issue_and_transfer( "bigvoter1111", core_sym::from_string("100000000.0000"),  config::system_account_name );
 BOOST_REQUIRE_EQUAL( success(), stake( "bigvoter1111", core_sym::from_string("3700000.0000"), core_sym::from_string("3700000.0000") ) );
 
+produce_blocks(1);
+
+create_account_with_resources(N(prodvoter111), config::system_account_name, core_sym::from_string("10000.0000"), false,
+core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+issue_and_transfer( "prodvoter111", core_sym::from_string("100000000.0000"),  config::system_account_name );
+BOOST_REQUIRE_EQUAL( success(), stake( "prodvoter111", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000") ) );
+
+produce_blocks(1);
 
 // Make a producer account to create an appropriate producer_vote_weight
 create_account_with_resources(N(prod11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
@@ -850,6 +864,11 @@ core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
 // prod11111111 registers to be a producer
 BOOST_REQUIRE_EQUAL( success(), regproducer( "prod11111111", 1) );
+
+produce_blocks(1);
+
+// prodvoter111 votes for prod11111111
+BOOST_REQUIRE_EQUAL( success(), vote( N(prodvoter111), { N(prod11111111) } ) );
 
 produce_blocks(1);
 
@@ -876,13 +895,117 @@ produce_blocks(1);
 BOOST_REQUIRE_EQUAL(wasm_assert_msg("Proposal::status is not PROPOSAL_STATUS::FINISHED_VOTING"),
         approve(N(reviewer1111), N(reviewer1111), N(proposer1111)));
 
-BOOST_REQUIRE_EQUAL( success(), stake( "bigvoter1111", core_sym::from_string("3750000.0000"), core_sym::from_string("3750000.0000") ) );
+BOOST_REQUIRE_EQUAL( success(), stake( "bigvoter1111", core_sym::from_string("37500000.0000"), core_sym::from_string("37500000.0000") ) );
 
-produce_blocks(1);
+produce_blocks(100);
 
 BOOST_REQUIRE_EQUAL(success(),
         approve(N(reviewer1111), N(reviewer1111), N(proposer1111)));
 
 } FC_LOG_AND_RETHROW()
+
+
+
+BOOST_FIXTURE_TEST_CASE(proposal_stake_unstake_repetition, eosio_wps_tester) try {
+
+create_account_with_resources(N(committee111), config::system_account_name, core_sym::from_string("100.0000"), false,
+core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+create_account_with_resources(N(reviewer1111), config::system_account_name, core_sym::from_string("100.0000"), false,
+core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+create_account_with_resources(N(proposer1111), config::system_account_name, core_sym::from_string("100.0000"), false,
+core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+create_account_with_resources(N(randomuser11), config::system_account_name, core_sym::from_string("100.0000"), false,
+core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+cross_15_percent_threshold();
+
+// 40% needed for proposal acceptance
+setwpsenv(config::system_account_name, 40, 30, 500, 6);
+regcommittee(config::system_account_name, N(committee111), "categoryX", true);
+regreviewer(N(committee111), N(committee111), N(reviewer1111), "bob", "bob");
+regproposer(N(proposer1111), N(proposer1111), "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin");
+regproposal(N(proposer1111), N(proposer1111), N(committee111), 1, "title", "summary", "project_img_url",
+"description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 3);
+acceptprop(N(reviewer1111), N(reviewer1111), N(proposer1111));
+
+create_account_with_resources(N(bigvoter1111), config::system_account_name, core_sym::from_string("10000.0000"), false,
+core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+issue_and_transfer( "bigvoter1111", core_sym::from_string("100000000.0000"),  config::system_account_name );
+BOOST_REQUIRE_EQUAL( success(), stake( "bigvoter1111", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000") ) );
+
+produce_blocks(1);
+
+create_account_with_resources(N(prodvoter111), config::system_account_name, core_sym::from_string("10000.0000"), false,
+core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+issue_and_transfer( "prodvoter111", core_sym::from_string("100000000.0000"),  config::system_account_name );
+BOOST_REQUIRE_EQUAL( success(), stake( "prodvoter111", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000") ) );
+
+produce_blocks(1);
+
+// Make a producer account to create an appropriate producer_vote_weight
+create_account_with_resources(N(prod11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+// prod11111111 registers to be a producer
+BOOST_REQUIRE_EQUAL( success(), regproducer( "prod11111111", 1) );
+
+produce_blocks(1);
+
+// prodvoter111 votes for prod11111111
+BOOST_REQUIRE_EQUAL( success(), vote( N(prodvoter111), { N(prod11111111) } ) );
+
+produce_blocks(1);
+
+// bigvoter1111 votes for prod11111111
+BOOST_REQUIRE_EQUAL( success(), vote( N(bigvoter1111), { N(prod11111111) } ) );
+
+produce_blocks(1);
+
+// Unstake and stake repeatedly
+BOOST_REQUIRE_EQUAL( success(), unstake( "bigvoter1111", "bigvoter1111", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000") ) );
+
+produce_block( fc::days(4) );
+
+BOOST_REQUIRE_EQUAL( success(), stake( "bigvoter1111", core_sym::from_string("15000000.0000"), core_sym::from_string("15000000.0000") ) );
+
+produce_blocks(100);
+
+BOOST_REQUIRE_EQUAL( success(), unstake( "bigvoter1111", "bigvoter1111", core_sym::from_string("15000000.0000"), core_sym::from_string("15000000.0000") ) );
+
+produce_block( fc::days(4) );
+
+BOOST_REQUIRE_EQUAL( success(), stake( "bigvoter1111", core_sym::from_string("15000000.0000"), core_sym::from_string("15000000.0000") ) );
+
+produce_blocks(100);
+
+BOOST_REQUIRE_EQUAL( success(), unstake( "bigvoter1111", "bigvoter1111", core_sym::from_string("15000000.0000"), core_sym::from_string("15000000.0000") ) );
+
+produce_block( fc::days(4) );
+
+BOOST_REQUIRE_EQUAL( success(), stake( "bigvoter1111", core_sym::from_string("15000000.0000"), core_sym::from_string("15000000.0000") ) );
+
+produce_blocks(100);
+
+BOOST_REQUIRE_EQUAL( success(), unstake( "bigvoter1111", "bigvoter1111", core_sym::from_string("15000000.0000"), core_sym::from_string("15000000.0000") ) );
+
+produce_block( fc::days(4) );
+
+BOOST_REQUIRE_EQUAL( success(), stake( "bigvoter1111", core_sym::from_string("34000000.0000"), core_sym::from_string("34000000.0000") ) );
+
+produce_blocks(100);
+
+BOOST_REQUIRE_EQUAL(success(), voteproposal(N(bigvoter1111), N(bigvoter1111), {N(proposer1111)}));
+
+produce_blocks(100);
+
+BOOST_REQUIRE_EQUAL(success(),
+        approve(N(reviewer1111), N(reviewer1111), N(proposer1111)));
+
+} FC_LOG_AND_RETHROW()
+
+
+
 
 BOOST_AUTO_TEST_SUITE_END()
