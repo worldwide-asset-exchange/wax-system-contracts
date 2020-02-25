@@ -776,6 +776,12 @@ core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 issue_and_transfer( "bigvoter1111", core_sym::from_string("100000000.0000"),  config::system_account_name );
 BOOST_REQUIRE_EQUAL( success(), stake( "bigvoter1111", core_sym::from_string("50000.0000"), core_sym::from_string("50000.0000") ) );
 
+create_account_with_resources(N(prodvoter111), config::system_account_name, core_sym::from_string("10000.0000"), false,
+core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+issue_and_transfer( "prodvoter111", core_sym::from_string("100000000.0000"),  config::system_account_name );
+BOOST_REQUIRE_EQUAL( success(), stake( "prodvoter111", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000") ) );
+
 produce_blocks(1);
 
 // Make a producer account to create an appropriate producer_vote_weight
@@ -787,8 +793,8 @@ BOOST_REQUIRE_EQUAL( success(), regproducer( "prod11111111", 1) );
 
 produce_blocks(1);
 
-// bigvoter1111 votes for prod11111111
-BOOST_REQUIRE_EQUAL( success(), vote( N(bigvoter1111), { N(prod11111111) } ) );
+// prodvoter111 votes for prod11111111
+BOOST_REQUIRE_EQUAL( success(), vote( N(prodvoter111), { N(prod11111111) } ) );
 
 produce_blocks(1);
 
