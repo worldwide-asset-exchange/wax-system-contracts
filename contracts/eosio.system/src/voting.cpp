@@ -172,6 +172,10 @@ namespace eosiosystem {
          check( producers.size() == 0, "cannot vote for producers and proxy at same time" );
          check( voter_name != proxy, "cannot proxy to self" );
       } else {
+         if(producers.size() == 0){
+            auto wpsvoter = _wpsvoters.find( voter_name.value );
+            check(wpsvoter->proposals.size() == 0, "unvote worker proposals before unvoting producers");
+         }
          check( producers.size() <= 30, "attempt to vote for too many producers" );
          for( size_t i = 1; i < producers.size(); ++i ) {
             check( producers[i-1] < producers[i], "producer votes must be unique and sorted" );

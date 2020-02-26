@@ -1019,6 +1019,9 @@ BOOST_FIXTURE_TEST_CASE(proposal_stake_unstake_repetition, eosio_wps_tester) try
     BOOST_REQUIRE_EQUAL(success(),
             approve(N(reviewer1111), N(reviewer1111), N(proposer1111)));
 
+    // bigvoter1111 votes for prod11111111
+    BOOST_REQUIRE_EQUAL( success(), vote( N(bigvoter1111), vector<account_name>() ) );
+
 } FC_LOG_AND_RETHROW()
 
 
