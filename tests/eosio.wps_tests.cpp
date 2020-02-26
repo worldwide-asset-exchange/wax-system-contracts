@@ -1023,7 +1023,7 @@ BOOST_FIXTURE_TEST_CASE(proposal_stake_unstake_repetition, eosio_wps_tester) try
     BOOST_REQUIRE_EQUAL( wasm_assert_msg("unvote worker proposals before unvoting producers"), vote( N(bigvoter1111), vector<account_name>() ) );
 
     // bigvoter1111 unvotes proposals
-    BOOST_REQUIRE_EQUAL( success(), voteproposal( N(bigvoter1111), vector<account_name>() ) );
+    BOOST_REQUIRE_EQUAL( success(), voteproposal( N(bigvoter1111), N(bigvoter1111), vector<account_name>() ) );
 
     // bigvoter1111 unvotes prods
     BOOST_REQUIRE_EQUAL( success(), vote( N(bigvoter1111), vector<account_name>() ) );

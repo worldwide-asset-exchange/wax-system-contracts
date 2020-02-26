@@ -174,7 +174,9 @@ namespace eosiosystem {
       } else {
          if(producers.size() == 0){
             auto wpsvoter = _wpsvoters.find( voter_name.value );
-            check(wpsvoter->proposals.size() == 0, "unvote worker proposals before unvoting producers");
+            if(wpsvoter != _wpsvoters.end()) {
+               check(wpsvoter->proposals.size() == 0, "unvote worker proposals before unvoting producers");
+            }
          }
          check( producers.size() <= 30, "attempt to vote for too many producers" );
          for( size_t i = 1; i < producers.size(); ++i ) {
