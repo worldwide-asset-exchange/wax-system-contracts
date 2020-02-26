@@ -613,9 +613,14 @@ BOOST_FIXTURE_TEST_CASE(proposal_vote_claim, eosio_wps_tester) try {
     // bigvoter1111 votes for prod11111111
     BOOST_REQUIRE_EQUAL( success(), vote( N(bigvoter1111), { N(prod11111111) } ) );
 
-    produce_blocks(1);
+    produce_blocks(100);
 
     BOOST_REQUIRE_EQUAL(error("missing authority of smallvoter11"), voteproposal(N(proposer1111), N(smallvoter11), {N(proposer1111)}));
+
+    // smallvoter11 votes for prod11111111
+    BOOST_REQUIRE_EQUAL( success(), vote( N(smallvoter11), { N(prod11111111) } ) );
+
+    produce_blocks(100);
 
     BOOST_REQUIRE_EQUAL(success(), voteproposal(N(smallvoter11), N(smallvoter11), {N(proposer1111)}));
 
@@ -801,11 +806,21 @@ BOOST_FIXTURE_TEST_CASE(proposal_vote_increase_stake, eosio_wps_tester) try {
     // prodvoter111 votes for prod11111111
     BOOST_REQUIRE_EQUAL( success(), vote( N(prodvoter111), { N(prod11111111) } ) );
 
-    produce_blocks(1);
+    produce_blocks(100);
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("You must be voting for a producer in order to vote for worker proposals"),
+            voteproposal(N(bigvoter1111), N(bigvoter1111), {N(proposer1111)}));
+
+    produce_blocks(100);
+
+    // bigvoter1111 votes for prod11111111
+    BOOST_REQUIRE_EQUAL( success(), vote( N(bigvoter1111), { N(prod11111111) } ) );
+
+    produce_blocks(100);
 
     BOOST_REQUIRE_EQUAL(success(), voteproposal(N(bigvoter1111), N(bigvoter1111), {N(proposer1111)}));
 
-    produce_blocks(1);
+    produce_blocks(100);
 
     BOOST_REQUIRE_EQUAL(wasm_assert_msg("Proposal::status is not PROPOSAL_STATUS::FINISHED_VOTING"),
             approve(N(reviewer1111), N(reviewer1111), N(proposer1111)));

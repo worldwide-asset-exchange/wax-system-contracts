@@ -670,6 +670,8 @@ namespace eosiosystem {
             check(false, "Proxies can't vote for worker proposals");
         }
 
+        check(voter->producers.size() > 0, "You must be voting for a producer in order to vote for worker proposals");
+
         std::map<name, std::pair<double, bool /*new*/> > proposal_deltas;
 
         if(wpsvoter != _wpsvoters.end()){
