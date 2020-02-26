@@ -770,7 +770,7 @@ BOOST_FIXTURE_TEST_CASE(proposal_vote_increase_stake, eosio_wps_tester) try {
 
     cross_15_percent_threshold();
 
-    setwpsenv(config::system_account_name, 35, 30, 500, 6);
+    setwpsenv(config::system_account_name, 30, 30, 500, 6);
     regcommittee(config::system_account_name, N(committee111), "categoryX", true);
     regreviewer(N(committee111), N(committee111), N(reviewer1111), "bob", "bob");
     regproposer(N(proposer1111), N(proposer1111), "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin");
