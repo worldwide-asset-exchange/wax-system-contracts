@@ -10,6 +10,20 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+
+## wax-1.7.0-2.0.2
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
+
+BUG FIXES:
+- wps global stake tracking fix
+
+BREAKING CHANGES:
+
 ## wax-1.7.0-2.0.1
 
 BREAKING CHANGES:
