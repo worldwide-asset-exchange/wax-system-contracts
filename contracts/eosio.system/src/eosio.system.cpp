@@ -22,12 +22,14 @@ namespace eosiosystem {
     _proposers(get_self(), get_self().value),
     _proposals(get_self(), get_self().value),
     _committees(get_self(), get_self().value),
-    _reviewers(get_self(), get_self().value)
+    _reviewers(get_self(), get_self().value),
+    _wps_global(get_self(), get_self().value)
    {
       //print( "construct system\n" );
       _gstate  = _global.exists() ? _global.get() : get_default_parameters();
       _gstate2 = _global2.exists() ? _global2.get() : eosio_global_state2{};
       _gstate3 = _global3.exists() ? _global3.get() : eosio_global_state3{};
+      _wps_state = _wps_global.exists() ? _wps_global.get() : wps_global_state{};
    }
 
    eosio_global_state system_contract::get_default_parameters() {
@@ -45,6 +47,7 @@ namespace eosiosystem {
       _global.set( _gstate, get_self() );
       _global2.set( _gstate2, get_self() );
       _global3.set( _gstate3, get_self() );
+      _wps_global.set( _wps_state, get_self() );
    }
 
    void system_contract::setram( uint64_t max_ram_size ) {

@@ -146,8 +146,6 @@ namespace eosiosystem {
         check(itr_proposal != _proposals.end(), "Proposal not found in proposal table");
 
         time_point_sec current_time = current_time_point();
-        wps_env_singleton _wps_env(get_self(), get_self().value);
-        auto wps_env = _wps_env.get();
         auto& proposal = (*itr_proposal);
 
         check(proposal.status == PROPOSAL_STATUS::APPROVED, "Proposal::status is not PROPOSAL_STATUS::APPROVED");
@@ -563,6 +561,12 @@ namespace eosiosystem {
         _wps_env.set( env, _self );
     }
 
+    void system_contract::setwpsstate(double total_stake) {
+        require_auth(get_self());
+        check(total_stake > 0, "total_stake should be more 0");
+        _wps_state.total_stake = total_stake;
+    }
+
     void system_contract::regcommittee(name committeeman, const string& category, bool is_oversight){
         //registration of committee requires contract account permissions
         require_auth(get_self());
@@ -643,13 +647,6 @@ namespace eosiosystem {
         });
     }
 
-    double stake2vote_wps( int64_t staked ) {
-        // From voting.cpp
-        /// TODO subtract 2080 brings the large numbers closer to this decade
-        double weight = int64_t( (current_time_point().sec_since_epoch() - (block_timestamp::block_timestamp_epoch / 1000)) / (seconds_per_day * 7) )  / double( 13 );
-        return double(staked) * std::pow( 2, weight );
-    }
-
     void system_contract::voteproposal( const name& voter_name, const std::vector<name>& proposals ) {
         require_auth( voter_name );
         // vote_stake_updater( voter_name );
@@ -658,6 +655,7 @@ namespace eosiosystem {
 
     void system_contract::update_wps_votes( const name& voter_name, const std::vector<name>& proposals){
         //validate input
+        check( _wps_state.total_stake > 0, "system-wide stake must be greater than 0");
         check( proposals.size() <= 1, "attempt to vote for too many proposals" );
         for( size_t i = 1; i < proposals.size(); ++i ) {
             check( proposals[i-1] != proposals[i], "proposal votes must be unique" );
@@ -672,7 +670,7 @@ namespace eosiosystem {
         check( _gstate.total_activated_stake >= min_activated_stake,
                "cannot update wps votes until the chain is activated (at least 15% of all tokens participate in voting)" );
 
-        auto new_vote_weight = stake2vote_wps( voter->staked );
+        auto new_vote_weight = stake2vote( voter->staked );
         if( voter->is_proxy ) {
             check(false, "Proxies can't vote for worker proposals");
         }
@@ -721,9 +719,8 @@ namespace eosiosystem {
                             p.total_votes = 0;
                         }
                     });
-
-                    auto total_activated_vote = stake2vote_wps(_gstate.total_activated_stake);
-                    if((*pitr).total_votes > (double) (total_activated_vote / ((double) (100/wps_env.total_voting_percent)))){
+                    double total_activated_vote = stake2vote(_wps_state.total_stake);
+                    if((*pitr).total_votes > total_activated_vote * double(wps_env.total_voting_percent)/100.0){
                         if((*pitr).status == PROPOSAL_STATUS::ON_VOTE){
                             _proposals.modify( pitr, same_payer, [&]( auto& p ) {
                                 p.status = PROPOSAL_STATUS::FINISHED_VOTING;
