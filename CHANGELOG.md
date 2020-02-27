@@ -7,9 +7,9 @@ BREAKING CHANGES:
 FEATURES:
 
 IMPROVEMENTS:
+- Deployment script
 
 BUG FIXES:
-
 
 ## wax-1.7.0-2.0.2
 
