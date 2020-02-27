@@ -41,7 +41,8 @@ make clean # if this fails, do `sudo make clean`
 rm $DEPLOYMENT_FILE
 make dev-docker-all
 $CLEOS set contract eosio ./build/contracts/eosio.system/ -x 604800 -s -d --json > $DEPLOYMENT_FILE
-$EOSC multisig cancel $PROPOSER_ACCOUNT $PROPOSAL_NAME $PROPOSER_ACCOUNT --vault-file $TEMP_VAULT_FILE
+$EOSC multisig cancel $PROPOSER_ACCOUNT $PROPOSAL_NAME $PROPOSER_ACCOUNT --vault-file $TEMP_VAULT_FILE || echo "Proposal did not already exist - excellent"
 $EOSC multisig propose $PROPOSER_ACCOUNT $PROPOSAL_NAME $DEPLOYMENT_FILE --request admin.wax --with-subaccounts --vault-file $TEMP_VAULT_FILE
 echo "use this command to review the multisig proposal: '$EOSC multisig review $PROPOSER_ACCOUNT $PROPOSAL_NAME'"
-echo "use this command to execute the multisig proposal: '$EOSC multisig exec $PROPOSER_ACCOUNT $PROPOSAL_NAME $PROPOSER_ACCOUNT' (You will need to create a new vault for your executer account 'eosc vault creaate --import')"
+echo "use this command to execute the multisig proposal: '$EOSC multisig exec $PROPOSER_ACCOUNT $PROPOSAL_NAME $PROPOSER_ACCOUNT' (You will probably need to create a vault for your proposer account 'eosc vault create --import')"
+echo "use this command to cancel the multisig proposal: '$EOSC multisig cancel $PROPOSER_ACCOUNT $PROPOSAL_NAME $PROPOSER_ACCOUNT' (You will probably need to create a vault for your proposer account 'eosc vault create --import')"
