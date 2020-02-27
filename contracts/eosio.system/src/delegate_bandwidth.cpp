@@ -341,6 +341,8 @@ namespace eosiosystem {
          }
       }
 
+      _wps_state.total_stake += (stake_net_delta.amount + stake_cpu_delta.amount);
+
       update_voting_power( from, stake_net_delta + stake_cpu_delta );
    }
 
