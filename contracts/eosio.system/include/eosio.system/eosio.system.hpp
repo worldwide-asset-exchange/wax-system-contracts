@@ -377,6 +377,14 @@ namespace eosiosystem {
     };
 
     /**
+     * Defines new global state parameters needed for wps in particular
+     */
+    struct [[eosio::table("wpsstate"), eosio::contract("eosio.system")]] wps_global_state {
+        double total_stake = 0;
+        EOSLIB_SERIALIZE( wps_global_state, (total_stake) )
+    };
+
+    /**
     * Proposers table
     *
     * @details The proposers table stores all WPS proposers' information
@@ -414,6 +422,11 @@ namespace eosiosystem {
     * @details The WPS environment singleton holds configurable variables for the system
     */
     typedef eosio::singleton< "wpsglobal"_n, wpsenv > wps_env_singleton;
+
+    /**
+     * Global wps state singleton
+     */
+    typedef eosio::singleton< "wpsstate"_n, wps_global_state > wps_global_state_singleton;
 
    /**
     * Voters table
@@ -552,6 +565,8 @@ namespace eosiosystem {
          proposal_table          _proposals;
          committee_table          _committees;
          reviewer_table          _reviewers;
+         wps_global_state_singleton _wps_global;
+         wps_global_state        _wps_state;
 
       public:
          static constexpr eosio::name active_permission{"active"_n};
@@ -1096,6 +1111,9 @@ namespace eosiosystem {
        void setwpsenv(uint32_t total_voting_percent, uint32_t duration_of_voting, uint32_t max_duration_of_funding, uint32_t total_iteration_of_funding);
 
        [[eosio::action]]
+       void setwpsstate(double total_stake);
+
+       [[eosio::action]]
        void regcommittee(name committeeman, const string& category, bool is_oversight);
 
        [[eosio::action]]
@@ -1158,6 +1176,7 @@ namespace eosiosystem {
        using rmvreject_action = eosio::action_wrapper<"rmvreject"_n, &system_contract::rmvreject>;
        using rmvcompleted_action = eosio::action_wrapper<"rmvcompleted"_n, &system_contract::rmvcompleted>;
        using setwpsenv_action = eosio::action_wrapper<"setwpsenv"_n, &system_contract::setwpsenv>;
+       using setwpsstate_action = eosio::action_wrapper<"setwpsstate"_n, &system_contract::setwpsstate>;
        using rejectfund_action = eosio::action_wrapper<"rejectfund"_n, &system_contract::rejectfund>;
        using voteproposal_action = eosio::action_wrapper<"voteproposal"_n, &system_contract::voteproposal>;
 
@@ -1236,6 +1255,8 @@ namespace eosiosystem {
                system_contract* this_contract;
          };
    };
+
+   double stake2vote( int64_t staked );
 
    /** @}*/ // end of @defgroup eosiosystem eosio.system
 } /// eosiosystem
