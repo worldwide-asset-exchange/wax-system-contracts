@@ -13,6 +13,7 @@
 #include <cmath>
 #include <numeric>
 
+
 namespace {
    uint64_t to_int(const eosio::checksum256& value) {
       auto byte_array = value.extract_as_byte_array();
@@ -185,23 +186,24 @@ namespace eosiosystem {
          return;
       }
 
-      bool select_a_standby = is_it_time_to_select_a_standby();
+      int64_t standby_index = -1;
 
-      uint64_t previous_block_hash_int = to_int(previous_block_hash);
-      const uint64_t standby_index = (_greward.random_standby_selection ? previous_block_hash_int : _greward.last_standby_index + 1) % max_standbys;
-
-      if (select_a_standby) {
+      if (is_it_time_to_select_a_standby()) {
          prod_vec_t standbys; standbys.reserve(max_standbys);
 
          // Pick the current 36 standbys
          select_producers_into(21, max_standbys, reward_type::standby, standbys);
 
-         // sort by producer name, if both are equal it will sort by location
-         std::sort( standbys.begin(), standbys.end() );
+         if(standbys.size() > 0) {
+           // sort by producer name, if both are equal it will sort by location
+           std::sort( standbys.begin(), standbys.end() );
 
-         if (standbys.size() > standby_index) {
-            // Add the selected standby as an elected top producer.
-            top_producers[previous_block_hash_int % top_producers.size()] = standbys[standby_index];
+           uint64_t previous_block_hash_int = to_int(previous_block_hash);
+
+           standby_index = (_greward.random_standby_selection ? previous_block_hash_int : _greward.last_standby_index + 1) % standbys.size();
+
+           // Add the selected standby as an elected top producer.
+           top_producers[previous_block_hash_int % top_producers.size()] = standbys[standby_index];
          }
       }
 
@@ -216,7 +218,7 @@ namespace eosiosystem {
 
       // Proposes a new list
       if (auto version = set_proposed_producers(producers); version.has_value()) {
-         if(select_a_standby) {
+         if(standby_index >= 0) {
            _greward.last_standby_index = standby_index;
          }
          _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );

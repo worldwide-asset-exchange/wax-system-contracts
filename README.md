@@ -39,7 +39,7 @@ After build:
 Run interactive tests:
 1. Start the interactive shell: `make dev-docker-start`
 1. Run all the tests: `make test`
-1. Run a single test: `make compile && ./build/tests/unit_test --log_level=all --run_test=eosio_system_tests/voter_pay_performance_rewards`
+1. Run a single test: `make compile && ./build/tests/unit_test --log_level=all --run_test=eosio_system_tests/voter_pay_performance_rewards_misc_scenarios_random`
 
 ### License
 [MIT](https://github.com/worldwide-asset-exchange/wax-eos-contracts/blob/master/LICENSE)
