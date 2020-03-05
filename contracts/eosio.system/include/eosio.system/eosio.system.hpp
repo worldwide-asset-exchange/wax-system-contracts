@@ -245,8 +245,6 @@ namespace eosiosystem {
       std::map<uint64_t /*version*/,     top_prod_vec_t> proposed_top_producers;
       top_prod_vec_t current_producers;
 
-      uint8_t current_hour = 0;
-
       uint32_t producer_blocks_performance_window = 30 * 21 * 12 / 0.99; // default approx 1 hour worth of blocks
       uint32_t standby_blocks_performance_window = 6 * 36 * 12 / 0.01; // default approx 36 hours worth of blocks
       bool random_standby_selection = true; // turn randomized standby selection on/off
@@ -288,7 +286,7 @@ namespace eosiosystem {
       }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( eosio_global_reward, (activated)(counters)(proposed_top_producers)(current_producers)(current_hour)(producer_blocks_performance_window)(standby_blocks_performance_window)(random_standby_selection)(last_standby_index)(rolling_producer_performances))
+      EOSLIB_SERIALIZE( eosio_global_reward, (activated)(counters)(proposed_top_producers)(current_producers)(producer_blocks_performance_window)(standby_blocks_performance_window)(random_standby_selection)(last_standby_index)(rolling_producer_performances))
    };
 
    /**
