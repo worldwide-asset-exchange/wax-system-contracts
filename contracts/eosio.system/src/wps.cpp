@@ -90,9 +90,6 @@ namespace eosiosystem {
         check(img_url.size() > 0, "not a valid image URL");
         check(bio.size() > 0, "bio should be more than 0 characters long");
         check(country.size() > 0, "country name should be more than 0 characters long");
-        check(telegram.size() > 4, "not a valid Telegram username");
-        check(website.size() > 0, "not a valid website URL");
-        check(linkedin.size() > 0, "not a valid linkedin URL");
 
         //verify that the inputs aren't too long
         check(first_name.size() < 128, "first name should be shorter than 128 characters.");
