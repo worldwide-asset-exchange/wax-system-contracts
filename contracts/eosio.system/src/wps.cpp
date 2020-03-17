@@ -161,7 +161,7 @@ namespace eosiosystem {
         eosio::action(
                 eosio::permission_level{get_self() , "active"_n },
                 "eosio.token"_n, "transfer"_n,
-                std::make_tuple( get_self(), account, transfer_amount, std::string("Your worker proposal has been approved."))
+                std::make_tuple( "eosio.saving"_n, account, transfer_amount, std::string("Your worker proposal has been approved."))
         ).send();
 
         _proposers.modify(itr, same_payer, [&](auto& _proposer){
@@ -516,6 +516,29 @@ namespace eosiosystem {
         check((*itr_proposal).committee==(*itr).committee, "Reviewer is not part of this proposal's responsible committee");
 
         _proposals.erase(itr_proposal);
+
+        for (auto wpsvoter = _wpsvoters.begin(); wpsvoter != _wpsvoters.end(); wpsvoter++){
+            std::vector<name> votes = wpsvoter->proposals;
+            auto it = votes.begin();
+            if(votes.begin() != votes.end()){
+                int count = 0;
+                while(it != votes.end()){
+                    if(*it == proposer){
+                        it = votes.erase(it);
+                        count++;
+                        break;
+                    }
+                    else{
+                        ++it;
+                    }
+                }
+                if(count != 0){
+                    _wpsvoters.modify(wpsvoter, same_payer, [&](auto& wv){
+                        wv.proposals = votes;
+                    });
+                }
+            }
+        }
     }
 
     void system_contract::rmvcompleted(name reviewer, name proposer){
@@ -532,6 +555,29 @@ namespace eosiosystem {
         check((*itr_proposal).committee==(*itr).committee, "Reviewer is not part of this proposal's responsible committee");
 
         _proposals.erase(itr_proposal);
+
+        for (auto wpsvoter = _wpsvoters.begin(); wpsvoter != _wpsvoters.end(); wpsvoter++){
+            std::vector<name> votes = wpsvoter->proposals;
+            auto it = votes.begin();
+            if(votes.begin() != votes.end()){
+                int count = 0;
+                while(it != votes.end()){
+                    if(*it == proposer){
+                        it = votes.erase(it);
+                        count++;
+                        break;
+                    }
+                    else{
+                        ++it;
+                    }
+                }
+                if(count != 0){
+                    _wpsvoters.modify(wpsvoter, same_payer, [&](auto& wv){
+                        wv.proposals = votes;
+                    });
+                }
+            }
+        }
     }
 
     void system_contract::setwpsenv(
@@ -653,9 +699,14 @@ namespace eosiosystem {
     void system_contract::update_wps_votes( const name& voter_name, const std::vector<name>& proposals){
         //validate input
         check( _wps_state.total_stake > 0, "system-wide stake must be greater than 0");
-        check( proposals.size() <= 1, "attempt to vote for too many proposals" );
-        for( size_t i = 1; i < proposals.size(); ++i ) {
-            check( proposals[i-1] != proposals[i], "proposal votes must be unique" );
+        check( proposals.size() <= 30, "attempt to vote for too many proposals" );
+
+        for( size_t i = 0; i < proposals.size(); ++i ) {
+            for( size_t j = 0; j < proposals.size(); ++j ){
+                if(i != j){
+                    check( proposals[i] != proposals[j], "proposal votes must be unique" );
+                }
+            }
         }
 
         auto voter = _voters.find( voter_name.value );
