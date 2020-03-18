@@ -345,17 +345,6 @@ namespace eosiosystem {
         });
     }
 
-    void system_contract::rmvproposal(name proposer){
-        // needs authority of the proposers's account
-        require_auth(proposer);
-
-        // verify that the account already exists in the proposer table
-        auto itr = _proposals.find(proposer.value);
-        check(itr != _proposals.end(), "Account not found in proposal table");
-
-        _proposals.erase(itr);
-    }
-
     void system_contract::regreviewer(name committee, name reviewer, const string& first_name, const string& last_name){
         //Require permission of committee account
         require_auth(committee);

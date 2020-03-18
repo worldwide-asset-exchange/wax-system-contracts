@@ -1081,9 +1081,6 @@ namespace eosiosystem {
        );
 
        [[eosio::action]]
-       void rmvproposal(name proposer);
-
-       [[eosio::action]]
        void regreviewer(name committee, name reviewer, const string& first_name, const string& last_name);
 
        [[eosio::action]]
@@ -1165,7 +1162,6 @@ namespace eosiosystem {
        using rmvproposer_action = eosio::action_wrapper<"rmvproposer"_n, &system_contract::rmvproposer>;
        using regproposal_action = eosio::action_wrapper<"regproposal"_n, &system_contract::regproposal>;
        using editproposal_action = eosio::action_wrapper<"editproposal"_n, &system_contract::editproposal>;
-       using rmvproposal_action = eosio::action_wrapper<"rmvproposal"_n, &system_contract::rmvproposal>;
        using claimfunds_action = eosio::action_wrapper<"claimfunds"_n, &system_contract::claimfunds>;
        using regreviewer_action = eosio::action_wrapper<"regreviewer"_n, &system_contract::regreviewer>;
        using editreviewer_action = eosio::action_wrapper<"editreviewer"_n, &system_contract::editreviewer>;
