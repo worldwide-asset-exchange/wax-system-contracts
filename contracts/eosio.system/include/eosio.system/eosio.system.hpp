@@ -1108,6 +1108,9 @@ namespace eosiosystem {
        void rmvcompleted(name reviewer, name proposer);
 
        [[eosio::action]]
+       void cleanvotes(name reviewer, name proposer, uint64_t begin, uint64_t end);
+
+       [[eosio::action]]
        void setwpsenv(uint32_t total_voting_percent, uint32_t duration_of_voting, uint32_t max_duration_of_funding, uint32_t total_iteration_of_funding);
 
        [[eosio::action]]
@@ -1175,6 +1178,7 @@ namespace eosiosystem {
        using rmvcommittee_action = eosio::action_wrapper<"rmvcommittee"_n, &system_contract::rmvcommittee>;
        using rmvreject_action = eosio::action_wrapper<"rmvreject"_n, &system_contract::rmvreject>;
        using rmvcompleted_action = eosio::action_wrapper<"rmvcompleted"_n, &system_contract::rmvcompleted>;
+       using cleanvotes_action = eosio::action_wrapper<"cleanvotes"_n, &system_contract::cleanvotes>;
        using setwpsenv_action = eosio::action_wrapper<"setwpsenv"_n, &system_contract::setwpsenv>;
        using setwpsstate_action = eosio::action_wrapper<"setwpsstate"_n, &system_contract::setwpsstate>;
        using rejectfund_action = eosio::action_wrapper<"rejectfund"_n, &system_contract::rejectfund>;

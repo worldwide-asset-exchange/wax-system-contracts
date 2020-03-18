@@ -159,9 +159,9 @@ namespace eosiosystem {
 
         //inline action transfer, send funds to proposer
         eosio::action(
-                eosio::permission_level{get_self() , "active"_n },
+                eosio::permission_level{saving_account, active_permission },
                 "eosio.token"_n, "transfer"_n,
-                std::make_tuple( "eosio.saving"_n, account, transfer_amount, std::string("Your worker proposal has been approved."))
+                std::make_tuple( saving_account, account, transfer_amount, std::string("Your worker proposal has been approved."))
         ).send();
 
         _proposers.modify(itr, same_payer, [&](auto& _proposer){
@@ -516,29 +516,6 @@ namespace eosiosystem {
         check((*itr_proposal).committee==(*itr).committee, "Reviewer is not part of this proposal's responsible committee");
 
         _proposals.erase(itr_proposal);
-
-        for (auto wpsvoter = _wpsvoters.begin(); wpsvoter != _wpsvoters.end(); wpsvoter++){
-            std::vector<name> votes = wpsvoter->proposals;
-            auto it = votes.begin();
-            if(votes.begin() != votes.end()){
-                int count = 0;
-                while(it != votes.end()){
-                    if(*it == proposer){
-                        it = votes.erase(it);
-                        count++;
-                        break;
-                    }
-                    else{
-                        ++it;
-                    }
-                }
-                if(count != 0){
-                    _wpsvoters.modify(wpsvoter, same_payer, [&](auto& wv){
-                        wv.proposals = votes;
-                    });
-                }
-            }
-        }
     }
 
     void system_contract::rmvcompleted(name reviewer, name proposer){
@@ -555,8 +532,19 @@ namespace eosiosystem {
         check((*itr_proposal).committee==(*itr).committee, "Reviewer is not part of this proposal's responsible committee");
 
         _proposals.erase(itr_proposal);
+    }
 
-        for (auto wpsvoter = _wpsvoters.begin(); wpsvoter != _wpsvoters.end(); wpsvoter++){
+    void system_contract::cleanvotes(name reviewer, name proposer, uint64_t begin, uint64_t end){
+        require_auth(reviewer);
+
+        check(is_account(proposer), "Proposal creator does not exist");
+
+        auto itr = _reviewers.find(reviewer.value);
+        check(itr != _reviewers.end(), "Account not found in reviewers table");
+
+        check(end > begin, "Invalid range");
+
+        for (auto wpsvoter = _wpsvoters.begin() + begin; wpsvoter != _wpsvoters.begin() + end; wpsvoter++){
             std::vector<name> votes = wpsvoter->proposals;
             auto it = votes.begin();
             if(votes.begin() != votes.end()){
