@@ -544,7 +544,7 @@ namespace eosiosystem {
 
         check(end > begin, "Invalid range");
 
-        for (auto wpsvoter = _wpsvoters.begin() + begin; wpsvoter != _wpsvoters.begin() + end; wpsvoter++){
+        for (auto wpsvoter = std::advance(_wpsvoters.begin(), begin); wpsvoter != std::advance(_wpsvoters.begin(), end); wpsvoter++){
             std::vector<name> votes = wpsvoter->proposals;
             auto it = votes.begin();
             if(votes.begin() != votes.end()){
