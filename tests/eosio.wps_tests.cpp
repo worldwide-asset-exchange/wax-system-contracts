@@ -613,7 +613,8 @@ core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
     // bigvoter1111 votes for prod11111111
     BOOST_REQUIRE_EQUAL( success(), vote( N(bigvoter1111), { N(prod11111111) } ) );
 
-    produce_blocks(1);
+    produce_block(fc::days(10));
+    BOOST_REQUIRE_EQUAL( success(), push_action(N(prod11111111), N(claimrewards), mvo()("owner", "prod11111111")) );
 
     BOOST_REQUIRE_EQUAL(error("missing authority of smallvoter11"), voteproposal(N(proposer1111), N(smallvoter11), {N(proposer1111)}));
 
@@ -723,7 +724,8 @@ BOOST_FIXTURE_TEST_CASE(proposal_reject_fund, eosio_wps_tester) try {
     // bigvoter1111 votes for prod11111111
     BOOST_REQUIRE_EQUAL( success(), vote( N(bigvoter1111), { N(prod11111111) } ) );
 
-    produce_blocks(1);
+    produce_block(fc::days(10));
+    BOOST_REQUIRE_EQUAL( success(), push_action(N(prod11111111), N(claimrewards), mvo()("owner", "prod11111111")) );
 
     BOOST_REQUIRE_EQUAL(success(), voteproposal(N(bigvoter1111), N(bigvoter1111), {N(proposer1111)}));
 
