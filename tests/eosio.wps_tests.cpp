@@ -212,16 +212,6 @@ public:
         );
     }
 
-    action_result rmvproposal(name sender,
-                              name proposer) {
-        return push_action(
-                sender,
-                N(rmvproposal),
-                mvo()
-                        ("proposer", proposer)
-        );
-    }
-
     action_result setwpsenv(name sender, uint32_t total_voting_percent, uint32_t duration_of_voting,
                             uint32_t max_duration_of_funding, uint32_t total_iteration_of_funding) {
         return push_action(
@@ -501,10 +491,6 @@ proposal = get_proposal(N(proposer1111));
 
 BOOST_REQUIRE_EQUAL(proposal["title"], "First proposal");
 
-BOOST_REQUIRE_EQUAL(wasm_assert_msg("Account not found in proposal table"), rmvproposal(N(randomuser11), N(randomuser11)));
-
-BOOST_REQUIRE_EQUAL(success(), rmvproposal(N(proposer1111), N(proposer1111)));
-
 } FC_LOG_AND_RETHROW()
 
 
@@ -516,6 +502,8 @@ create_account_with_resources(N(reviewer1111), config::system_account_name, core
 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 create_account_with_resources(N(proposer1111), config::system_account_name, core_sym::from_string("100.0000"), false,
 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+create_account_with_resources(N(proposer2222), config::system_account_name, core_sym::from_string("100.0000"), false,
+core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 create_account_with_resources(N(randomuser11), config::system_account_name, core_sym::from_string("100.0000"), false,
 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
@@ -523,8 +511,11 @@ setwpsenv(config::system_account_name, 5, 30, 500, 6);
 regcommittee(config::system_account_name, N(committee111), "categoryX", true);
 regreviewer(N(committee111), N(committee111), N(reviewer1111), "bob", "bob");
 regproposer(N(proposer1111), N(proposer1111), "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin");
+regproposer(N(proposer1111), N(proposer2222), "user", "two", "img_url", "bio", "country", "telegram", "website", "linkedin");
 regproposal(N(proposer1111), N(proposer1111), N(committee111), 1, "title", "summary", "project_img_url",
 "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 3);
+regproposal(N(proposer2222), N(proposer2222), N(committee111), 1, "title", "summary", "project_img_url",
+"description", "roadmap", 30, {"user 2"}, core_sym::from_string("9000.0000"), 3);
 
 BOOST_REQUIRE_EQUAL(error("missing authority of reviewer1111"),
         acceptprop(N(proposer1111), N(reviewer1111), N(proposer1111)));
@@ -547,20 +538,13 @@ auto proposal = get_proposal(N(proposer1111));
 
 BOOST_REQUIRE_EQUAL(proposal["status"], 2);
 
-BOOST_REQUIRE_EQUAL(success(), rmvproposal(N(proposer1111), N(proposer1111)));
+produce_blocks(1);
+
+BOOST_REQUIRE_EQUAL(success(), acceptprop(N(reviewer1111), N(reviewer1111), N(proposer2222)));
 
 produce_blocks(1);
 
-regproposal(N(proposer1111), N(proposer1111), N(committee111), 1, "title", "summary", "project_img_url",
-"description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 3);
-
-produce_blocks(1);
-
-BOOST_REQUIRE_EQUAL(success(), acceptprop(N(reviewer1111), N(reviewer1111), N(proposer1111)));
-
-produce_blocks(1);
-
-proposal = get_proposal(N(proposer1111));
+proposal = get_proposal(N(proposer2222));
 
 BOOST_REQUIRE_EQUAL(proposal["status"], 3);
 
