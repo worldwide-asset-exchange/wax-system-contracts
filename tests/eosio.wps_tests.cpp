@@ -307,6 +307,18 @@ public:
                 ("producers", producers));
     }
     
+    action_result cleanvotes(name sender, name reviewer, name proposer, uint64_t begin, uint64_t end) {
+        return push_action(
+                sender,
+                N(cleanvotes),
+                mvo()
+                        ("reviewer", reviewer)
+                        ("proposer", proposer)
+                        ("begin", begin)
+                        ("end", end)
+        );
+    }
+
     fc::variant get_committee(const account_name& act) {
         vector<char> data = get_row_by_account(config::system_account_name, config::system_account_name, N(committees), act);
         return data.empty() ? fc::variant() : abi_ser.binary_to_variant("committee", data, abi_serializer_max_time);
@@ -325,6 +337,11 @@ public:
     fc::variant get_proposal(const account_name& act) {
         vector<char> data = get_row_by_account(config::system_account_name, config::system_account_name, N(proposals), act);
         return data.empty() ? fc::variant() : abi_ser.binary_to_variant("proposal", data, abi_serializer_max_time);
+    }
+
+    fc::variant get_wpsvoter(const account_name& act) {
+        vector<char> data = get_row_by_account(config::system_account_name, config::system_account_name, N(wpsvoters), act);
+        return data.empty() ? fc::variant() : abi_ser.binary_to_variant("wps_voter", data, abi_serializer_max_time);
     }
 };
 
@@ -511,11 +528,10 @@ setwpsenv(config::system_account_name, 5, 30, 500, 6);
 regcommittee(config::system_account_name, N(committee111), "categoryX", true);
 regreviewer(N(committee111), N(committee111), N(reviewer1111), "bob", "bob");
 regproposer(N(proposer1111), N(proposer1111), "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin");
-regproposer(N(proposer1111), N(proposer2222), "user", "two", "img_url", "bio", "country", "telegram", "website", "linkedin");
+regproposer(N(proposer2222), N(proposer2222), "user", "two", "img_url", "bio", "country", "telegram", "website", "linkedin");
 regproposal(N(proposer1111), N(proposer1111), N(committee111), 1, "title", "summary", "project_img_url",
 "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 3);
-regproposal(N(proposer2222), N(proposer2222), N(committee111), 1, "title", "summary", "project_img_url",
-"description", "roadmap", 30, {"user 2"}, core_sym::from_string("9000.0000"), 3);
+regproposal(N(proposer2222), N(proposer2222), N(committee111), 1, "title", "summary", "project_img_url", "description", "roadmap", 30, {"user 2"}, core_sym::from_string("9000.0000"), 3);
 
 BOOST_REQUIRE_EQUAL(error("missing authority of reviewer1111"),
         acceptprop(N(proposer1111), N(reviewer1111), N(proposer1111)));
@@ -978,6 +994,109 @@ BOOST_FIXTURE_TEST_CASE(proposal_stake_unstake_repetition, eosio_wps_tester) try
     BOOST_REQUIRE_EQUAL(success(),
             approve(N(reviewer1111), N(reviewer1111), N(proposer1111)));
 
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(proposal_cleanvotes, eosio_wps_tester) try {
+
+    create_account_with_resources(N(committee111), config::system_account_name, core_sym::from_string("100.0000"), false,
+    core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+    create_account_with_resources(N(reviewer1111), config::system_account_name, core_sym::from_string("100.0000"), false,
+    core_sym::from_string("10.0000"), core_sym::from_string("10000.0000"));
+    create_account_with_resources(N(proposer1111), config::system_account_name, core_sym::from_string("100.0000"), false,
+    core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+    cross_15_percent_threshold();
+
+    setwpsenv(config::system_account_name, 35, 30, 500, 6);
+    regcommittee(config::system_account_name, N(committee111), "categoryX", true);
+    regreviewer(N(committee111), N(committee111), N(reviewer1111), "bob", "bob");
+    regproposer(N(proposer1111), N(proposer1111), "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin");
+    regproposal(N(proposer1111), N(proposer1111), N(committee111), 1, "title", "summary", "project_img_url",
+    "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 3);
+    acceptprop(N(reviewer1111), N(reviewer1111), N(proposer1111));
+
+
+    create_account_with_resources(N(voter1111111), config::system_account_name, core_sym::from_string("10000.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+    create_account_with_resources(N(voter2222222), config::system_account_name, core_sym::from_string("10000.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+    create_account_with_resources(N(voter3333333), config::system_account_name, core_sym::from_string("10000.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+    issue_and_transfer( "voter1111111", core_sym::from_string("100000000.0000"),  config::system_account_name );
+    BOOST_REQUIRE_EQUAL( success(), stake( "voter1111111", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000") ) );
+
+    issue_and_transfer( "voter2222222", core_sym::from_string("100000000.0000"),  config::system_account_name );
+    BOOST_REQUIRE_EQUAL( success(), stake( "voter2222222", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000") ) );
+
+    issue_and_transfer( "voter3333333", core_sym::from_string("100000000.0000"),  config::system_account_name );
+    BOOST_REQUIRE_EQUAL( success(), stake( "voter3333333", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000") ) );
+
+    // Make a producer account to create an appropriate producer_vote_weight
+    create_account_with_resources(N(prod11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+    core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+    // prod11111111 registers to be a producer
+    BOOST_REQUIRE_EQUAL( success(), regproducer( "prod11111111", 1) );
+
+    BOOST_REQUIRE_EQUAL(success(), voteproposal(N(voter1111111), N(voter1111111), {N(proposer1111)}));
+    BOOST_REQUIRE_EQUAL(success(), voteproposal(N(voter2222222), N(voter2222222), {N(proposer1111)}));
+    BOOST_REQUIRE_EQUAL(success(), voteproposal(N(voter3333333), N(voter3333333), {N(proposer1111)}));
+
+
+    auto voter1111111 = get_wpsvoter(N(voter1111111));
+    auto voter2222222 = get_wpsvoter(N(voter2222222));
+    auto voter3333333 = get_wpsvoter(N(voter3333333));
+
+    BOOST_REQUIRE_EQUAL(voter1111111["proposals"].size(), 1);
+    BOOST_REQUIRE_EQUAL(voter2222222["proposals"].size(), 1);
+    BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 1);
+
+    produce_blocks(1);
+
+    BOOST_REQUIRE_EQUAL(error("missing authority of reviewer1111"), cleanvotes(N(proposer1111), N(reviewer1111), N(proposer1111), 0, 1));
+    BOOST_REQUIRE_EQUAL(success(), cleanvotes(N(reviewer1111), N(reviewer1111), N(proposer1111), 0, 1));
+
+    voter1111111 = get_wpsvoter(N(voter1111111));
+    voter2222222 = get_wpsvoter(N(voter2222222));
+    voter3333333 = get_wpsvoter(N(voter3333333));
+
+    BOOST_REQUIRE_EQUAL(voter1111111["proposals"].size(), 0);
+    BOOST_REQUIRE_EQUAL(voter2222222["proposals"].size(), 1);
+    BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 1);
+
+    produce_blocks(1);
+
+    BOOST_REQUIRE_EQUAL(success(), cleanvotes(N(reviewer1111), N(reviewer1111), N(proposer1111), 1, 2));
+
+    voter1111111 = get_wpsvoter(N(voter1111111));
+    voter2222222 = get_wpsvoter(N(voter2222222));
+    voter3333333 = get_wpsvoter(N(voter3333333));
+
+    BOOST_REQUIRE_EQUAL(voter1111111["proposals"].size(), 0);
+    BOOST_REQUIRE_EQUAL(voter2222222["proposals"].size(), 0);
+    BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 1);
+
+    produce_blocks(1);
+
+    BOOST_REQUIRE_EQUAL(success(), cleanvotes(N(reviewer1111), N(reviewer1111), N(proposer1111), 0, 2));
+
+    voter1111111 = get_wpsvoter(N(voter1111111));
+    voter2222222 = get_wpsvoter(N(voter2222222));
+    voter3333333 = get_wpsvoter(N(voter3333333));
+
+    BOOST_REQUIRE_EQUAL(voter1111111["proposals"].size(), 0);
+    BOOST_REQUIRE_EQUAL(voter2222222["proposals"].size(), 0);
+    BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 1);
+
+    produce_blocks(1);
+
+    BOOST_REQUIRE_EQUAL(success(), cleanvotes(N(reviewer1111), N(reviewer1111), N(proposer1111), 2, 3));
+
+    voter1111111 = get_wpsvoter(N(voter1111111));
+    voter2222222 = get_wpsvoter(N(voter2222222));
+    voter3333333 = get_wpsvoter(N(voter3333333));
+
+    BOOST_REQUIRE_EQUAL(voter1111111["proposals"].size(), 0);
+    BOOST_REQUIRE_EQUAL(voter2222222["proposals"].size(), 0);
+    BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 0);
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
