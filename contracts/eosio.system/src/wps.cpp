@@ -544,9 +544,7 @@ namespace eosiosystem {
                         count++;
                         break;
                     }
-                    else{
-                        ++it;
-                    }
+                    ++it;
                 }
                 if(count != 0){
                     _wpsvoters.modify(wpsvoter, same_payer, [&](auto& wv){
