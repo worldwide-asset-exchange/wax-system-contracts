@@ -730,7 +730,7 @@ public:
       time_point gbm_final_time = gbm_initial_time + microseconds(useconds_in_gbm_period);
       const auto unstake_time = std::min(control->head_block_time(), gbm_final_time);
       const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
-      return to_tokens + (to_tokens / 5) * 2 * (delta_time_usec / double(useconds_in_gbm_period));
+      return to_tokens + (to_tokens / 3) * 2 * (delta_time_usec / double(useconds_in_gbm_period));
    }
 
    asset get_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {

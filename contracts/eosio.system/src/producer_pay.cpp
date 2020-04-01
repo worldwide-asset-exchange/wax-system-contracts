@@ -74,8 +74,8 @@ namespace eosiosystem {
          const auto unstake_time = std::min(current_time_point(), gbm_final_time);
          const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
          auto new_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
-         // needs to be 1/2 Savings, 1/5 Voters, GBM receives a linearly deflating share over three years
-         auto to_voters        = new_tokens / 5;
+         // needs to be 1/3 Savings, 1/3 Voters, 1/3 producers, GBM receives a linearly deflating share over three years
+         auto to_voters        = new_tokens / 3;
          auto to_per_block_pay = to_voters;
          auto to_savings       = new_tokens - (to_voters + to_per_block_pay);
          auto to_gbm           = to_voters * 2 * (delta_time_usec / double(useconds_in_gbm_period));
