@@ -8,6 +8,7 @@ FEATURES:
 
 IMPROVEMENTS:
 - Deployment script
+- 5% to 3% yearly inflation
 
 BUG FIXES:
 
