@@ -40,12 +40,12 @@ namespace eosiosystem {
          update_producer_reward_status(schedule_version);
 
          // Counts blocks according to producer type
-         if (auto it = _rewards.find( producer.value ); it != _rewards.end() ) {
-            const reward_type producer_type = it->get_current_type();
+         if ( const auto it = _rewards.find( producer.value ); it != _rewards.end() ) {
+            const auto producer_type = it->get_current_type();
             _greward.new_unpaid_block(producer_type, timestamp);
 
             _rewards.modify( it, same_payer, [&](auto& rec ) {
-              uint32_t blocks_performance_window = producer_type == reward_type::producer
+              const uint32_t blocks_performance_window = producer_type == reward_type::producer
                   ? _greward.producer_blocks_performance_window
                   : _greward.standby_blocks_performance_window;
                rec.track_block(timestamp, blocks_performance_window);
@@ -57,8 +57,7 @@ namespace eosiosystem {
          * At startup the initial producer may not be one that is registered / elected
          * and therefore there may be no producer object for them.
          */
-         auto prod = _producers.find( producer.value );
-         if ( prod != _producers.end() ) {
+         if ( const auto prod = _producers.find( producer.value ); prod != _producers.end() ) {
             _gstate.total_unpaid_blocks++;
             _producers.modify( prod, same_payer, [&](auto& p ) {
                p.unpaid_blocks++;
@@ -189,7 +188,7 @@ namespace eosiosystem {
             auto& curr_gcnt = _greward.get_counters(type);
             auto& curr_cnt = reward.get_counters(type);
 
-            if (auto total_unpaid_blocks = curr_gcnt.total_unpaid_blocks; total_unpaid_blocks > 0) {
+            if (const auto total_unpaid_blocks = curr_gcnt.total_unpaid_blocks; total_unpaid_blocks > 0) {
                if (curr_cnt.unpaid_blocks > 0) {
                  curr_info.per_block_pay +=
                      curr_gcnt.perblock_bucket * curr_cnt.unpaid_blocks / total_unpaid_blocks;
@@ -213,7 +212,6 @@ namespace eosiosystem {
 
          _producers.modify( prod, same_payer, [&](auto& p) {
             p.last_claim_time = ct;
-            //p.unpaid_blocks   = 0;
          });
 
          _rewards.modify( reward, same_payer, [&](auto& rec) {

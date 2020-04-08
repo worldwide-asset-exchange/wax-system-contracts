@@ -51,7 +51,7 @@ namespace eosiosystem {
             // If we only have 21 producers or less they are ready to produce, otherwise
             // they will have to wait to be selected
             /// @todo It's necessary to check for "active" producers.
-            if (std::distance(_producers.cbegin(), _producers.cend()) <= 21)
+            if (std::distance(_producers.cbegin(), _producers.cend()) <= max_producers)
                info.set_current_type(reward_type::producer);
          });
       };
@@ -134,10 +134,10 @@ namespace eosiosystem {
          }
       }
 
-      for(const auto& new_top_prod: it_ver->second) {
-         if (auto reward_it = _rewards.find(new_top_prod.first.value); reward_it != _rewards.end()) {
+      for(const auto& new_top_producers: it_ver->second) {
+         if (auto reward_it = _rewards.find(new_top_producers.first.value); reward_it != _rewards.end()) {
             _rewards.modify(reward_it, same_payer, [&](auto& rec) {
-               rec.current_type = new_top_prod.second; // raw uint32 type
+               rec.current_type = new_top_producers.second; // raw uint32 type
             });
          }
       }
@@ -178,9 +178,9 @@ namespace eosiosystem {
       _gstate.last_producer_schedule_update = block_time;
 
       prod_vec_t top_producers;
-      top_producers.reserve(21);
+      top_producers.reserve(max_producers);
 
-      select_producers_into(0, 21, reward_type::producer, top_producers);
+      select_producers_into(0, max_producers, reward_type::producer, top_producers);
 
       if (top_producers.size() == 0 || top_producers.size() < _gstate.last_producer_schedule_size ) {
          return;
@@ -191,8 +191,8 @@ namespace eosiosystem {
       if (is_it_time_to_select_a_standby()) {
          prod_vec_t standbys; standbys.reserve(max_standbys);
 
-         // Pick the current 36 standbys
-         select_producers_into(21, max_standbys, reward_type::standby, standbys);
+         // Pick the current max_standbys standbys
+         select_producers_into(max_producers, max_standbys, reward_type::standby, standbys);
 
          if(standbys.size() > 0) {
            // sort by producer name, if both are equal it will sort by location
@@ -227,7 +227,7 @@ namespace eosiosystem {
             return;
 
          top_prod_vec_t new_top_producers;
-         new_top_producers.reserve(21);
+         new_top_producers.reserve(max_producers);
 
          // Map 'top_producers' to 'new_top_producers'
          using namespace std;
@@ -443,8 +443,8 @@ namespace eosiosystem {
 
        uint64_t i = 0;
 
-       for (auto it = idx.cbegin(); it != idx.cend() && i < 57; ++it, ++i) {
-          if(i < 21) {
+       for (auto it = idx.cbegin(); it != idx.cend() && i < max_producers + max_standbys; ++it, ++i) {
+          if(i < max_producers) {
             producers.emplace(it->owner, true);
           } else {
             standbys.emplace(it->owner, true);
@@ -459,11 +459,11 @@ namespace eosiosystem {
          } else if(standbys.find(producer) != standbys.end()) {
            type = reward_type::standby;
          }
-         double perf = rewards.get_performance(type, _gstate2.last_block_num);
-         if(perf == -1.) {
+         optional<double> perf = rewards.get_performance(type, _gstate2.last_block_num);
+         if(perf == std::nullopt) {
            perf = _greward.average_producer_performances();
          }
-         producer_performances.push_back(perf);
+         producer_performances.push_back(perf.value());
        }
 
        while(producer_performances.size() < num_performance_producers) {

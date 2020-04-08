@@ -38,6 +38,7 @@ namespace eosiosystem {
    using std::string;
    using std::vector;
    using std::set;
+   using std::optional;
 
    template<typename E, typename F>
    static inline auto has_field( F flags, E field )
@@ -77,6 +78,7 @@ namespace eosiosystem {
    static constexpr int64_t  votepay_factor        = 4;                // 25% of the producer pay
    static constexpr uint32_t refund_delay_sec      = 3 * seconds_per_day;
    static constexpr uint32_t max_standbys          = 36;
+   static constexpr uint32_t max_producers         = 21;
    static constexpr double   producer_perc_reward  = 0.60;
    static constexpr double   standby_perc_reward   = 1 - producer_perc_reward;
    static constexpr uint32_t num_performance_producers = 16;
@@ -245,8 +247,8 @@ namespace eosiosystem {
       std::map<uint64_t /*version*/,     top_prod_vec_t> proposed_top_producers;
       top_prod_vec_t current_producers;
 
-      uint32_t producer_blocks_performance_window = 30 * 21 * 12 / 0.99; // default approx 1 hour worth of blocks
-      uint32_t standby_blocks_performance_window = 6 * 36 * 12 / 0.01; // default approx 36 hours worth of blocks
+      uint32_t producer_blocks_performance_window = 60 * max_producers * 12 / 0.99; // default approx 2 hours worth of blocks
+      uint32_t standby_blocks_performance_window = 6 * max_standbys * 12 / 0.01; // default approx 36 hours worth of blocks
       bool random_standby_selection = true; // turn randomized standby selection on/off
       uint64_t last_standby_index = 0;
 
@@ -615,20 +617,20 @@ namespace eosiosystem {
          return it->second;
       }
 
-      double get_performance(reward_type as_type, block_timestamp block_time) {
+      optional<double> get_performance(reward_type as_type, block_timestamp block_time) {
         const auto &counter = get_counters(as_type);
         double rolling_blocks = counter.roll_blocks(block_time);
         switch(as_type) {
           case reward_type::standby: {
-            double expected_blocks_produced = counter.blocks_performance_window * .01 * (1. / 36.);
+            double expected_blocks_produced = counter.blocks_performance_window * .01 * (1. / double(max_standbys));
             return sigmoid(rolling_blocks, 5, expected_blocks_produced / 2.);
           }
           case reward_type::producer: {
-            double expected_blocks_produced = counter.blocks_performance_window * 0.99 * (1. / 21.);
+            double expected_blocks_produced = counter.blocks_performance_window * 0.99 * (1. / double(max_producers));
             return sigmoid(rolling_blocks, 5, expected_blocks_produced / 2.);
           }
           default:
-            return -1.;
+            return std::nullopt;
         }
       }
 
