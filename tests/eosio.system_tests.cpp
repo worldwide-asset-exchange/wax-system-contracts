@@ -2504,7 +2504,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_stability_random, eosio_sy
       const asset initial_balance_b = get_balance(N(producvoterb));
 
       setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-      produce_blocks(2 * standbys_blocks_performance_window);  // cycle through the producers to set them all at close to full rewards scaling
+      produce_blocks(3 * standbys_blocks_performance_window);  // cycle through the producers to set them all at close to full rewards scaling
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
       const auto     global_state_a            = get_global_state();
       const uint64_t claim_time_a              = microseconds_since_epoch_of_iso_string( global_state_a["last_pervote_bucket_fill"] );
