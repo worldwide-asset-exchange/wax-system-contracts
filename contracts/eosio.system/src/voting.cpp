@@ -99,7 +99,7 @@ namespace eosiosystem {
    }
 
    /**
-    * Returns true when the percent (in the last 24 hours) of standby produced
+    * Returns true when the percent of standby produced
     * blocks is less than 1% otherwise returns false
     */
    bool system_contract::is_it_time_to_select_a_standby() const {
@@ -110,10 +110,65 @@ namespace eosiosystem {
 
       if (total > 0) {
          double percent = 100.0 * stb_cnt.block_count / total;
-         return percent < 1.0;
+         return percent < standby_perc_blocks;
       }
 
       return false;
+   }
+
+   /**
+    * Records the missed blocks that producers were expected to produce beteen the currrent and last seen block slots
+    */
+   void system_contract::record_missed_blocks(uint32_t last_slot, uint32_t current_slot) {
+     auto total_missed_blocks = current_slot - (last_slot + 1);
+     auto producers = _greward.current_producers;
+     auto num_producers = producers.size();
+     if(total_missed_blocks > 0 && num_producers > 0) {
+       // We missed a/some slot(s) that should have had blocks
+
+       auto missed_rotations = total_missed_blocks / (blocks_per_round * num_producers);                    // Number of full rotations that were missed
+       auto every_producer_missed_blocks = missed_rotations * blocks_per_round;                             // Every producer missed, at minimum, this many blocks
+       auto first_missed_slot = last_slot + 1;                                                    // First slot that was missed
+       auto first_missed_index = first_missed_slot % (num_producers * blocks_per_round) / blocks_per_round; // Index of the producer that missed the first slot
+
+       // Attribute each of the producers in this gap with their counts for the blocks they were expected to produce
+       uint32_t blocks_counted = 0;
+       auto index = first_missed_index;
+       while(blocks_counted < total_missed_blocks) {    // < is actually too weak, should be strictly !=
+         uint32_t producer_missed_blocks = every_producer_missed_blocks;                                    // Start with the minimum number of blocks that every producer missed
+
+         /*
+            Check if the producer missed more than the base amount due to non-whole
+            multiples of full producer and individual producer rounds of blocks being missed
+            Note that (num_producers - first_missed_index) is the additive inverse of first_missed_index mod num_producers
+            Necessary to do it this way to overcome unsigned math limitations
+         */
+         auto index_from_first_missed_producer = (index + (num_producers - first_missed_index)) % num_producers; // Relative index from this producer to the first producer to miss a block
+         // If we went at least every_producer_missed_blocks plus a whole multiple of producer rounds from the first
+         //  missed producer to this one, the current timestamp slot will be greater than this projected block height:
+         auto possible_missed_block_height = first_missed_slot + every_producer_missed_blocks * num_producers + index_from_first_missed_producer * blocks_per_round;
+         if(possible_missed_block_height < current_slot) {
+           if(possible_missed_block_height + blocks_per_round <= current_slot) {
+             // This producer received an extra round of blocks over the missed rotations
+             producer_missed_blocks += blocks_per_round;
+           } else {
+             // This producer received some extra blocks but not a full round
+             producer_missed_blocks += current_slot - possible_missed_block_height;
+           }
+         }
+
+         auto producer = producers[index].first;
+         if (auto reward_it = _rewards.find(producer.value); reward_it != _rewards.end()) {
+            const uint32_t blocks_performance_window = _greward.get_performance_window(reward_it->get_current_type());
+            _rewards.modify(reward_it, same_payer, [&](auto& rec) {
+               rec.missed_blocks(producer_missed_blocks, current_slot, blocks_performance_window);
+            });
+         }
+
+         index = (index + 1) % num_producers;
+         blocks_counted += producer_missed_blocks;
+       }
+     }
    }
 
    /**
@@ -137,7 +192,7 @@ namespace eosiosystem {
       for(const auto& new_top_producers: it_ver->second) {
          if (auto reward_it = _rewards.find(new_top_producers.first.value); reward_it != _rewards.end()) {
             _rewards.modify(reward_it, same_payer, [&](auto& rec) {
-               rec.current_type = new_top_producers.second; // raw uint32 type
+               rec.set_current_type(new_top_producers.second);
             });
          }
       }
@@ -459,7 +514,7 @@ namespace eosiosystem {
          } else if(standbys.find(producer) != standbys.end()) {
            type = reward_type::standby;
          }
-         optional<double> perf = rewards.get_performance(type, _gstate2.last_block_num);
+         optional<double> perf = rewards.get_performance(type);
          if(perf == std::nullopt) {
            perf = _greward.average_producer_performances();
          }

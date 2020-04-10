@@ -415,20 +415,46 @@ namespace eosiosystem {
                _greward.current_producers.emplace_back(top_prod_vec_t::value_type{it->owner, enum_cast(reward_type::producer)});
             }
          }
-
       }
 
       _greward.activated = true;
       eosio::print("Standby rewards feature activated\n");
    }
 
-   void system_contract::setrwrdsenv(uint32_t producer_blocks_performance_window, uint32_t standby_blocks_performance_window, bool random_standby_selection){
+   void system_contract::setrwrdsenv(uint32_t producer_blocks_performance_window, uint32_t standby_blocks_performance_window, bool random_standby_selection) {
      require_auth( get_self() );
      check(producer_blocks_performance_window > 0, "producer_blocks_performance_window must be > 0");
      check(standby_blocks_performance_window > 0, "standby_blocks_performance_window must be > 0");
      _greward.producer_blocks_performance_window = producer_blocks_performance_window;
      _greward.standby_blocks_performance_window = standby_blocks_performance_window;
      _greward.random_standby_selection = random_standby_selection;
+   }
+
+   void system_contract::resetperf(const name producer, uint32_t producer_type) {
+     require_auth( producer );
+
+     auto reward_it = _rewards.require_find(producer.value, "Rewards info for producer does not exist yet");
+
+     auto current_blocktime = eosio::current_block_time();
+
+     reward_type producer_type_enum = static_cast<reward_type>(producer_type);
+
+     // Calculate the number of block slots that must have elapsed in order to permit resetting performance metrics for the given producer type
+     // This is an extrapolation of the producer type's block performance window to the number of slots that will be expected to have elapsed
+     // in order for the producer to have reached that performance window number of slots.
+     uint32_t minimum_reset_interval = _greward.get_performance_window(producer_type_enum);
+     if(producer_type_enum == reward_type::producer) {
+       minimum_reset_interval *= max_producers * 100 / (100 - standby_perc_blocks);
+     } else {
+       minimum_reset_interval *= max_standbys * 100 / standby_perc_blocks;
+     }
+
+     check(reward_it->get_counters(producer_type_enum).last_slot + minimum_reset_interval <= current_blocktime.slot, "Cannot reset performance before the minimum reset interval");
+
+     _rewards.modify(reward_it, same_payer, [&](auto& rec) {
+       auto counters = rec.get_counters(producer_type_enum);
+       counters.reset_performance();
+     });
    }
 
 } /// eosio.system
