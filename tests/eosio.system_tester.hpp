@@ -1032,7 +1032,7 @@ public:
    void produce_blocks_skip_producer(uint32_t n, account_name name) {
       uint32_t i = 0;
       while(i < n) {
-         if(control->pending_block_producer() == name) {
+         if(control->head_block_producer() == name) {
            produce_block(fc::milliseconds(500 * 13));
            i += 13;
          } else {
