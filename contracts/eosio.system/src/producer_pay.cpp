@@ -17,6 +17,7 @@ namespace eosiosystem {
 
       _ds >> timestamp >> producer;
 
+      const auto last_timestamp = _gstate2.last_block_num;
       _gstate2.last_block_num = timestamp;
 
       /** until activated stake crosses this threshold no new rewards are paid */
@@ -37,6 +38,8 @@ namespace eosiosystem {
 
          _ds >> ignored2 >> ignored2 >> schedule_version;
 
+         record_missed_blocks(last_timestamp.slot, timestamp.slot);
+
          update_producer_reward_status(schedule_version);
 
          // Counts blocks according to producer type
@@ -45,10 +48,8 @@ namespace eosiosystem {
             _greward.new_unpaid_block(producer_type, timestamp);
 
             _rewards.modify( it, same_payer, [&](auto& rec ) {
-              const uint32_t blocks_performance_window = producer_type == reward_type::producer
-                  ? _greward.producer_blocks_performance_window
-                  : _greward.standby_blocks_performance_window;
-               rec.track_block(timestamp, blocks_performance_window);
+               const uint32_t blocks_performance_window = _greward.get_performance_window(producer_type);
+               rec.track_block(timestamp.slot, blocks_performance_window);
             });
          }
       }
@@ -67,7 +68,7 @@ namespace eosiosystem {
 
       /// only update block producers once every minute, block_timestamp is in half seconds
       if( timestamp.slot - _gstate.last_producer_schedule_update.slot > 120 ) {
-            update_elected_producers( timestamp, previous );
+         update_elected_producers( timestamp, previous );
 
          if( (timestamp.slot - _gstate.last_name_close.slot) > blocks_per_day ) {
             name_bid_table bids(get_self(), get_self().value);
@@ -215,7 +216,7 @@ namespace eosiosystem {
          });
 
          _rewards.modify( reward, same_payer, [&](auto& rec) {
-            rec.reset_counters();
+            rec.reset_rewards_counters();
          });
 
       }
