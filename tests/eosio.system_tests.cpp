@@ -3599,14 +3599,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_reset_perf, eosio_system_t
      }
   };
 
-  // It can reset up to 26 producers in one call (quantity > 26 will be ignored)
-  auto reset_producers = [&](const std::string& prefix, std::size_t quantity, uint32_t type) {
-     for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-        account_name prod{prefix + std::string(1, c)};
-        BOOST_REQUIRE_EQUAL(success(), push_action(prod, N(resetperf), mvo()("producer", prod.to_string())("producer_type", type)));
-     }
-  };
-
   // Create producers/standbys
   gen_producers("defproducer", 21, producer_names);
   produce_block();
@@ -3623,55 +3615,42 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_reset_perf, eosio_system_t
   BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+21)));
   BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>(standby_names.begin(), standby_names.begin()+21)));
 
-
   uint32_t standbys_blocks_performance_window = 12;
   uint32_t producer_blocks_performance_window = 3 * 12;
 
-  const asset initial_balance_a = get_balance(N(producvotera));
-  const asset initial_balance_b = get_balance(N(producvoterb));
-
   setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, false);
 
-  auto minimum_reset_window = 21 * producer_blocks_performance_window / .99;
-  // produce_blocks(2 * minimum_reset_window);                     // cycle through the producers to set them all at close to full rewards scaling
-  // produce_block(fc::milliseconds(500 * minimum_reset_window));  // add enough empty blocks to meet the minimum reset threshold to prove that producvoterb' earnings will be > 0 despite the lost blocks
-  // BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
-  // BOOST_REQUIRE_EQUAL(success(), push_action(N(producvoterb), N(voterclaim), mvo()("owner", "producvoterb")));
-  // const asset balance_a = get_balance(N(producvotera));
-  // const asset balance_b = get_balance(N(producvoterb));
-  // BOOST_REQUIRE_GT(balance_a.get_amount(), initial_balance_a.get_amount());
-  // BOOST_REQUIRE_GT(balance_b.get_amount(), initial_balance_b.get_amount());
+  auto minimum_producer_reset_window = 21 * producer_blocks_performance_window / .99;
+  auto minimum_standbys_reset_window = 36 * standbys_blocks_performance_window / .01;
 
-  produce_blocks(2 * minimum_reset_window);                                       // cycle through the producers to set them all at close to full rewards scaling
-  produce_block(fc::milliseconds(2 * 500 * minimum_reset_window));                // reduce the producers' performance ratings
+  produce_blocks(2 * minimum_producer_reset_window);      // cycle through the producers to give them a non starting performance rating
   BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>()));  // remove the main producers from production
-  // BOOST_TEST_MESSAGE("minimum_reset_window = " << minimum_reset_window);
-  // for(int i = 0; i < 2 * minimum_reset_window; i++) {
-  //   BOOST_TEST_MESSAGE("i = " << i);
-  //   produce_blocks(1);
-  // }
-  produce_blocks_up_to_producer(N(defstandby1a));
-  produce_block(fc::milliseconds(500 * minimum_reset_window / 2));
+  produce_blocks_up_to_producer(N(defstandby1a)); // This ensures that defproducera is really out of rotation
+  produce_block(fc::milliseconds(500 * minimum_producer_reset_window / 2));
   BOOST_REQUIRE_EQUAL(wasm_assert_msg("Cannot reset performance before the minimum reset interval"),
                                 push_action(N(defproducera), N(resetperf), mvo()("producer", "defproducera")("producer_type", 1)));
-  produce_block(fc::milliseconds(500 * (minimum_reset_window - minimum_reset_window / 2)));
-  reset_producers("defproducer", 21, 1);
-  produce_block(fc::days(1)); // so we can claim voting rewards again
-  BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+21)));
-  BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
-  // TODO: uncomment below, this crashes the calidator tester for some reason though it should not
-  // produce_block(fc::days(1)); // so we can claim voting rewards again
-  // produce_blocks_up_to_producer(N(defproducer1a));
-  // produce_blocks(minimum_reset_window); // let them all have one round
-  // BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
-  // const asset after_reset_balance_a = get_balance(N(producvotera));
+  produce_block(fc::milliseconds(500 * (minimum_producer_reset_window - minimum_producer_reset_window / 2)));
+  BOOST_REQUIRE(get_performance("defproducera", 1) != 0.66);
+  BOOST_REQUIRE_EQUAL(success(), push_action(N(defproducera), N(resetperf), mvo()("producer", "defproducera")("producer_type", 1)));
+  BOOST_REQUIRE_EQUAL(get_performance("defproducera", 1), 0.66);
 
-  // // BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
-  // // BOOST_REQUIRE_EQUAL(success(), push_action(N(producvoterb), N(voterclaim), mvo()("owner", "producvoterb")));
-  // // const asset balance_a = get_balance(N(producvotera));
-  // // const asset balance_b = get_balance(N(producvoterb));
-  // // BOOST_REQUIRE_GT(balance_a.get_amount(), initial_balance_a.get_amount());
-  // // BOOST_REQUIRE_GT(balance_b.get_amount(), initial_balance_b.get_amount());
+  BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+21))); //bring back the main producers
+  BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>()));  // remove the standbys from production
+  produce_blocks_up_to_producer(N(defproducera));
+  BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>(standby_names.begin(), standby_names.begin()+21)));
+  produce_blocks_up_to_producer(N(defstandby1a));
+
+  BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1a), N(resetperf), mvo()("producer", "defstandby1a")("producer_type", 2)));
+  BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>()));  // remove the standbys from production
+  produce_blocks_up_to_producer(N(defproducera));
+  produce_blocks_up_to_producer(N(defproduceru));       // flush out the standbys
+  produce_block(fc::milliseconds(500 * minimum_standbys_reset_window / 2));
+  BOOST_REQUIRE_EQUAL(wasm_assert_msg("Cannot reset performance before the minimum reset interval"),
+                                push_action(N(defstandby1a), N(resetperf), mvo()("producer", "defstandby1a")("producer_type", 2)));
+  produce_block(fc::milliseconds(500 * (minimum_standbys_reset_window - minimum_standbys_reset_window / 2)));
+  BOOST_REQUIRE(get_performance("defstandby1a", 2) != 0.66);
+  BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1a), N(resetperf), mvo()("producer", "defstandby1a")("producer_type", 2)));
+  BOOST_REQUIRE_EQUAL(get_performance("defstandby1a", 2), 0.66);
 } FC_LOG_AND_RETHROW()
 
 #endif // LONG_TESTS

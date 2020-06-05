@@ -452,7 +452,7 @@ namespace eosiosystem {
      check(reward_it->get_counters(producer_type_enum).last_slot + minimum_reset_interval <= current_blocktime.slot, "Cannot reset performance before the minimum reset interval");
 
      _rewards.modify(reward_it, same_payer, [&](auto& rec) {
-       auto counters = rec.get_counters(producer_type_enum);
+       auto& counters = rec.get_counters(producer_type_enum);
        counters.reset_performance();
      });
    }

@@ -549,7 +549,7 @@ namespace eosiosystem {
          }
 
          // performance tracking
-         double avg_blocks = 0.0;
+         double avg_blocks = 0.66;
          uint32_t samples = 0;
          uint32_t last_slot = 0;
 
@@ -566,7 +566,7 @@ namespace eosiosystem {
          }
 
          void reset_performance() {
-           avg_blocks = 0;
+           avg_blocks = 0.66;
            samples = 0;
          }
       };

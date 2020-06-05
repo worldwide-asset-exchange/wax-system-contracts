@@ -1042,6 +1042,11 @@ public:
       }
    }
 
+   double get_performance( const account_name& producer, uint32_t producer_type ) {
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(rewards), producer );
+      return data.empty() ? -1 : abi_ser.binary_to_variant("reward_info", data, abi_serializer_max_time)["counters"][producer_type]["value"]["avg_blocks"].as<double>();
+   }
+
    abi_serializer abi_ser;
    abi_serializer token_abi_ser;
 };
