@@ -2097,6 +2097,8 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_change_vote_random, eosio_
      const asset c_final_balance = get_balance(N(producvoterc));
      const asset d_final_balance = get_balance(N(producvoterd));
 
+     print_performances(producer_names, 1);
+
      BOOST_REQUIRE_APROX(a_final_balance.get_amount(), b_final_balance.get_amount(), 0.001);
      BOOST_REQUIRE_GT(a_final_balance.get_amount(), c_final_balance.get_amount());
      BOOST_REQUIRE_GT(b_final_balance.get_amount(), c_final_balance.get_amount());
@@ -2173,6 +2175,8 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_change_vote_nonrandom, eos
       const asset b_final_balance = get_balance(N(producvoterb));
       const asset c_final_balance = get_balance(N(producvoterc));
       const asset d_final_balance = get_balance(N(producvoterd));
+
+      print_performances(producer_names, 1);
 
       BOOST_REQUIRE_APROX(a_final_balance.get_amount(), b_final_balance.get_amount(), 0.001);
       BOOST_REQUIRE_GT(a_final_balance.get_amount(), c_final_balance.get_amount());
@@ -2411,6 +2415,10 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_misc_scenarios_nonrandom, 
       BOOST_TEST_MESSAGE("f_final_balance: " << f_final_balance.get_amount() << "\n");
       BOOST_TEST_MESSAGE("g_final_balance: " << g_final_balance.get_amount() << "\n");
 
+      print_performances(producer_names, 1);
+      print_performances(standby_names, 2);
+      print_performances(substandby_names, 0);
+
       BOOST_REQUIRE_APROX(double(c_final_balance.get_amount()) / double(b_final_balance.get_amount()), 15. / 16., 0.05);
       BOOST_REQUIRE_GTE(1, std::abs(f_final_balance.get_amount() - g_final_balance.get_amount()));  // because they both should have average scoring producers
       BOOST_REQUIRE_GT(f_final_balance.get_amount(), e_final_balance.get_amount());                 // because the average went up by the time f cashes out
@@ -2419,161 +2427,158 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_misc_scenarios_nonrandom, 
    }
 } FC_LOG_AND_RETHROW()
 
-// BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_expected_blocks, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
-//    using prod_vec_t = std::vector<account_name>;
-//    activaterewd();
-//    const asset large_asset = core_sym::from_string("80.0000");
-//    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-//    create_account_with_resources( N(producvoterb), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-//    create_account_with_resources( N(producvoterc), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-// 
-//    prod_vec_t producer_names, standby_names;
-//    producer_names.reserve(21);
-//    standby_names.reserve(36);
-// 
-//    // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-//    auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-//       for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-//          account_name prod{prefix + std::string(1, c)};
-//          BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-// 
-//          result.emplace_back(prod);
-//          create_account_with_resources(
-//             prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-// 
-//          regproducer(prod);
-//       }
-//    };
-// 
-//    // Create producers/standbys
-//    gen_producers("defproducer", 21, producer_names);
-//    produce_block();
-// 
-//    gen_producers("defstandby1", 26, standby_names);
-//    produce_block();
-// 
-//    gen_producers("defstandby2", 10, standby_names);
-//    produce_block();
-// 
-//    transfer( config::system_account_name, "producvotera", core_sym::from_string("100000000.0000"), config::system_account_name);
-//    transfer( config::system_account_name, "producvoterb", core_sym::from_string("50000000.0000"), config::system_account_name);
-//    transfer( config::system_account_name, "producvoterc", core_sym::from_string("50000000.0000"), config::system_account_name);
-// 
-//    BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000")));
-//    BOOST_REQUIRE_EQUAL(success(), stake("producvoterb", core_sym::from_string("20000000.0000"), core_sym::from_string("20000000.0000")));
-//    BOOST_REQUIRE_EQUAL(success(), stake("producvoterc", core_sym::from_string("20000000.0000"), core_sym::from_string("20000000.0000")));
-// 
-//    BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+21)));
-// 
-//    BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>(standby_names.begin(), standby_names.begin()+30)));
-// 
-//    BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterc), vector<account_name>(standby_names.begin()+30, standby_names.begin()+36)));
-// 
-//    uint32_t full_round = 21 * 12;
-//    uint32_t standbys_blocks_performance_window = 2 * 36 * 12 / 0.01;
-//    uint32_t producer_blocks_performance_window = 2 * 21 * 12 / (1 - 0.01);
-// 
-//    {
-//       const auto     initial_global_state              = get_global_state();
-//       const uint64_t initial_claim_time                = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
-//       const int64_t  initial_voters_bucket             = initial_global_state["voters_bucket"].as<int64_t>();
-//       const int64_t  initial_voters_account_balance    = get_balance(N(eosio.voters)).get_amount();
-//       const uint32_t initial_tot_unpaid_voteshare      = initial_global_state["total_unpaid_voteshare"].as<uint32_t>();
-//       const asset initial_supply  = get_token_supply();
-//       const asset initial_balance_a = get_balance(N(producvotera));
-//       const asset initial_balance_b = get_balance(N(producvoterb));
-// 
-//       setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-//       // 
-//       // BOOST_TEST_MESSAGE("producing");
-//       // produce_blocks(126);
-//       // BOOST_TEST_MESSAGE("delaying");
-//       // produce_block(fc::milliseconds(500 * 126));
-//       // BOOST_TEST_MESSAGE("producing");
-//       // produce_blocks(252);
-//       // BOOST_TEST_MESSAGE("delaying");
-//       // produce_block(fc::milliseconds(500 * 252));
-//       // BOOST_TEST_MESSAGE("producing");
-//       // produce_blocks(63);
-//       // BOOST_TEST_MESSAGE("delaying");
-//       // produce_block(fc::milliseconds(500 * 63));
-//       // BOOST_TEST_MESSAGE("producing");
-//       // produce_blocks(189);
-//       // BOOST_TEST_MESSAGE("delaying");
-//       // produce_block(fc::milliseconds(500 * 189));
-//       // BOOST_TEST_MESSAGE("producing");
-//       // produce_blocks(252 * 10);
-//       // BOOST_TEST_MESSAGE("delaying");
-//       // produce_block(fc::milliseconds(500 * 252 * 10));
-//       // BOOST_TEST_MESSAGE("producing");
-//       // produce_blocks(252 * 10 - 111);
-//       // BOOST_TEST_MESSAGE("delaying");
-//       // produce_block(fc::milliseconds(500 * 252 * 10 - 111));
-//       // BOOST_TEST_MESSAGE("producing");
-//       // produce_blocks(252 * 30 - 22);
-//       // BOOST_TEST_MESSAGE("delaying");
-//       // produce_block(fc::milliseconds(500 * 252 * 30 - 22));
-//       // BOOST_TEST_MESSAGE("producing");
-//       // produce_blocks(252 * 50 - 187);
-//       // BOOST_TEST_MESSAGE("delaying");
-//       // produce_block(fc::milliseconds(500 * 252 * 50 - 187));
-// 
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(126);
-//       BOOST_TEST_MESSAGE("delaying");
-//       produce_block(fc::milliseconds(500 * 63));
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(100);
-//       BOOST_TEST_MESSAGE("delaying");
-//       produce_block(fc::milliseconds(500 * 100));
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(63);
-//       BOOST_TEST_MESSAGE("delaying");
-//       produce_block(fc::milliseconds(500 * 163));
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(189);
-//       BOOST_TEST_MESSAGE("delaying");
-//       produce_block(fc::milliseconds(500 * 15));
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(287);
-//       // BOOST_TEST_MESSAGE("delaying");
-//       // produce_block(fc::milliseconds(500 * 9));
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(10);
-//       BOOST_TEST_MESSAGE("delaying");
-//       produce_block(fc::milliseconds(500 * 301));
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(5);
-//       BOOST_TEST_MESSAGE("delaying");
-//       produce_block(fc::milliseconds(500 * 438));
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(8);
-//       BOOST_TEST_MESSAGE("delaying");
-//       produce_block(fc::milliseconds(500 * 253));
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(3);
-//       BOOST_TEST_MESSAGE("delaying");
-//       produce_block(fc::milliseconds(500 * (252 * 3 + 1)));
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(3);
-//       BOOST_TEST_MESSAGE("delaying");
-//       produce_block(fc::milliseconds(500 * (252 * 3 - (24 + 6) + 1)));
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(4);
-//       BOOST_TEST_MESSAGE("delaying");
-//       produce_block(fc::milliseconds(500 * (252 * 3 + (12 + 5) + 1)));
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(5);
-//       BOOST_TEST_MESSAGE("delaying");
-//       produce_block(fc::milliseconds(500 * (252 * 5 + 3 * 12 + 1)));
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(5);
-//       BOOST_TEST_MESSAGE("delaying");
-//       produce_block(fc::days(20));
-//       BOOST_TEST_MESSAGE("producing");
-//       produce_blocks(5);
-//    }
-// } FC_LOG_AND_RETHROW()
+BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_expected_blocks, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
+   using prod_vec_t = std::vector<account_name>;
+   activaterewd();
+   const asset large_asset = core_sym::from_string("80.0000");
+   create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( N(producvoterb), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( N(producvoterc), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+
+   prod_vec_t producer_names;
+   producer_names.reserve(21);
+
+   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
+   auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
+      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
+         account_name prod{prefix + std::string(1, c)};
+         BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
+
+         result.emplace_back(prod);
+         create_account_with_resources(
+            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
+
+         regproducer(prod);
+      }
+   };
+
+    auto check_producers = [&](vector<double> expected_perfs, bool show_perfs = true) {
+       BOOST_REQUIRE(expected_perfs.size() == producer_names.size());
+       string res;
+       for (int i = 0; i < producer_names.size(); i++) {
+          const auto& prod = producer_names[i];
+          auto expected_perf = expected_perfs[i];
+          auto actual_perf = get_performance(prod, 1);
+          res += std::to_string(actual_perf) + string(",");
+          BOOST_REQUIRE_APROX(expected_perf, actual_perf, 0.001);
+       }
+       if(show_perfs) {
+         BOOST_TEST_MESSAGE(res);
+       }
+    };
+
+   // Create producers/standbys
+   gen_producers("defproducer", 21, producer_names);
+   produce_block();
+
+   transfer( config::system_account_name, "producvotera", core_sym::from_string("200000000.0000"), config::system_account_name);
+
+   BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
+
+   BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+21)));
+
+   uint32_t standbys_blocks_performance_window = 12;
+   uint32_t producer_blocks_performance_window = 3 * 12;
+
+   auto full_performance_start_at = [&](int starting_producer_index) {
+     // This is just to speed up setting to full rewards performance
+     setrwrdsenv(config::system_account_name, 2, standbys_blocks_performance_window, true);
+     produce_blocks(504);
+     // Back to normal
+     setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
+     produce_blocks(21 * 12 * producer_blocks_performance_window / 12);
+     // Now we're at full rewards performance
+     const auto &starting_producer = producer_names[starting_producer_index];
+     const auto &subsequent_producer = producer_names[(starting_producer_index + 1) % producer_names.size()];
+     produce_blocks_up_to_producer(subsequent_producer);
+     produce_blocks_up_to_producer(starting_producer);
+     check_producers({1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0}, false);
+   };
+
+   const auto     initial_global_state              = get_global_state();
+   const uint64_t initial_claim_time                = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
+   const int64_t  initial_voters_bucket             = initial_global_state["voters_bucket"].as<int64_t>();
+   const int64_t  initial_voters_account_balance    = get_balance(N(eosio.voters)).get_amount();
+   const uint32_t initial_tot_unpaid_voteshare      = initial_global_state["total_unpaid_voteshare"].as<uint32_t>();
+   const asset initial_supply  = get_token_supply();
+   const asset initial_balance_a = get_balance(N(producvotera));
+   const asset initial_balance_b = get_balance(N(producvoterb));
+
+   setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
+
+   full_performance_start_at(0);
+   miss_slots(1);
+   check_producers({0.972994,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+   produce_blocks(1);
+   check_producers({0.973744,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+
+   full_performance_start_at(0);
+   produce_blocks(1);
+   miss_slots(1);
+   check_producers({0.972994,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+
+   full_performance_start_at(1);
+   produce_blocks(1);
+   miss_slots(1);
+   check_producers({1.000000,0.972994,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+
+   full_performance_start_at(1);
+   produce_blocks(11);
+   miss_slots(2);
+   check_producers({1.000000,0.972222,0.972994,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+
+   full_performance_start_at(20);
+   produce_blocks(10);
+   miss_slots(4);
+   check_producers({0.945988,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,0.944444});
+
+   full_performance_start_at(7);
+   produce_blocks(7);
+   miss_slots(27);
+   check_producers({1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,0.861111,0.666667,0.729938,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+
+   full_performance_start_at(7);
+   produce_blocks(7);
+   miss_slots(252);
+   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.675926,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+   produce_blocks(1);
+   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.684928,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+   produce_blocks(251);
+   check_producers({0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.768884,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280});
+
+   full_performance_start_at(7);
+   produce_blocks(7);
+   miss_slots(504);
+   check_producers({0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.351852,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333});
+
+   full_performance_start_at(7);
+   produce_blocks(7);
+   miss_slots(258);
+   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.527778,0.648920,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+
+   full_performance_start_at(7);
+   produce_blocks(7);
+   miss_slots(378);
+   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.527778,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.648920,0.666667,0.666667});
+
+   full_performance_start_at(0);
+   miss_slots(504);
+   check_producers({0.351852,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333});
+
+   full_performance_start_at(0);
+   miss_slots(258);
+   check_producers({0.513889,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+
+   full_performance_start_at(0);
+   miss_slots(378);
+   check_producers({0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.513889,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+
+   full_performance_start_at(0);
+   miss_slots(252 * 100);
+   check_producers({0.027778,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000});
+   produce_blocks(1);
+   check_producers({0.054784,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000});
+} FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_stability_random, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
    using prod_vec_t = std::vector<account_name>;

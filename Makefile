@@ -1,6 +1,8 @@
 CMAKE_CPU_SETUP := $(shell expr $(shell nproc) + 2)
 
 DEV_DOCKER_VERSION=wax-1.6.1-1.2.1
+# For debugging/print logging use...
+# DEV_DOCKER_VERSION = wax-1.6.1-1.2.0-internal2
 CONTAINER=wax-system-contracts
 
 DOCKER_COMMON=-v `pwd`:`pwd` --name $(CONTAINER) -w `pwd` waxteam/dev:$(DEV_DOCKER_VERSION)

@@ -1032,7 +1032,7 @@ public:
    void produce_blocks_skip_producer(uint32_t n, account_name name) {
       uint32_t i = 0;
       while(i < n) {
-         if(control->head_block_producer() == name) {
+         if(control->head_block_producer() == name || control->pending_block_producer() == name) {
            produce_block(fc::milliseconds(500 * 13));
            i += 13;
          } else {
@@ -1042,9 +1042,23 @@ public:
       }
    }
 
+   void miss_slots(uint32_t n) {
+     produce_block(fc::milliseconds(500 * (n + 1)));
+   };
+
    double get_performance( const account_name& producer, uint32_t producer_type ) {
       vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(rewards), producer );
       return data.empty() ? -1 : abi_ser.binary_to_variant("reward_info", data, abi_serializer_max_time)["counters"][producer_type]["value"]["avg_blocks"].as<double>();
+   }
+
+   void print_performances( const std::vector<account_name>& producer_names, uint32_t producer_type ) {
+     string res;
+     for (int i = 0; i < producer_names.size(); i++) {
+        const auto& prod = producer_names[i];
+        auto perf = get_performance(prod, producer_type);
+        res += prod.to_string() + string(": ") + std::to_string(perf) + string("\n");
+     }
+     BOOST_TEST_MESSAGE(res);
    }
 
    abi_serializer abi_ser;

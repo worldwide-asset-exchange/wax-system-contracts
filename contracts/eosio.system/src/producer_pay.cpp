@@ -38,9 +38,9 @@ namespace eosiosystem {
 
          _ds >> ignored2 >> ignored2 >> schedule_version;
 
-         record_missed_blocks(last_timestamp.slot, timestamp.slot);
-
          update_producer_reward_status(schedule_version);
+
+         record_missed_blocks(last_timestamp.slot, timestamp.slot);
 
          // Counts blocks according to producer type
          if ( const auto it = _rewards.find( producer.value ); it != _rewards.end() ) {

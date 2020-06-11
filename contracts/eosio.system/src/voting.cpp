@@ -120,7 +120,7 @@ namespace eosiosystem {
     * Records the missed blocks that producers were expected to produce beteen the currrent and last seen block slots
     */
    void system_contract::record_missed_blocks(uint32_t last_slot, uint32_t current_slot) {
-     auto total_missed_blocks = current_slot - (last_slot + 1);
+     auto total_missed_blocks = current_slot - (last_slot + 1); // plus 1 because last_slot was not missed
      auto producers = _greward.current_producers;
      auto num_producers = producers.size();
      if(total_missed_blocks > 0 && num_producers > 0) {
@@ -134,8 +134,11 @@ namespace eosiosystem {
        // Attribute each of the producers in this gap with their counts for the blocks they were expected to produce
        uint32_t blocks_counted = 0;
        auto index = first_missed_index;
-       while(blocks_counted < total_missed_blocks) {    // < is actually too weak, should be strictly !=
-         uint32_t producer_missed_blocks = every_producer_missed_blocks;                                    // Start with the minimum number of blocks that every producer missed
+       /*
+        In the following loop, blocks_counted < total_missed_blocks is actually too weak,should be strictly !=, AND we should never have to rely on the i variable to get us out of this loop. blocks_counted should always end up totalling to total_missed_blocks. It is there "in case anything goes wrong" in the subsequent maths
+       */
+       for (int i = 0; i < num_producers && blocks_counted < total_missed_blocks; i++) {
+         uint32_t producer_missed_blocks = every_producer_missed_blocks; // Start with the minimum number of blocks that every producer missed
 
          /*
             Check if the producer missed more than the base amount due to non-whole
@@ -144,17 +147,22 @@ namespace eosiosystem {
             Necessary to do it this way to overcome unsigned math limitations
          */
          auto index_from_first_missed_producer = (index + (num_producers - first_missed_index)) % num_producers; // Relative index from this producer to the first producer to miss a block
-         // If we went at least every_producer_missed_blocks plus a whole multiple of producer rounds from the first
-         //  missed producer to this one, the current timestamp slot will be greater than this projected block height:
-         auto possible_missed_block_height = first_missed_slot + every_producer_missed_blocks * num_producers + index_from_first_missed_producer * blocks_per_round;
-         if(possible_missed_block_height < current_slot) {
-           if(possible_missed_block_height + blocks_per_round <= current_slot) {
-             // This producer received an extra round of blocks over the missed rotations
-             producer_missed_blocks += blocks_per_round;
-           } else {
-             // This producer received some extra blocks but not a full round
-             producer_missed_blocks += current_slot - possible_missed_block_height;
-           }
+
+         // The first slot that the indexed producer would have been scheduled for just prior to the current slot
+         auto starting_missed_block_height = 12 * (first_missed_slot / 12) + every_producer_missed_blocks * num_producers + index_from_first_missed_producer * blocks_per_round;
+         // This is the last slot the indexed producer is scheduled for
+         auto max_missed_block_height = starting_missed_block_height + blocks_per_round;
+         // The actual last missed slot for this producer
+         auto last_missed_block_height = std::min(max_missed_block_height, current_slot);
+         // accumulate the number of blocks missed by this producer
+         producer_missed_blocks += starting_missed_block_height < last_missed_block_height ? last_missed_block_height - starting_missed_block_height : 0;
+         if(index_from_first_missed_producer == 0) {
+           /* If this is the first producer to miss blocks, we have to reduce
+            * the missed blocks by the offset at which the producer began missing blocks
+            * since the above accounting method starts at the first slot that the
+            * producer is scheduled for
+          */
+           producer_missed_blocks -= first_missed_slot % blocks_per_round;
          }
 
          auto producer = producers[index].first;
@@ -168,6 +176,7 @@ namespace eosiosystem {
          index = (index + 1) % num_producers;
          blocks_counted += producer_missed_blocks;
        }
+       // check(blocks_counted == total_missed_blocks, "Math error totalling blocks. Should never happen!");
      }
    }
 
