@@ -27,10 +27,16 @@
          BOOST_REQUIRE_EQUAL(R, L); \
    } while (false)
 
- #define BOOST_REQUIRE_GTE(L, R) \
-    if (L < R) \
-       BOOST_FAIL("[" << (L) << " < " << (R) << "] (should be >=)");
+#define BOOST_REQUIRE_GTE(L, R) \
+   if (L < R) \
+      BOOST_FAIL("[" << (L) << " < " << (R) << "] (should be >=)");
 
+#define BOOST_REQUIRE_WITHIN(L, R, limit) \
+   if (L < R) { \
+      BOOST_REQUIRE_GTE(limit, R - L); \
+   } \
+   else \
+      BOOST_REQUIRE_GTE(limit, L - R);
 
 
 struct _abi_hash {
@@ -2508,70 +2514,70 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_expected_blocks, eosio_sys
 
    full_performance_start_at(0);
    miss_slots(1);
-   check_producers({0.972994,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+   check_producers({0.972222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
    produce_blocks(1);
-   check_producers({0.973744,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+   check_producers({0.972994,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
 
    full_performance_start_at(0);
    produce_blocks(1);
    miss_slots(1);
-   check_producers({0.972994,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+   check_producers({0.972222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
 
    full_performance_start_at(1);
    produce_blocks(1);
    miss_slots(1);
-   check_producers({1.000000,0.972994,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+   check_producers({1.000000,0.972222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
 
    full_performance_start_at(1);
    produce_blocks(11);
    miss_slots(2);
-   check_producers({1.000000,0.972222,0.972994,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+   check_producers({1.000000,0.972222,0.972222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
 
    full_performance_start_at(20);
    produce_blocks(10);
    miss_slots(4);
-   check_producers({0.945988,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,0.944444});
+   check_producers({0.944444,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,0.944444});
 
    full_performance_start_at(7);
    produce_blocks(7);
    miss_slots(27);
-   check_producers({1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,0.861111,0.666667,0.729938,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+   check_producers({1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,0.861111,0.666667,0.722222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
 
    full_performance_start_at(7);
    produce_blocks(7);
    miss_slots(252);
-   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.675926,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
    produce_blocks(1);
-   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.684928,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.675926,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
    produce_blocks(251);
-   check_producers({0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.768884,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280});
+   check_producers({0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280});
 
    full_performance_start_at(7);
    produce_blocks(7);
    miss_slots(504);
-   check_producers({0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.351852,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333});
+   check_producers({0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333});
 
    full_performance_start_at(7);
    produce_blocks(7);
    miss_slots(258);
-   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.527778,0.648920,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.527778,0.638889,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
 
    full_performance_start_at(7);
    produce_blocks(7);
    miss_slots(378);
-   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.527778,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.648920,0.666667,0.666667});
+   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.527778,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.638889,0.666667,0.666667});
 
    full_performance_start_at(0);
    miss_slots(504);
-   check_producers({0.351852,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333});
+   check_producers({0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333});
 
    full_performance_start_at(0);
    miss_slots(258);
-   check_producers({0.513889,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+   check_producers({0.500000,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
 
    full_performance_start_at(0);
    miss_slots(378);
-   check_producers({0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.513889,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+   check_producers({0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.500000,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
 
    full_performance_start_at(0);
    miss_slots(252 * 100);
@@ -4392,10 +4398,8 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
       BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
       auto usecs_between_fills = claim_time - initial_claim_time;
 
-      BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year ) )),
-                          supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE(5 > ((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 5) * 2) -
-                          add_gbm(savings - initial_savings));
+      BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year ) )), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_WITHIN((supply.get_amount() - initial_supply.get_amount()), add_gbm(5 * (savings - initial_savings) / 3), 5);
 
       int64_t to_producer        = int64_t( (double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate) / usecs_per_year ) / 5;
       int64_t to_perblock_bucket = to_producer;
@@ -4433,9 +4437,9 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
       }
       const asset   supply  = get_token_supply();
       const int64_t savings = get_balance(N(eosio.saving)).get_amount();
-      // Amount issued per year is very close to the 6% inflation target. Small difference (500 tokens out of 50'000'000 issued)
+      // Amount issued per year is very close to the 5% inflation target. Small difference (500 tokens out of 50'000'000 issued)
       // is due to compounding every 8 hours in this test as opposed to theoretical continuous compounding
-      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.06)) - (supply.get_amount() - initial_supply.get_amount()));
+      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.05)) - (supply.get_amount() - initial_supply.get_amount()));
       BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.03)) - (savings - initial_savings));
    }
 
@@ -4625,10 +4629,8 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
       BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
       auto usecs_between_fills = claim_time - initial_claim_time;
 
-      BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year )) ),
-                          supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_GT(5, ((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 5) * 2) -
-                          add_gbm(savings - initial_savings));
+      BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year )) ), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_WITHIN((supply.get_amount() - initial_supply.get_amount()), add_gbm(5 * (savings - initial_savings) / 3), 5);
 
 
       BOOST_TEST_MESSAGE("Initial supply = " << initial_supply.get_amount());
@@ -4675,9 +4677,9 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
       }
       const asset   supply  = get_token_supply();
       const int64_t savings = get_balance(N(eosio.saving)).get_amount();
-      // Amount issued per year is very close to the 6% inflation target. Small difference (500 tokens out of 50'000'000 issued)
+      // Amount issued per year is very close to the 5% inflation target. Small difference (500 tokens out of 50'000'000 issued)
       // is due to compounding every 8 hours in this test as opposed to theoretical continuous compounding
-      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.06)) - (supply.get_amount() - initial_supply.get_amount()));
+      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.05)) - (supply.get_amount() - initial_supply.get_amount()));
       BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.03)) - (savings - initial_savings));
    }
 
@@ -5133,10 +5135,8 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
       BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
       auto usecs_between_fills = claim_time - initial_claim_time;
 
-      BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year )) ),
-                          supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_GT(5, ((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 5) * 2) -
-                          add_gbm(savings - initial_savings));
+      BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year )) ), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_WITHIN((supply.get_amount() - initial_supply.get_amount()), add_gbm(5 * (savings - initial_savings) / 3), 5);
 
       int64_t to_producer        = int64_t( (double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate) / usecs_per_year ) / 5;
       int64_t to_perblock_bucket = to_producer;
@@ -5167,9 +5167,9 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
       }
       const asset   supply  = get_token_supply();
       const int64_t savings = get_balance(N(eosio.saving)).get_amount();
-      // Amount issued per year is very close to the 6% inflation target. Small difference (500 tokens out of 50'000'000 issued)
+      // Amount issued per year is very close to the 5% inflation target. Small difference (500 tokens out of 50'000'000 issued)
       // is due to compounding every 8 hours in this test as opposed to theoretical continuous compounding
-      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.06)) - (supply.get_amount() - initial_supply.get_amount()));
+      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.05)) - (supply.get_amount() - initial_supply.get_amount()));
       BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.03)) - (savings - initial_savings));
    }
 
@@ -5178,10 +5178,6 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
 BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
 
    auto within_one = [](int64_t a, int64_t b) -> bool { return std::abs( a - b ) <= 1; };
-
-   const int64_t secs_per_year  = 52 * 7 * 24 * 3600;
-   const double  usecs_per_year = secs_per_year * 1000000;
-   const double  cont_rate      = 0.04879;
 
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
@@ -5321,12 +5317,12 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
 
       const uint64_t usecs_between_fills = claim_time - initial_claim_time;
 
-      const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * cont_rate / usecs_per_year;
+      const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * continuous_rate / usecs_per_year;
       BOOST_REQUIRE_EQUAL( add_gbm(int64_t(expected_supply_growth)), supply.get_amount() - initial_supply.get_amount() );
 
       BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth)/5 * 2), savings - initial_savings );
 
-      const int64_t expected_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (cont_rate / 5.) / usecs_per_year );
+      const int64_t expected_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (continuous_rate / 5.) / usecs_per_year );
       const int64_t expected_pervote_bucket  = 0;
 
       const int64_t from_perblock_bucket = initial_unpaid_blocks * expected_perblock_bucket / initial_tot_unpaid_blocks ;
@@ -5393,11 +5389,11 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
 
       const uint64_t usecs_between_fills = claim_time - initial_claim_time;
 
-      const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * cont_rate / usecs_per_year;
+      const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * continuous_rate / usecs_per_year;
       BOOST_REQUIRE_EQUAL( add_gbm(int64_t(expected_supply_growth)), supply.get_amount() - initial_supply.get_amount() );
       BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth) / 5 * 2), savings - initial_savings );
 
-      const int64_t expected_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (cont_rate/ 5.) / usecs_per_year )
+      const int64_t expected_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (continuous_rate/ 5.) / usecs_per_year )
                                                + initial_perblock_bucket;
       const int64_t expected_pervote_bucket  = 0;
       const int64_t from_perblock_bucket = initial_unpaid_blocks * expected_perblock_bucket / initial_tot_unpaid_blocks ;
@@ -5519,11 +5515,11 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
 
       const uint64_t usecs_between_fills         = bucket_fill_time - initial_bucket_fill_time;
 
-      const int64_t expected_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (cont_rate / 5.) / usecs_per_year )
+      const int64_t expected_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (continuous_rate / 5.) / usecs_per_year )
          + initial_perblock_bucket;
       const int64_t from_perblock_bucket = initial_unpaid_blocks * expected_perblock_bucket / initial_tot_unpaid_blocks;
 
-      const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * cont_rate / usecs_per_year;
+      const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * continuous_rate / usecs_per_year;
       BOOST_REQUIRE_EQUAL( add_gbm(int64_t(expected_supply_growth)), supply.get_amount() - initial_supply.get_amount() );
 
       produce_block(fc::hours(2));

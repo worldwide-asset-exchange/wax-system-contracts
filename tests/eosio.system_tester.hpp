@@ -735,7 +735,7 @@ public:
       return data.empty() ? asset(0, balance_symbol) : abi_ser.binary_to_variant("genesis_tokens", data, abi_serializer_max_time)["balance"].as<asset>();
    }
 
-   uint64_t add_gbm(uint64_t to_tokens) {
+   int64_t add_gbm(uint64_t to_tokens) {
       uint32_t seconds_per_day       = 24 * 3600;
       int64_t  useconds_per_day      = int64_t(seconds_per_day) * 1000'000ll;
       uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022

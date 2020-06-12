@@ -117,67 +117,112 @@ namespace eosiosystem {
    }
 
    /**
-    * Records the missed blocks that producers were expected to produce beteen the currrent and last seen block slots
+    * Records the curent block for performance and reward tracking as well as any recently missed blocks
     */
-   void system_contract::record_missed_blocks(uint32_t last_slot, uint32_t current_slot) {
+   void system_contract::track_blocks(const name &current_producer, uint32_t last_slot, uint32_t current_slot) {
+     auto current_producer_missed_blocks = record_missed_blocks(current_producer, last_slot, current_slot);
+
+     if ( const auto it = _rewards.find( current_producer.value ); it != _rewards.end() ) {
+       const auto producer_type = it->get_current_type();
+       _greward.new_unpaid_block(producer_type);
+
+       _rewards.modify( it, same_payer, [&](auto& rec ) {
+          const uint32_t blocks_performance_window = _greward.get_performance_window(producer_type);
+          rec.track_blocks(1, 1 + current_producer_missed_blocks, current_slot, blocks_performance_window);
+       });
+     }
+   }
+
+   /**
+    * Records the missed blocks that producers (except for the current producer)
+    * were expected to produce beteen the currrent and last seen block slots
+    * Returns the number of missed blocks by the current prodcuer
+    */
+   uint32_t system_contract::record_missed_blocks(const name &current_producer, uint32_t last_slot, uint32_t current_slot) {
+     auto current_producer_missed_blocks = 0;
      auto total_missed_blocks = current_slot - (last_slot + 1); // plus 1 because last_slot was not missed
      auto producers = _greward.current_producers;
      auto num_producers = producers.size();
      if(total_missed_blocks > 0 && num_producers > 0) {
        // We missed a/some slot(s) that should have had blocks
 
-       auto missed_rotations = total_missed_blocks / (blocks_per_round * num_producers);                    // Number of full rotations that were missed
-       auto every_producer_missed_blocks = missed_rotations * blocks_per_round;                             // Every producer missed, at minimum, this many blocks
-       auto first_missed_slot = last_slot + 1;                                                    // First slot that was missed
-       auto first_missed_index = first_missed_slot % (num_producers * blocks_per_round) / blocks_per_round; // Index of the producer that missed the first slot
+       // Number of full rotations that were missed
+       auto missed_rotations = total_missed_blocks / (blocks_per_round * num_producers);
+       // Every producer missed, at minimum, this many blocks
+       auto every_producer_missed_blocks = missed_rotations * blocks_per_round;
+       // First slot that was missed
+       auto first_missed_slot = last_slot + 1;
+       // Index of the producer that missed the first slot
+       auto first_missed_index = first_missed_slot % (num_producers * blocks_per_round) / blocks_per_round;
 
        // Attribute each of the producers in this gap with their counts for the blocks they were expected to produce
        uint32_t blocks_counted = 0;
        auto index = first_missed_index;
        /*
-        In the following loop, blocks_counted < total_missed_blocks is actually too weak,should be strictly !=, AND we should never have to rely on the i variable to get us out of this loop. blocks_counted should always end up totalling to total_missed_blocks. It is there "in case anything goes wrong" in the subsequent maths
+        In the following loop,
+        blocks_counted < total_missed_blocks is actually too weak, should be strictly !=,
+        AND we should never have to rely on the i variable to get us out of this loop.
+        blocks_counted should always end up totalling to total_missed_blocks.
+        It is there defensively "in case anything goes wrong" in the subsequent math
        */
        for (int i = 0; i < num_producers && blocks_counted < total_missed_blocks; i++) {
-         uint32_t producer_missed_blocks = every_producer_missed_blocks; // Start with the minimum number of blocks that every producer missed
+         // Start with the minimum number of blocks that every producer missed
+         uint32_t producer_missed_blocks = every_producer_missed_blocks;
 
          /*
             Check if the producer missed more than the base amount due to non-whole
             multiples of full producer and individual producer rounds of blocks being missed
+
+            index_from_first_missed_producer is the relative index from this producer to the first producer to miss a block
             Note that (num_producers - first_missed_index) is the additive inverse of first_missed_index mod num_producers
             Necessary to do it this way to overcome unsigned math limitations
          */
-         auto index_from_first_missed_producer = (index + (num_producers - first_missed_index)) % num_producers; // Relative index from this producer to the first producer to miss a block
+         auto index_from_first_missed_producer = (index + (num_producers - first_missed_index)) % num_producers;
 
          // The first slot that the indexed producer would have been scheduled for just prior to the current slot
-         auto starting_missed_block_height = 12 * (first_missed_slot / 12) + every_producer_missed_blocks * num_producers + index_from_first_missed_producer * blocks_per_round;
+         auto starting_missed_block_height = 12 * (first_missed_slot / 12)
+                                            + every_producer_missed_blocks * num_producers
+                                            + index_from_first_missed_producer * blocks_per_round;
          // This is the last slot the indexed producer is scheduled for
          auto max_missed_block_height = starting_missed_block_height + blocks_per_round;
          // The actual last missed slot for this producer
          auto last_missed_block_height = std::min(max_missed_block_height, current_slot);
          // accumulate the number of blocks missed by this producer
-         producer_missed_blocks += starting_missed_block_height < last_missed_block_height ? last_missed_block_height - starting_missed_block_height : 0;
-         if(index_from_first_missed_producer == 0) {
-           /* If this is the first producer to miss blocks, we have to reduce
-            * the missed blocks by the offset at which the producer began missing blocks
-            * since the above accounting method starts at the first slot that the
-            * producer is scheduled for
+         producer_missed_blocks += starting_missed_block_height < last_missed_block_height
+                                  ? last_missed_block_height - starting_missed_block_height
+                                  : 0;
+         if (index_from_first_missed_producer == 0) {
+           /*
+              If this is the first producer to miss blocks, we have to reduce
+              the missed blocks by the offset at which the producer began missing blocks
+              since the above accounting method starts at the first slot that the
+              producer is scheduled for
           */
            producer_missed_blocks -= first_missed_slot % blocks_per_round;
          }
 
          auto producer = producers[index].first;
-         if (auto reward_it = _rewards.find(producer.value); reward_it != _rewards.end()) {
-            const uint32_t blocks_performance_window = _greward.get_performance_window(reward_it->get_current_type());
-            _rewards.modify(reward_it, same_payer, [&](auto& rec) {
-               rec.missed_blocks(producer_missed_blocks, current_slot, blocks_performance_window);
-            });
+         if (producer != current_producer) {
+           if (auto reward_it = _rewards.find(producer.value); reward_it != _rewards.end()) {
+              const uint32_t blocks_performance_window = _greward.get_performance_window(reward_it->get_current_type());
+              _rewards.modify(reward_it, same_payer, [&](auto& rec) {
+                 rec.track_blocks(0, producer_missed_blocks, current_slot, blocks_performance_window);
+              });
+           }
+         } else {
+           // We will return this value as the output of this function since the current producer will also
+           // Be successfully producing this block, the recording needs to account for that extra block
+           current_producer_missed_blocks += producer_missed_blocks;
          }
 
          index = (index + 1) % num_producers;
          blocks_counted += producer_missed_blocks;
        }
+       // Left commented out for emphasis...
        // check(blocks_counted == total_missed_blocks, "Math error totalling blocks. Should never happen!");
      }
+
+     return current_producer_missed_blocks;
    }
 
    /**

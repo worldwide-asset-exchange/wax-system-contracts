@@ -288,7 +288,7 @@ namespace eosiosystem {
          return it->second;
       }
 
-      void new_unpaid_block(reward_type type, const eosio::block_timestamp& tm) {
+      void new_unpaid_block(reward_type type) {
          auto& counters = get_counters(type);
 
          counters.total_unpaid_blocks++;
@@ -624,15 +624,10 @@ namespace eosiosystem {
          return it->second;
       }
 
-      void missed_blocks(uint32_t num_blocks, uint32_t current_slot, uint32_t blocks_performance_window) {
+      void track_blocks(uint32_t produced_blocks, uint32_t missed_blocks, uint32_t current_slot, uint32_t blocks_performance_window) {
         auto &counter = get_current_counter();
-        counter.update_performance(0, num_blocks, current_slot, blocks_performance_window);
-      }
-
-      void track_block(uint32_t current_slot, uint32_t blocks_performance_window) {
-        auto &counter = get_current_counter();
-        counter.update_performance(1, 1, current_slot, blocks_performance_window);
-        counter.unpaid_blocks++;
+        counter.update_performance(produced_blocks, missed_blocks, current_slot, blocks_performance_window);
+        counter.unpaid_blocks += produced_blocks;
       }
 
       optional<double> get_performance(reward_type as_type) {
@@ -1494,7 +1489,8 @@ namespace eosiosystem {
          void select_producers_into( uint64_t begin, uint64_t count, reward_type type, prod_vec_t& result );
          bool is_it_time_to_select_a_standby() const;
          double calculate_producers_performance( const voter_info& voter );
-         void record_missed_blocks( uint32_t last_slot, uint32_t current_slot );
+         void track_blocks( const name &current_producer, uint32_t last_slot, uint32_t current_slot );
+         uint32_t record_missed_blocks( const name &current_producer, uint32_t last_slot, uint32_t current_slot );
 
          template <auto system_contract::*...Ptrs>
          class registration {

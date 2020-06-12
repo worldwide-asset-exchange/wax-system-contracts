@@ -39,19 +39,7 @@ namespace eosiosystem {
          _ds >> ignored2 >> ignored2 >> schedule_version;
 
          update_producer_reward_status(schedule_version);
-
-         record_missed_blocks(last_timestamp.slot, timestamp.slot);
-
-         // Counts blocks according to producer type
-         if ( const auto it = _rewards.find( producer.value ); it != _rewards.end() ) {
-            const auto producer_type = it->get_current_type();
-            _greward.new_unpaid_block(producer_type, timestamp);
-
-            _rewards.modify( it, same_payer, [&](auto& rec ) {
-               const uint32_t blocks_performance_window = _greward.get_performance_window(producer_type);
-               rec.track_block(timestamp.slot, blocks_performance_window);
-            });
-         }
+         track_blocks(producer, last_timestamp.slot, timestamp.slot);
       }
       else {
          /**
