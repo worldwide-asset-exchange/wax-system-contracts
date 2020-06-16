@@ -723,31 +723,31 @@ namespace eosiosystem {
             auto pitr = _proposals.find( pd.first.value );
             if( pitr != _proposals.end() ) {
 
-                check( (*pitr).status != PROPOSAL_STATUS::PENDING, "The proposal is not currently on vote" );
+                if((*pitr).status == PROPOSAL_STATUS::ON_VOTE){
+                    time_point_sec current_time = current_time_point();
+                    wps_env_singleton _wps_env(get_self(), get_self().value);
+                    auto wps_env = _wps_env.get();
+                    uint32_t duration_of_voting = wps_env.duration_of_voting * seconds_per_day;
 
-                time_point_sec current_time = current_time_point();
-                wps_env_singleton _wps_env(get_self(), get_self().value);
-                auto wps_env = _wps_env.get();
-                uint32_t duration_of_voting = wps_env.duration_of_voting * seconds_per_day;
-
-                if(time_point_sec(time_point(current_time - (*pitr).vote_start_time)) >= time_point_sec(duration_of_voting)) {
-                    _proposals.modify(pitr, same_payer, [&](auto &proposal) {
-                        proposal.status = PROPOSAL_STATUS::REJECTED;
-                    });
-                }
-                else{
-                    _proposals.modify( pitr, same_payer, [&]( auto& p ) {
-                        p.total_votes += pd.second.first;
-                        if ( p.total_votes < 0 ) { // floating point arithmetics can give small negative numbers
-                            p.total_votes = 0;
-                        }
-                    });
-                    double total_activated_vote = stake2vote(_wps_state.total_stake);
-                    if((*pitr).total_votes > total_activated_vote * double(wps_env.total_voting_percent)/100.0){
-                        if((*pitr).status == PROPOSAL_STATUS::ON_VOTE){
-                            _proposals.modify( pitr, same_payer, [&]( auto& p ) {
-                                p.status = PROPOSAL_STATUS::FINISHED_VOTING;
-                            });
+                    if(time_point_sec(time_point(current_time - (*pitr).vote_start_time)) >= time_point_sec(duration_of_voting)) {
+                        _proposals.modify(pitr, same_payer, [&](auto &proposal) {
+                            proposal.status = PROPOSAL_STATUS::REJECTED;
+                        });
+                    }
+                    else{
+                        _proposals.modify( pitr, same_payer, [&]( auto& p ) {
+                            p.total_votes += pd.second.first;
+                            if ( p.total_votes < 0 ) { // floating point arithmetics can give small negative numbers
+                                p.total_votes = 0;
+                            }
+                        });
+                        double total_activated_vote = stake2vote(_wps_state.total_stake);
+                        if((*pitr).total_votes > total_activated_vote * double(wps_env.total_voting_percent)/100.0){
+                            if((*pitr).status == PROPOSAL_STATUS::ON_VOTE){
+                                _proposals.modify( pitr, same_payer, [&]( auto& p ) {
+                                    p.status = PROPOSAL_STATUS::FINISHED_VOTING;
+                                });
+                            }
                         }
                     }
                 }
