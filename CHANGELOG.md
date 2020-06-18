@@ -7,10 +7,21 @@ BREAKING CHANGES:
 FEATURES:
 
 IMPROVEMENTS:
+
+BUG FIXES:
+
+## wax-1.7.0-2.1.0
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
 - Deployment script
 - 5% to 3% yearly inflation
 
 BUG FIXES:
+- various WPS checks
 
 ## wax-1.7.0-2.0.2
 
