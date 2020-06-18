@@ -751,10 +751,6 @@ namespace eosiosystem {
                         }
                     }
                 }
-            } else {
-                if( pd.second.second ) {
-                    check( false, ( pd.first.to_string() + "does not have an existing proposal" ).data() );
-                }
             }
         }
 

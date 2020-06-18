@@ -10,6 +10,17 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+## wax-1.7.0-2.1.1
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
+
+BUG FIXES:
+- fix more WPS checks
+
 ## wax-1.7.0-2.1.0
 
 BREAKING CHANGES:
