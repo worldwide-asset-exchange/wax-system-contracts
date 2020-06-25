@@ -13,31 +13,6 @@
 
 #include "eosio.system_tester.hpp"
 
-/// percent expressed as a float number between 0 and 1
-/// @todo Float comparisons can be a problem!
-#define BOOST_REQUIRE_APROX(L, R, percent) \
-   do { \
-      if (R != 0.0 && L != 0.0) { \
-         auto A = std::max(R, L); \
-         auto B = std::min(R, L); \
-         if ((1 - B / static_cast<double>(A)) > percent) \
-            BOOST_FAIL("[" << (R) << "] !aprox to [" << (L) << "] (in " << percent * 100 << "%)"); \
-      } \
-      else \
-         BOOST_REQUIRE_EQUAL(R, L); \
-   } while (false)
-
-#define BOOST_REQUIRE_GTE(L, R) \
-   if (L < R) \
-      BOOST_FAIL("[" << (L) << " < " << (R) << "] (should be >=)");
-
-#define BOOST_REQUIRE_WITHIN(L, R, limit) \
-   if (L < R) { \
-      BOOST_REQUIRE_GTE(limit, R - L); \
-   } \
-   else \
-      BOOST_REQUIRE_GTE(limit, L - R);
-
 
 struct _abi_hash {
    name owner;
@@ -546,7 +521,7 @@ BOOST_FIXTURE_TEST_CASE( delegate_to_another_user, eosio_system_tester ) try {
    total = get_total_stake( "bob111111111" );
    BOOST_REQUIRE_EQUAL( core_sym::from_string("230.0000"), total["net_weight"].as<asset>());
    BOOST_REQUIRE_EQUAL( core_sym::from_string("120.0000"), total["cpu_weight"].as<asset>());
-   //balance should not change after unsuccessfull attempts to unstake
+   //balance should not change after unsuccessful attempts to unstake
    BOOST_REQUIRE_EQUAL( core_sym::from_string("700.0000"), get_balance( "alice1111111" ) );
    //voting power too
    REQUIRE_MATCHING_OBJECT( voter( "alice1111111", core_sym::from_string("300.0000") ), get_voter_info( "alice1111111" ) );
@@ -2000,7 +1975,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards, eosio_system_tester, * bo
       BOOST_REQUIRE_EQUAL(initial_voters_account_balance, initial_voters_bucket); //no tokens were reserved yet
       BOOST_REQUIRE_EQUAL(voters_account_balance, voters_bucket);
 
-      BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_WITHIN(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount(), 1);
       BOOST_REQUIRE_GT(balance.get_amount(), initial_balance.get_amount());
       BOOST_REQUIRE_GTE(max_voter_reward, balance.get_amount() - initial_balance.get_amount());
    }
@@ -2034,7 +2009,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards, eosio_system_tester, * bo
 #ifdef LONG_TESTS
 
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_change_vote_random, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
-  using prod_vec_t = std::vector<account_name>;
   activaterewd();
   const asset large_asset = core_sym::from_string("80.0000");
   create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -2044,20 +2018,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_change_vote_random, eosio_
 
   prod_vec_t producer_names;
   producer_names.reserve(21);
-
-  // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-  auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-     for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-        account_name prod{prefix + std::string(1, c)};
-        BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-        result.emplace_back(prod);
-        create_account_with_resources(
-           prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-        regproducer(prod);
-     }
-  };
 
   // Create producers/standbys
   gen_producers("defproducer", 21, producer_names);
@@ -2113,7 +2073,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_change_vote_random, eosio_
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_change_vote_nonrandom, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
-   using prod_vec_t = std::vector<account_name>;
    activaterewd();
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -2123,20 +2082,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_change_vote_nonrandom, eos
 
    prod_vec_t producer_names;
    producer_names.reserve(21);
-
-   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-   auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-         account_name prod{prefix + std::string(1, c)};
-         BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-         result.emplace_back(prod);
-         create_account_with_resources(
-            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-         regproducer(prod);
-      }
-   };
 
    // Create producers/standbys
    gen_producers("defproducer", 21, producer_names);
@@ -2192,7 +2137,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_change_vote_nonrandom, eos
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_misc_scenarios_random, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
-   using prod_vec_t = std::vector<account_name>;
    activaterewd();
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -2207,20 +2151,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_misc_scenarios_random, eos
    producer_names.reserve(21);
    standby_names.reserve(36);
    substandby_names.reserve(17);
-
-   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-   auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-         account_name prod{prefix + std::string(1, c)};
-         BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-         result.emplace_back(prod);
-         create_account_with_resources(
-            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-         regproducer(prod);
-      }
-   };
 
    // Create producers/standbys
    gen_producers("defproducer", 21, producer_names);
@@ -2311,7 +2241,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_misc_scenarios_random, eos
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_misc_scenarios_nonrandom, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
-   using prod_vec_t = std::vector<account_name>;
    activaterewd();
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -2326,20 +2255,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_misc_scenarios_nonrandom, 
    producer_names.reserve(21);
    standby_names.reserve(36);
    substandby_names.reserve(17);
-
-   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-   auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-         account_name prod{prefix + std::string(1, c)};
-         BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-         result.emplace_back(prod);
-         create_account_with_resources(
-            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-         regproducer(prod);
-      }
-   };
 
    // Create producers/standbys
    gen_producers("defproducer", 21, producer_names);
@@ -2434,7 +2349,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_misc_scenarios_nonrandom, 
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_expected_blocks, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
-   using prod_vec_t = std::vector<account_name>;
    activaterewd();
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -2443,35 +2357,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_expected_blocks, eosio_sys
 
    prod_vec_t producer_names;
    producer_names.reserve(21);
-
-   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-   auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-         account_name prod{prefix + std::string(1, c)};
-         BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-         result.emplace_back(prod);
-         create_account_with_resources(
-            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-         regproducer(prod);
-      }
-   };
-
-    auto check_producers = [&](vector<double> expected_perfs, bool show_perfs = true) {
-       BOOST_REQUIRE(expected_perfs.size() == producer_names.size());
-       string res;
-       for (int i = 0; i < producer_names.size(); i++) {
-          const auto& prod = producer_names[i];
-          auto expected_perf = expected_perfs[i];
-          auto actual_perf = get_performance(prod, 1);
-          res += std::to_string(actual_perf) + string(",");
-          BOOST_REQUIRE_APROX(expected_perf, actual_perf, 0.001);
-       }
-       if(show_perfs) {
-         BOOST_TEST_MESSAGE(res);
-       }
-    };
 
    // Create producers/standbys
    gen_producers("defproducer", 21, producer_names);
@@ -2487,18 +2372,12 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_expected_blocks, eosio_sys
    uint32_t producer_blocks_performance_window = 3 * 12;
 
    auto full_performance_start_at = [&](int starting_producer_index) {
-     // This is just to speed up setting to full rewards performance
-     setrwrdsenv(config::system_account_name, 2, standbys_blocks_performance_window, true);
-     produce_blocks(504);
-     // Back to normal
-     setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-     produce_blocks(21 * 12 * producer_blocks_performance_window / 12);
-     // Now we're at full rewards performance
+     full_performances(producer_blocks_performance_window, standbys_blocks_performance_window, true, producer_names);
      const auto &starting_producer = producer_names[starting_producer_index];
      const auto &subsequent_producer = producer_names[(starting_producer_index + 1) % producer_names.size()];
      produce_blocks_up_to_producer(subsequent_producer);
      produce_blocks_up_to_producer(starting_producer);
-     check_producers({1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0}, false);
+     check_producers(producer_names, {1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0}, false);
    };
 
    const auto     initial_global_state              = get_global_state();
@@ -2510,84 +2389,81 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_expected_blocks, eosio_sys
    const asset initial_balance_a = get_balance(N(producvotera));
    const asset initial_balance_b = get_balance(N(producvoterb));
 
-   setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-
    full_performance_start_at(0);
    miss_slots(1);
-   check_producers({0.972222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+   check_producers(producer_names, {0.972222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
    produce_blocks(1);
-   check_producers({0.972994,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+   check_producers(producer_names, {0.972994,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
 
    full_performance_start_at(0);
    produce_blocks(1);
    miss_slots(1);
-   check_producers({0.972222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+   check_producers(producer_names, {0.972222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
 
    full_performance_start_at(1);
    produce_blocks(1);
    miss_slots(1);
-   check_producers({1.000000,0.972222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+   check_producers(producer_names, {1.000000,0.972222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
 
    full_performance_start_at(1);
    produce_blocks(11);
    miss_slots(2);
-   check_producers({1.000000,0.972222,0.972222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+   check_producers(producer_names, {1.000000,0.972222,0.972222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
 
    full_performance_start_at(20);
    produce_blocks(10);
    miss_slots(4);
-   check_producers({0.944444,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,0.944444});
+   check_producers(producer_names, {0.944444,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,0.944444});
 
    full_performance_start_at(7);
    produce_blocks(7);
    miss_slots(27);
-   check_producers({1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,0.861111,0.666667,0.722222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
+   check_producers(producer_names, {1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,0.861111,0.666667,0.722222,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000,1.000000});
 
    full_performance_start_at(7);
    produce_blocks(7);
    miss_slots(252);
-   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+   check_producers(producer_names, {0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
    produce_blocks(1);
-   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.675926,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+   check_producers(producer_names, {0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.675926,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
    produce_blocks(251);
-   check_producers({0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280});
+   check_producers(producer_names, {0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280,0.762280});
 
    full_performance_start_at(7);
    produce_blocks(7);
    miss_slots(504);
-   check_producers({0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333});
+   check_producers(producer_names, {0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333});
 
    full_performance_start_at(7);
    produce_blocks(7);
    miss_slots(258);
-   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.527778,0.638889,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+   check_producers(producer_names, {0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.527778,0.638889,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
 
    full_performance_start_at(7);
    produce_blocks(7);
    miss_slots(378);
-   check_producers({0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.527778,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.638889,0.666667,0.666667});
+   check_producers(producer_names, {0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.527778,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.638889,0.666667,0.666667});
 
    full_performance_start_at(0);
    miss_slots(504);
-   check_producers({0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333});
+   check_producers(producer_names, {0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333});
 
    full_performance_start_at(0);
    miss_slots(258);
-   check_producers({0.500000,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+   check_producers(producer_names, {0.500000,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
 
    full_performance_start_at(0);
    miss_slots(378);
-   check_producers({0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.500000,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
+   check_producers(producer_names, {0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.333333,0.500000,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667,0.666667});
 
    full_performance_start_at(0);
    miss_slots(252 * 100);
-   check_producers({0.027778,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000});
+   check_producers(producer_names, {0.027778,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000});
    produce_blocks(1);
-   check_producers({0.054784,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000});
+   check_producers(producer_names, {0.054784,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000});
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_stability_random, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
-   using prod_vec_t = std::vector<account_name>;
    activaterewd();
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -2597,20 +2473,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_stability_random, eosio_sy
    prod_vec_t producer_names, standby_names;
    producer_names.reserve(21);
    standby_names.reserve(36);
-
-   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-   auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-         account_name prod{prefix + std::string(1, c)};
-         BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-         result.emplace_back(prod);
-         create_account_with_resources(
-            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-         regproducer(prod);
-      }
-   };
 
    // Create producers/standbys
    gen_producers("defproducer", 21, producer_names);
@@ -2649,8 +2511,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_stability_random, eosio_sy
       const asset initial_balance_a = get_balance(N(producvotera));
       const asset initial_balance_b = get_balance(N(producvoterb));
 
-      setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-      produce_blocks(2 * 36 * standbys_blocks_performance_window / .01);  // cycle through the producers to set them all at close to full rewards scaling
+      full_performances(producer_blocks_performance_window, standbys_blocks_performance_window, true, producer_names, standby_names);
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
       const auto     global_state_a            = get_global_state();
       const uint64_t claim_time_a              = microseconds_since_epoch_of_iso_string( global_state_a["last_pervote_bucket_fill"] );
@@ -2696,7 +2557,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_stability_random, eosio_sy
       const asset initial_balance_b = get_balance(N(producvoterb));
 
       setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-      produce_block(fc::milliseconds(500 * 10 * 36 * standbys_blocks_performance_window / .01));  // miss a whole bunch of block slots to set the producers close to zero rewards scalling
+      produce_block(fc::milliseconds(500 * 10 * 36 * standbys_blocks_performance_window / .01));  // miss a whole bunch of block slots to set the producers close to zero rewards scaling
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
       const auto     global_state_a            = get_global_state();
       const uint64_t claim_time_a              = microseconds_since_epoch_of_iso_string( global_state_a["last_pervote_bucket_fill"] );
@@ -2739,7 +2600,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_stability_random, eosio_sy
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_stability_nonrandom, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
-  using prod_vec_t = std::vector<account_name>;
   activaterewd();
   const asset large_asset = core_sym::from_string("80.0000");
   create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -2749,20 +2609,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_stability_nonrandom, eosio
   prod_vec_t producer_names, standby_names;
   producer_names.reserve(21);
   standby_names.reserve(36);
-
-  // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-  auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-     for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-        account_name prod{prefix + std::string(1, c)};
-        BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-        result.emplace_back(prod);
-        create_account_with_resources(
-           prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-        regproducer(prod);
-     }
-  };
 
   // Create producers/standbys
   gen_producers("defproducer", 21, producer_names);
@@ -2801,8 +2647,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_stability_nonrandom, eosio
      const asset initial_balance_a = get_balance(N(producvotera));
      const asset initial_balance_b = get_balance(N(producvoterb));
 
-     setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, false);
-     produce_blocks(2 * 36 * standbys_blocks_performance_window / .01);  // cycle through the producers to set them all at close to full rewards scaling
+     full_performances(producer_blocks_performance_window, standbys_blocks_performance_window, false, producer_names, standby_names);
      BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
      const auto     global_state_a            = get_global_state();
      const uint64_t claim_time_a              = microseconds_since_epoch_of_iso_string( global_state_a["last_pervote_bucket_fill"] );
@@ -2848,7 +2693,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_stability_nonrandom, eosio
      const asset initial_balance_b = get_balance(N(producvoterb));
 
      setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-     produce_block(fc::milliseconds(500 * 10 * 36 * standbys_blocks_performance_window / .01));  // miss a whole bunch of block slots to set the producers close to zero rewards scalling
+     produce_block(fc::milliseconds(500 * 10 * 36 * standbys_blocks_performance_window / .01));  // miss a whole bunch of block slots to set the producers close to zero rewards scaling
      BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
      const auto     global_state_a            = get_global_state();
      const uint64_t claim_time_a              = microseconds_since_epoch_of_iso_string( global_state_a["last_pervote_bucket_fill"] );
@@ -2892,27 +2737,12 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_stability_nonrandom, eosio
 
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_producers_stability_random, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
    cross_15_percent_threshold();
-   using prod_vec_t = std::vector<account_name>;
    activaterewd();
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
 
    prod_vec_t producer_names;
    producer_names.reserve(21);
-
-   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-   auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-         account_name prod{prefix + std::string(1, c)};
-         BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-         result.emplace_back(prod);
-         create_account_with_resources(
-            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-         regproducer(prod);
-      }
-   };
 
    // Create producers/standbys
    gen_producers("defproducer", 21, producer_names);
@@ -2922,7 +2752,8 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_producers_s
 
    BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000")));
 
-   BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
+   const vector<account_name> first_sixteen_prods(producer_names.begin(), producer_names.begin()+16);
+   BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), first_sixteen_prods));
 
    uint32_t standbys_blocks_performance_window = 12;
    uint32_t producer_blocks_performance_window = 3 * 12;
@@ -2936,8 +2767,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_producers_s
       const asset initial_balance_a = get_balance(N(producvotera));
       const asset initial_supply  = get_token_supply();
 
-      setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-      produce_blocks(2 * 36 * standbys_blocks_performance_window / .01);  // cycle through the producers to set them all at close to full rewards scaling
+      full_performances(producer_blocks_performance_window, standbys_blocks_performance_window, true, first_sixteen_prods);
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
 
       const auto     global_state_a            = get_global_state();
@@ -2972,7 +2802,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_producers_s
       const asset initial_balance_a = get_balance(N(producvotera));
 
       setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-      produce_block(fc::days(1));  // miss a whole bucnh of block slots to set the producers close to zero rewards scalling
+      produce_block(fc::days(1));  // miss a whole bunch of block slots to set the producers close to zero rewards scaling
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
       const auto     global_state_a            = get_global_state();
       const uint64_t claim_time_a              = microseconds_since_epoch_of_iso_string( global_state_a["last_pervote_bucket_fill"] );
@@ -3001,27 +2831,12 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_producers_s
 
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_producers_stability_nonrandom, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
    cross_15_percent_threshold();
-   using prod_vec_t = std::vector<account_name>;
    activaterewd();
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
 
    prod_vec_t producer_names;
    producer_names.reserve(21);
-
-   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-   auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-         account_name prod{prefix + std::string(1, c)};
-         BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-         result.emplace_back(prod);
-         create_account_with_resources(
-            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-         regproducer(prod);
-      }
-   };
 
    // Create producers/standbys
    gen_producers("defproducer", 21, producer_names);
@@ -3031,7 +2846,8 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_producers_s
 
    BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000")));
 
-   BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
+   const vector<account_name> first_sixteen_prods(producer_names.begin(), producer_names.begin()+16);
+   BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), first_sixteen_prods));
 
    uint32_t standbys_blocks_performance_window = 12;
    uint32_t producer_blocks_performance_window = 3 * 12;
@@ -3045,8 +2861,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_producers_s
       const asset initial_balance_a = get_balance(N(producvotera));
       const asset initial_supply  = get_token_supply();
 
-      setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, false);
-      produce_blocks(2 * 36 * standbys_blocks_performance_window / .01);  // cycle through the producers to set them all at close to full rewards scaling
+      full_performances(producer_blocks_performance_window, standbys_blocks_performance_window, false, first_sixteen_prods);
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
 
       const auto     global_state_a            = get_global_state();
@@ -3081,7 +2896,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_producers_s
       const asset initial_balance_a = get_balance(N(producvotera));
 
       setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, false);
-      produce_block(fc::days(1));  // miss a whole bucnh of block slots to set the producers close to zero rewards scalling
+      produce_block(fc::days(1));  // miss a whole bunch of block slots to set the producers close to zero rewards scaling
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
       const auto     global_state_a            = get_global_state();
       const uint64_t claim_time_a              = microseconds_since_epoch_of_iso_string( global_state_a["last_pervote_bucket_fill"] );
@@ -3110,7 +2925,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_producers_s
 
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_standbys_stability_random, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
    cross_15_percent_threshold();
-   using prod_vec_t = std::vector<account_name>;
    activaterewd();
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -3120,20 +2934,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_standbys_st
    prod_vec_t producer_names, standby_names;
    producer_names.reserve(21);
    standby_names.reserve(36);
-
-   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-   auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-         account_name prod{prefix + std::string(1, c)};
-         BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-         result.emplace_back(prod);
-         create_account_with_resources(
-            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-         regproducer(prod);
-      }
-   };
 
    // Create producers/standbys
    gen_producers("defproducer", 21, producer_names);
@@ -3154,7 +2954,9 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_standbys_st
    BOOST_REQUIRE_EQUAL(success(), stake("producvoterc", core_sym::from_string("20000000.0000"), core_sym::from_string("20000000.0000")));
 
    BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+21)));
-   BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>(standby_names.begin(), standby_names.begin()+16)));
+
+   const vector<account_name> first_sixteen_standbys(standby_names.begin(), standby_names.begin()+16);
+   BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), first_sixteen_standbys));
 
    uint32_t standbys_blocks_performance_window = 12;
    uint32_t producer_blocks_performance_window = 3 * 12;
@@ -3167,8 +2969,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_standbys_st
       const asset initial_balance_b = get_balance(N(producvoterb));
       const asset initial_supply  = get_token_supply();
 
-      setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-      produce_blocks(2 * 36 * standbys_blocks_performance_window / .01);  // cycle through the producers to set them all at close to full rewards scaling
+      full_performances(producer_blocks_performance_window, standbys_blocks_performance_window, true, producer_names, first_sixteen_standbys);
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvoterb), N(voterclaim), mvo()("owner", "producvoterb")));
 
       const auto     global_state_b            = get_global_state();
@@ -3203,7 +3004,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_standbys_st
       const asset initial_balance_b = get_balance(N(producvoterb));
 
       setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-      produce_block(fc::days(1));  // miss a whole bucnh of block slots to set the producers close to zero rewards scalling
+      produce_block(fc::days(1));  // miss a whole bunch of block slots to set the producers close to zero rewards scaling
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvoterb), N(voterclaim), mvo()("owner", "producvoterb")));
       const auto     global_state_b            = get_global_state();
       const uint64_t claim_time_b              = microseconds_since_epoch_of_iso_string( global_state_b["last_pervote_bucket_fill"] );
@@ -3232,7 +3033,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_standbys_st
 
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_standbys_stability_nonrandom, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
    cross_15_percent_threshold();
-   using prod_vec_t = std::vector<account_name>;
    activaterewd();
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -3242,20 +3042,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_standbys_st
    prod_vec_t producer_names, standby_names;
    producer_names.reserve(21);
    standby_names.reserve(36);
-
-   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-   auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-         account_name prod{prefix + std::string(1, c)};
-         BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-         result.emplace_back(prod);
-         create_account_with_resources(
-            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-         regproducer(prod);
-      }
-   };
 
    // Create producers/standbys
    gen_producers("defproducer", 21, producer_names);
@@ -3276,7 +3062,9 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_standbys_st
    BOOST_REQUIRE_EQUAL(success(), stake("producvoterc", core_sym::from_string("20000000.0000"), core_sym::from_string("20000000.0000")));
 
    BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+21)));
-   BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>(standby_names.begin(), standby_names.begin()+16)));
+
+   const vector<account_name> first_sixteen_standbys(standby_names.begin(), standby_names.begin()+16);
+   BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), first_sixteen_standbys));
 
    uint32_t standbys_blocks_performance_window = 12;
    uint32_t producer_blocks_performance_window = 3 * 12;
@@ -3289,8 +3077,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_standbys_st
       const asset initial_balance_b = get_balance(N(producvoterb));
       const asset initial_supply  = get_token_supply();
 
-      setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, false);
-      produce_blocks(2 * 36 * standbys_blocks_performance_window / .01);  // cycle through the producers to set them all at close to full rewards scaling
+      full_performances(producer_blocks_performance_window, standbys_blocks_performance_window, false, producer_names, first_sixteen_standbys);
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvoterb), N(voterclaim), mvo()("owner", "producvoterb")));
 
       const auto     global_state_b            = get_global_state();
@@ -3325,7 +3112,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_below_capacity_standbys_st
       const asset initial_balance_b = get_balance(N(producvoterb));
 
       setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, false);
-      produce_block(fc::days(1));  // miss a whole bucnh of block slots to set the producers close to zero rewards scalling
+      produce_block(fc::days(1));  // miss a whole bunch of block slots to set the producers close to zero rewards scaling
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvoterb), N(voterclaim), mvo()("owner", "producvoterb")));
       const auto     global_state_b            = get_global_state();
       const uint64_t claim_time_b              = microseconds_since_epoch_of_iso_string( global_state_b["last_pervote_bucket_fill"] );
@@ -3363,27 +3150,12 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_proxy_stability_random, eo
                                                ("proxy",  "alice1111111")
                                                ("isproxy", true ))
    );
-   using prod_vec_t = std::vector<account_name>;
    activaterewd();
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
 
    prod_vec_t producer_names;
    producer_names.reserve(21);
-
-   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-   auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-         account_name prod{prefix + std::string(1, c)};
-         BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-         result.emplace_back(prod);
-         create_account_with_resources(
-            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-         regproducer(prod);
-      }
-   };
 
    // Create producers/standbys
    gen_producers("defproducer", 21, producer_names);
@@ -3408,8 +3180,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_proxy_stability_random, eo
       const asset initial_balance_a = get_balance(N(producvotera));
       const asset initial_supply  = get_token_supply();
 
-      setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-      produce_blocks(2 * 36 * standbys_blocks_performance_window / .01);  // cycle through the producers to set them all at close to full rewards scaling
+      full_performances(producer_blocks_performance_window, standbys_blocks_performance_window, true, producer_names);
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
 
       const auto     global_state_a            = get_global_state();
@@ -3444,7 +3215,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_proxy_stability_random, eo
       const asset initial_balance_a = get_balance(N(producvotera));
 
       setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-      produce_block(fc::days(1));  // miss a whole bucnh of block slots to set the producers close to zero rewards scalling
+      produce_block(fc::days(1));  // miss a whole bunch of block slots to set the producers close to zero rewards scaling
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
       const auto     global_state_a            = get_global_state();
       const uint64_t claim_time_a              = microseconds_since_epoch_of_iso_string( global_state_a["last_pervote_bucket_fill"] );
@@ -3477,27 +3248,12 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_proxy_stability_nonrandom,
                                                ("proxy",  "alice1111111")
                                                ("isproxy", true ))
    );
-   using prod_vec_t = std::vector<account_name>;
    activaterewd();
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
 
    prod_vec_t producer_names;
    producer_names.reserve(21);
-
-   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-   auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-         account_name prod{prefix + std::string(1, c)};
-         BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-         result.emplace_back(prod);
-         create_account_with_resources(
-            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-         regproducer(prod);
-      }
-   };
 
    // Create producers/standbys
    gen_producers("defproducer", 21, producer_names);
@@ -3522,8 +3278,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_proxy_stability_nonrandom,
       const asset initial_balance_a = get_balance(N(producvotera));
       const asset initial_supply  = get_token_supply();
 
-      setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, false);
-      produce_blocks(2 * 36 * standbys_blocks_performance_window / .01);  // cycle through the producers to set them all at close to full rewards scaling
+      full_performances(producer_blocks_performance_window, standbys_blocks_performance_window, false, producer_names);
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
 
       const auto     global_state_a            = get_global_state();
@@ -3558,7 +3313,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_proxy_stability_nonrandom,
       const asset initial_balance_a = get_balance(N(producvotera));
 
       setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, false);
-      produce_block(fc::days(1));  // miss a whole bucnh of block slots to set the producers close to zero rewards scalling
+      produce_block(fc::days(1));  // miss a whole bunch of block slots to set the producers close to zero rewards scaling
       BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
       const auto     global_state_a            = get_global_state();
       const uint64_t claim_time_a              = microseconds_since_epoch_of_iso_string( global_state_a["last_pervote_bucket_fill"] );
@@ -3586,7 +3341,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_proxy_stability_nonrandom,
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_reset_perf, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
-  using prod_vec_t = std::vector<account_name>;
   activaterewd();
   const asset large_asset = core_sym::from_string("80.0000");
   create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -3595,20 +3349,6 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_reset_perf, eosio_system_t
   prod_vec_t producer_names, standby_names;
   producer_names.reserve(21);
   standby_names.reserve(36);
-
-  // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-  auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-     for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-        account_name prod{prefix + std::string(1, c)};
-        BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-        result.emplace_back(prod);
-        create_account_with_resources(
-           prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-        regproducer(prod);
-     }
-  };
 
   // Create producers/standbys
   gen_producers("defproducer", 21, producer_names);
@@ -3985,7 +3725,7 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay_performance_rewards, eosio_system_tester, 
       BOOST_REQUIRE_EQUAL(last_voters_bucket, initial_voters_bucket); //no tokens were reserved yet
       BOOST_REQUIRE_EQUAL(voters_account_balance, voters_bucket); // all tokens were already distributed
 
-      BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_WITHIN(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount(), 1);
       BOOST_REQUIRE_EQUAL(voters_bucket_pre_reward - voters_bucket, genesis_balance.get_amount() - initial_genesis_balance.get_amount());
    }
 
@@ -4535,10 +4275,10 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
       BOOST_REQUIRE_EQUAL(0, initial_pervote_bucket);
 
       BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5 * producer_perc_reward) , balance.get_amount() - initial_balance.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 2), savings - initial_savings);
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5 * per_block_multiplier * producer_perc_reward) , balance.get_amount() - initial_balance.get_amount());
+      BOOST_REQUIRE_WITHIN(int64_t(new_tokens - (new_tokens / 5) * gbm_inflation_multiplier), savings - initial_savings, 1);
 
-      int64_t from_perblock_bucket = int64_t( initial_supply.get_amount() * double(usecs_between_fills) * (continuous_rate / 5.0) * producer_perc_reward / usecs_per_year ) ;
+      int64_t from_perblock_bucket = int64_t( initial_supply.get_amount() * double(usecs_between_fills) * (continuous_rate / 5.0) * per_block_multiplier * producer_perc_reward / usecs_per_year ) ;
       int64_t from_pervote_bucket  = 0;
 
       if (from_pervote_bucket >= 100 * 10000) {
@@ -4630,14 +4370,14 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
       auto usecs_between_fills = claim_time - initial_claim_time;
 
       BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year )) ), supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_WITHIN((supply.get_amount() - initial_supply.get_amount()), add_gbm(5 * (savings - initial_savings) / 3), 5);
+      BOOST_REQUIRE_WITHIN((supply.get_amount() - initial_supply.get_amount()), add_gbm(5 * (savings - initial_savings) / savings_inflation_portion), 7);
 
 
       BOOST_TEST_MESSAGE("Initial supply = " << initial_supply.get_amount());
       BOOST_TEST_MESSAGE("Supply = " << supply.get_amount());
 
 
-      int64_t to_producer = int64_t( initial_supply.get_amount() * double(usecs_between_fills) * (continuous_rate / 5.0) * producer_perc_reward / usecs_per_year ) ;
+      int64_t to_producer = int64_t( initial_supply.get_amount() * double(usecs_between_fills) * (continuous_rate / 5.0) * per_block_multiplier * producer_perc_reward / usecs_per_year ) ;
       int64_t to_perblock_bucket = to_producer;
       int64_t to_pervote_bucket  = 0;
 
@@ -4679,15 +4419,15 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
       const int64_t savings = get_balance(N(eosio.saving)).get_amount();
       // Amount issued per year is very close to the 5% inflation target. Small difference (500 tokens out of 50'000'000 issued)
       // is due to compounding every 8 hours in this test as opposed to theoretical continuous compounding
-      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.05)) - (supply.get_amount() - initial_supply.get_amount()));
-      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.03)) - (savings - initial_savings));
+      BOOST_REQUIRE_GT(500 * 10000, int64_t(double(initial_supply.get_amount()) * double(0.05)) - (supply.get_amount() - initial_supply.get_amount()));
+      BOOST_REQUIRE_GT(500 * 10000, int64_t(double(initial_supply.get_amount()) * savings_inflation_portion / 100.0) - (savings - initial_savings));
+      BOOST_TEST_MESSAGE("Initial supply: " << initial_supply.get_amount() << "\nSupply: " << supply.get_amount() << "\nInitial savings: " << initial_savings << "\nSavings: " << savings << "\nSavings inflation proportion: " << savings_inflation_portion / 100.0);
    }
 
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(producer_standby_pay_reward, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
 
-   using prod_vec_t = std::vector<account_name>;
 
    const asset large_asset = core_sym::from_string("80.0000");
 
@@ -4703,20 +4443,6 @@ BOOST_FIXTURE_TEST_CASE(producer_standby_pay_reward, eosio_system_tester, * boos
    prod_vec_t producers, standbys;
    producers.reserve(21);
    standbys.reserve(52);
-
-   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
-   auto gen_producers = [&](const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
-      for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
-         account_name prod{prefix + std::string(1, c)};
-         BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
-
-         result.emplace_back(prod);
-         create_account_with_resources(
-            prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-
-         regproducer(prod);
-      }
-   };
 
    // Create producers/standbys
    gen_producers("defproduce1", 21, producers);
@@ -4974,16 +4700,16 @@ BOOST_FIXTURE_TEST_CASE(producer_standby_pay_reward, eosio_system_tester, * boos
          uint64_t new_tokens = (initial_supply.get_amount() * double(usecs_between_fills) * continuous_rate) / usecs_per_year;
 
          BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());    
-         BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 2), savings - initial_savings);
+         BOOST_REQUIRE_WITHIN(int64_t(new_tokens - (new_tokens / 5) * gbm_inflation_multiplier), savings - initial_savings, 1);
 
          // When the 1st claim reward is made, variables "initial_perblock_bucket_prod"
          // and "initial_perblock_bucket_stb" are zero so it's necessary a manual calculation
 
          int64_t perblock_bucket_prod =
-            initial_perblock_bucket_prod != 0 ? initial_perblock_bucket_prod : (new_tokens / 5) * producer_perc_reward;
+            initial_perblock_bucket_prod != 0 ? initial_perblock_bucket_prod : (new_tokens / 5) * per_block_multiplier * producer_perc_reward;
 
          int64_t perblock_bucket_stb =
-            initial_perblock_bucket_stb != 0 ? initial_perblock_bucket_stb : (new_tokens / 5) * standby_perc_reward;
+            initial_perblock_bucket_stb != 0 ? initial_perblock_bucket_stb : (new_tokens / 5) * per_block_multiplier * standby_perc_reward;
 
          int64_t per_block_pay = 0;
          if (initial_tot_unpaid_blocks_prod > 0)

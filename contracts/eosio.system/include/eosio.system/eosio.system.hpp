@@ -80,8 +80,7 @@ namespace eosiosystem {
    static constexpr uint32_t max_standbys          = 36;
    static constexpr uint32_t max_producers         = 21;
    static constexpr uint32_t blocks_per_round      = 12;
-   static constexpr double   producer_perc_reward  = 0.60;
-   static constexpr double   standby_perc_reward   = 1 - producer_perc_reward;
+   static constexpr double   producer_perc_reward  = 0.60;             // Per block pay split 60:40 producers:standbys
    static constexpr double   standby_perc_blocks   = 1.0;              // Standby's will be selected for 1% of block production
    static constexpr uint32_t num_performance_producers = 16;
    static constexpr uint32_t producer_performances_window = 1000;
@@ -938,7 +937,22 @@ namespace eosiosystem {
          /**
           * Configures producer/standby rewards
           *
-          * @details
+          * @details Sets up the nubmer of blocks to set up as the performance window over which to measure
+          *     bps and standbys for block production reliability. Also, whether or not to select standbys
+          *     in a random fashion is configured here
+          * @param producer_blocks_performance_window - the number of blocks to measure a producer's block
+          *     production reliability over.
+          *     For example, setting this value to 12*56 would translate into a window that would cover
+          *     approximately 2 hours. Since we rotate through 21 producers, and have 2 second blocks:
+          *     12*56*21/2/3600 = 1.96 hours. More accurately, this should be divided by 0.99 (see below)
+          * @param standby_blocks_performance_window - the number of blocks to measure a standby producer's
+          *     block production reliability over.
+          *     Since standbys get randomly selected into production for 1% of production, the calculation
+          *     for the length of time that a performance window covers is similar to above but needs to be
+          *     divided by 1%. For example to set the window to cover 18 hours, set the window to 3*12:
+          *     3*12*36/2/3600/0.01 = 18 hours
+          * @param random_standby_selection - enable random standby selection (true) or disable it and sequentially
+          *     choose each standby in order of vote share (false). Both modes always choose from the top 36 standbys
           *
           */
          [[eosio::action]]
@@ -1208,6 +1222,14 @@ namespace eosiosystem {
          [[eosio::action]]
          void claimgbmvote(const name owner);
 
+         /**
+         * Claim GBM producer reward.
+         * 
+         * @details Claims the GBM reward for a producer.
+         * @param owner - producer account claiming the reward.
+         */
+         [[eosio::action]]
+         void claimgbmprod( const name owner );
 
          /**
           * Reset producer performance stats.
@@ -1221,16 +1243,6 @@ namespace eosiosystem {
           */
          [[eosio::action]]
          void resetperf(const name producer, uint32_t producer_type);
-
-
-         /**
-          * Claim GBM producer reward.
-          * 
-          * @details Claims the GBM reward for a producer.
-          * @param owner - producer account claiming the reward.
-         */
-         [[eosio::action]]
-         void claimgbmprod( const name owner );
 
          /**
           * Set privilege status for an account.

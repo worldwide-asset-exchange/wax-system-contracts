@@ -24,6 +24,33 @@ using mvo = fc::mutable_variant_object;
 #endif
 
 
+/// percent expressed as a float number between 0 and 1
+/// @todo Float comparisons can be a problem!
+#define BOOST_REQUIRE_APROX(L, R, percent) \
+   do { \
+      if (R != 0.0 && L != 0.0) { \
+         auto A = std::max(R, L); \
+         auto B = std::min(R, L); \
+         if ((1 - B / static_cast<double>(A)) > percent) \
+            BOOST_FAIL("[" << (R) << "] !aprox to [" << (L) << "] (in " << percent * 100 << "%)"); \
+      } \
+      else \
+         BOOST_REQUIRE_EQUAL(R, L); \
+   } while (false)
+
+#define BOOST_REQUIRE_GTE(L, R) \
+   if (L < R) \
+      BOOST_FAIL("[" << (L) << " < " << (R) << "] (should be >=)");
+
+#define BOOST_REQUIRE_WITHIN(L, R, limit) \
+   if (L < R) { \
+      BOOST_REQUIRE_GTE(limit, R - L); \
+   } \
+   else \
+      BOOST_REQUIRE_GTE(limit, L - R);
+
+using prod_vec_t = std::vector<account_name>;
+
 namespace eosio_system {
 
 enum reward_type {
@@ -37,6 +64,13 @@ constexpr double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
 constexpr double secs_per_year   = 52 * 7 * 24 * 3600;
 constexpr double producer_perc_reward = 0.60;
 constexpr double standby_perc_reward  = 1 - producer_perc_reward;
+
+// This is the multiple of the per_block bucket relative to its previous value after standbys are enabled
+constexpr double per_block_multiplier  = 1.0 / producer_perc_reward;
+constexpr double savings_inflation_portion = 5.0 - (1.0 + per_block_multiplier);
+// Multiplier that accounts for gbm's addition to inflation once standby's are activated
+// gbm_inflation_multiplier == (to_voters + to_per_block_pay) / to_voters
+constexpr double gbm_inflation_multiplier  = 1.0 + per_block_multiplier;
 
 
 class eosio_system_tester : public TESTER {
@@ -216,7 +250,7 @@ public:
       return push_transaction( trx );
    }
 
-   transaction_trace_ptr setup_producer_accounts( const std::vector<account_name>& accounts,
+   transaction_trace_ptr setup_producer_accounts( const prod_vec_t& accounts,
                                                   asset ram = core_sym::from_string("1.0000"),
                                                   asset cpu = core_sym::from_string("80.0000"),
                                                   asset net = core_sym::from_string("80.0000")
@@ -714,7 +748,7 @@ public:
       return r;
    }
 
-   action_result vote( const account_name& voter, const std::vector<account_name>& producers, const account_name& proxy = name(0) ) {
+   action_result vote( const account_name& voter, const prod_vec_t& producers, const account_name& proxy = name(0) ) {
       return push_action(voter, N(voteproducer), mvo()
                          ("voter",     voter)
                          ("proxy",     proxy)
@@ -743,7 +777,8 @@ public:
       time_point gbm_final_time = gbm_initial_time + microseconds(useconds_in_gbm_period);
       const auto unstake_time = std::min(control->head_block_time(), gbm_final_time);
       const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
-      return to_tokens + (to_tokens / 5) * 2 * (delta_time_usec / double(useconds_in_gbm_period));
+      const double multiplier = standbys_activated ? gbm_inflation_multiplier : 2.0;
+      return to_tokens + (to_tokens / 5) * multiplier * (delta_time_usec / double(useconds_in_gbm_period));
    }
 
    asset get_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
@@ -918,7 +953,7 @@ public:
       BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111", "alice1111111", core_sym::from_string("300000000.0000"), core_sym::from_string("300000000.0000") ) );
 
       // create accounts {defproducera, defproducerb, ..., defproducerz} and register as producers
-      std::vector<account_name> producer_names;
+      prod_vec_t producer_names;
       {
          producer_names.reserve('z' - 'a' + 1);
          const std::string root("defproducer");
@@ -1009,7 +1044,9 @@ public:
       }
    }
 
+   bool standbys_activated = false;
    action_result activaterewd() {
+      standbys_activated = true;
       return push_action(config::system_account_name, N(activaterewd), mvo());
    }
 
@@ -1051,7 +1088,7 @@ public:
       return data.empty() ? -1 : abi_ser.binary_to_variant("reward_info", data, abi_serializer_max_time)["counters"][producer_type]["value"]["avg_blocks"].as<double>();
    }
 
-   void print_performances( const std::vector<account_name>& producer_names, uint32_t producer_type ) {
+   void print_performances( const prod_vec_t& producer_names, uint32_t producer_type ) {
      string res;
      for (int i = 0; i < producer_names.size(); i++) {
         const auto& prod = producer_names[i];
@@ -1060,6 +1097,91 @@ public:
      }
      BOOST_TEST_MESSAGE(res);
    }
+
+   bool check_producers(const prod_vec_t& producer_names,
+                        const vector<double>& expected_perfs,
+                        bool show_perfs = true,
+                        bool throw_bad_checks = true,
+                        const std::map<account_name, uint32_t>& producer_types = std::map<account_name, uint32_t>()) {
+      BOOST_REQUIRE(expected_perfs.size() == producer_names.size());
+      string res_expected;
+      string res_actual;
+      bool all_checkout = true;
+      for (int i = 0; i < producer_names.size(); i++) {
+         const auto& prod = producer_names[i];
+         const auto type_itr = producer_types.find(prod);
+         // If the producer type DNE assume regular BP
+         auto type = type_itr == producer_types.end() ? 1 : type_itr->second;
+         auto actual_perf = get_performance(prod, type);
+         auto expected_perf = expected_perfs[i];
+         res_expected += std::to_string(expected_perf) + string(",");
+         res_actual += std::to_string(actual_perf) + string(",");
+         auto percent_accuracy = 0.001;
+         if (expected_perf != 0.0 && actual_perf != 0.0) {
+           auto A = std::max(expected_perf, actual_perf);
+           auto B = std::min(expected_perf, actual_perf);
+           all_checkout = all_checkout && ((1 - B / static_cast<double>(A)) <= percent_accuracy);
+         } else {
+           all_checkout = all_checkout && (expected_perf == actual_perf);
+         }
+      }
+      if(show_perfs) {
+        BOOST_TEST_MESSAGE("Expected Perfs: " << res_expected << "\nActual Perfs: " << res_actual);
+      }
+      if(!all_checkout && throw_bad_checks) {
+        BOOST_FAIL("Expected Perfs: " << res_expected << "\nActual Perfs: " << res_actual);
+      }
+      return all_checkout;
+   };
+
+   void full_performances(uint32_t producer_blocks_performance_window,
+                          uint32_t standbys_blocks_performance_window,
+                          bool random_standby_selection,
+                          const prod_vec_t& producer_names,
+                          const prod_vec_t& standby_names = prod_vec_t()) {
+     std::map<account_name, uint32_t> producer_types;
+     vector<double> expected_perfs;
+     for(auto prod : producer_names) {
+       expected_perfs.push_back(1.0);
+       producer_types.emplace(prod, 1);
+     }
+     for(auto prod : standby_names) {
+       expected_perfs.push_back(1.0);
+       producer_types.emplace(prod, 2);
+     }
+
+     prod_vec_t all_producer_names(producer_names);
+     all_producer_names.insert(all_producer_names.end(), standby_names.begin(), standby_names.end());
+
+     // This is just to speed up setting to full rewards performance
+     setrwrdsenv(config::system_account_name, 2, 2, false);
+     while(!check_producers(all_producer_names, expected_perfs, false, false, producer_types)) {
+       produce_blocks(504);
+     }
+
+     // Now we're at full rewards performance,
+     // but when we switch back to the perf window params, our perf window will not be maxed.
+     // Go back to normal...
+     setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, random_standby_selection);
+     produce_blocks(21 * 12 * producer_blocks_performance_window / 12);
+     // Now we're at full rewards performance and the performance window should be maxed out
+     check_producers(all_producer_names, expected_perfs, false, true, producer_types);
+   };
+
+   // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
+   void gen_producers(const std::string& prefix, std::size_t quantity, prod_vec_t& result) {
+     const asset large_asset = core_sym::from_string("80.0000");
+
+     for (char c = 'a'; c <= 'z' && c - 'a' < quantity; c++ ) {
+       account_name prod{prefix + std::string(1, c)};
+       BOOST_TEST_CHECKPOINT("Producer: " << prod.to_string());
+
+       result.emplace_back(prod);
+       create_account_with_resources(prod, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
+
+       regproducer(prod);
+     }
+   };
 
    abi_serializer abi_ser;
    abi_serializer token_abi_ser;

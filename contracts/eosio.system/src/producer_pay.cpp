@@ -88,15 +88,20 @@ namespace eosiosystem {
          const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
          auto new_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
 
-         // needs to be 1/2 Savings, 1/5 Voters, 1/5 Producers (60% to producers, 40% to standbys),
+         // Inflation gets split: 7/15 Savings, 1/5 Voters, 1/3 Producers (and split 60% to full bps, 40% to standbys),
          // GBM receives a linearly deflating share over three years
-         auto to_voters             = new_tokens / 5;
-         auto to_per_block_pay      = to_voters;
-         auto to_per_block_pay_prod = to_voters * producer_perc_reward;
-         auto to_per_block_pay_stb  = to_voters * standby_perc_reward;
-         auto to_gbm                = to_voters * 2 * (delta_time_usec / double(useconds_in_gbm_period));
-         auto to_savings            = new_tokens - (to_voters + to_per_block_pay);
-         new_tokens                += to_gbm;
+         int64_t to_voters             = new_tokens / 5;
+         int64_t to_per_block_pay      = to_voters;
+         if (_greward.activated) {
+            // This ensures full bps get the same payout as before standbys were introduced
+            // The ratio works out to 1/5 / 60% == 1/3 of inflation going to producers
+            to_per_block_pay /= producer_perc_reward;
+         }
+         int64_t to_per_block_pay_prod  = to_per_block_pay * producer_perc_reward;
+         int64_t to_per_block_pay_stb   = to_per_block_pay - to_per_block_pay_prod;
+         int64_t to_gbm                 = (to_voters + to_per_block_pay) * (delta_time_usec / double(useconds_in_gbm_period));
+         int64_t to_savings             = new_tokens - (to_voters + to_per_block_pay);
+         new_tokens                     += to_gbm;
 
          {
             token::issue_action issue_act{ token_account, { {get_self(), active_permission} } };
