@@ -261,6 +261,14 @@ namespace eosiosystem {
       while (--schedule_version >= 0 && (it_ver = _greward.proposed_top_producers.find(schedule_version)) != _greward.proposed_top_producers.end());
    }
 
+   size_t system_contract::num_standbys() const {
+      prod_vec_t standbys; standbys.reserve(max_standbys);
+
+      // Pick the current max_standbys standbys
+      select_producers_into(max_producers, max_standbys, reward_type::standby, standbys);
+      return standbys.size();
+   }
+
    /**
     * Selects the specified producer range into the result vector. It also adds the
     * provided status to that vector. 
@@ -268,7 +276,7 @@ namespace eosiosystem {
    void system_contract::select_producers_into( uint64_t begin, 
                                                 uint64_t count,
                                                 reward_type type, 
-                                                prod_vec_t& result ) {
+                                                prod_vec_t& result ) const {
       auto idx = _producers.get_index<"prototalvote"_n>();
       uint64_t i = 0;
 
@@ -487,7 +495,6 @@ namespace eosiosystem {
 
    void system_contract::voterclaim(const name owner) {
       int64_t reward = collect_voter_reward(owner);
-
       eosio::token::transfer_action transfer_act{ token_account, { {voters_account, active_permission}, {owner, active_permission} } };
       transfer_act.send( voters_account, owner, asset(reward, core_symbol()), "voter pay" );
    }
@@ -519,7 +526,6 @@ namespace eosiosystem {
 
       double producers_performance = calculate_producers_performance(voter);
       double unpaid_voteshare = voter.unpaid_voteshare + producers_performance * voter.unpaid_voteshare_change_rate * double((ct - voter.unpaid_voteshare_last_updated).count() / 1E6);
-
       int64_t reward = _gstate.voters_bucket * (unpaid_voteshare / _gstate.total_unpaid_voteshare);
       check(reward > 0, "no rewards available.");
 
