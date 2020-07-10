@@ -92,12 +92,15 @@ namespace eosiosystem {
          // GBM receives a linearly deflating share over three years
          int64_t to_voters             = new_tokens / 5;
          int64_t to_per_block_pay      = to_voters;
+         double adjusted_producer_perc_reward = producer_perc_reward;
          if (_greward.activated) {
             // This ensures full bps get the same payout as before standbys were introduced
             // The ratio works out to 1/5 / 60% == 1/3 of inflation going to producers
-            to_per_block_pay /= producer_perc_reward;
+            double standby_perc_reward = (1.0 - adjusted_producer_perc_reward) * static_cast<double>(num_standbys()) / static_cast<double>(max_standbys);
+            adjusted_producer_perc_reward = adjusted_producer_perc_reward / (adjusted_producer_perc_reward + standby_perc_reward);
+            to_per_block_pay /= adjusted_producer_perc_reward;
          }
-         int64_t to_per_block_pay_prod  = to_per_block_pay * producer_perc_reward;
+         int64_t to_per_block_pay_prod  = to_per_block_pay * adjusted_producer_perc_reward;
          int64_t to_per_block_pay_stb   = to_per_block_pay - to_per_block_pay_prod;
          int64_t to_gbm                 = (to_voters + to_per_block_pay) * (delta_time_usec / double(useconds_in_gbm_period));
          int64_t to_savings             = new_tokens - (to_voters + to_per_block_pay);
@@ -117,7 +120,8 @@ namespace eosiosystem {
 
             if (_greward.activated) {
                transfer_act.send( get_self(), bpay_account, asset(to_per_block_pay_prod, core_symbol()), "fund bps bucket" );
-               transfer_act.send( get_self(), spay_account, asset(to_per_block_pay_stb, core_symbol()), "fund sps bucket" );
+               if (to_per_block_pay_stb > 0)
+                  transfer_act.send( get_self(), spay_account, asset(to_per_block_pay_stb, core_symbol()), "fund sps bucket" );
             }
             else
                transfer_act.send( get_self(), bpay_account, asset(to_per_block_pay, core_symbol()), "fund bps bucket" );

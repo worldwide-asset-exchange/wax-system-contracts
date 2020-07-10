@@ -80,7 +80,7 @@ namespace eosiosystem {
    static constexpr uint32_t max_standbys          = 36;
    static constexpr uint32_t max_producers         = 21;
    static constexpr uint32_t blocks_per_round      = 12;
-   static constexpr double   producer_perc_reward  = 0.60;             // Per block pay split 60:40 producers:standbys
+   static constexpr double   producer_perc_reward  = 0.60;             // Per block pay split 60:40 producers:standbys - when all producer and standby slots are filled
    static constexpr double   standby_perc_blocks   = 1.0;              // Standby's will be selected for 1% of block production
    static constexpr uint32_t num_performance_producers = 16;
    static constexpr uint32_t producer_performances_window = 1000;
@@ -1498,8 +1498,9 @@ namespace eosiosystem {
          void update_votes( const name& voter, const name& proxy, const std::vector<name>& producers, bool voting );
          void propagate_weight_change( const voter_info& voter );
 
-         void select_producers_into( uint64_t begin, uint64_t count, reward_type type, prod_vec_t& result );
+         void select_producers_into( uint64_t begin, uint64_t count, reward_type type, prod_vec_t& result ) const;
          bool is_it_time_to_select_a_standby() const;
+         size_t num_standbys() const;
          double calculate_producers_performance( const voter_info& voter );
          void track_blocks( const name &current_producer, uint32_t last_slot, uint32_t current_slot );
          uint32_t record_missed_blocks( const name &current_producer, uint32_t last_slot, uint32_t current_slot );

@@ -59,19 +59,22 @@ enum reward_type {
    rewStandby
 };
 
-constexpr double continuous_rate = 0.04879;
-constexpr double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
-constexpr double secs_per_year   = 52 * 7 * 24 * 3600;
-constexpr double producer_perc_reward = 0.60;
-constexpr double standby_perc_reward  = 1 - producer_perc_reward;
+constexpr double continuous_rate      = 0.04879;
+constexpr double usecs_per_year       = 52 * 7 * 24 * 3600 * 1000000ll;
+constexpr double secs_per_year        = 52 * 7 * 24 * 3600;
+constexpr double producer_perc_reward_maxed_slots = 0.60;
+constexpr uint32_t max_standbys       = 36;
 
-// This is the multiple of the per_block bucket relative to its previous value after standbys are enabled
-constexpr double per_block_multiplier  = 1.0 / producer_perc_reward;
-constexpr double savings_inflation_portion = 5.0 - (1.0 + per_block_multiplier);
-// Multiplier that accounts for gbm's addition to inflation once standby's are activated
-// gbm_inflation_multiplier == (to_voters + to_per_block_pay) / to_voters
-constexpr double gbm_inflation_multiplier  = 1.0 + per_block_multiplier;
-
+struct inflation_params {
+  double producer_perc_reward;
+  double standby_perc_reward;
+  // This is the multiple of the per_block bucket relative to its previous value after standbys are enabled
+  double per_block_multiplier;
+  double savings_inflation_portion;
+  // Multiplier that accounts for gbm's addition to inflation once standby's are activated
+  // gbm_inflation_multiplier == (to_voters + to_per_block_pay) / to_voters
+  double gbm_inflation_multiplier;
+};
 
 class eosio_system_tester : public TESTER {
 public:
@@ -769,7 +772,21 @@ public:
       return data.empty() ? asset(0, balance_symbol) : abi_ser.binary_to_variant("genesis_tokens", data, abi_serializer_max_time)["balance"].as<asset>();
    }
 
-   int64_t add_gbm(uint64_t to_tokens) {
+   inflation_params get_inflation_params(size_t num_standbys) {
+     double adjusted_producer_perc_reward = producer_perc_reward_maxed_slots;
+     double standby_perc_reward = (1.0 - adjusted_producer_perc_reward) * static_cast<double>(num_standbys) / static_cast<double>(max_standbys);
+     adjusted_producer_perc_reward = adjusted_producer_perc_reward / (adjusted_producer_perc_reward + standby_perc_reward);
+     double per_block_multiplier = 1.0 / adjusted_producer_perc_reward;
+     return {
+       .producer_perc_reward = adjusted_producer_perc_reward,
+       .standby_perc_reward = 1 - adjusted_producer_perc_reward,
+       .per_block_multiplier = per_block_multiplier,
+       .savings_inflation_portion = 5.0 - (1.0 + per_block_multiplier),
+       .gbm_inflation_multiplier = 1.0 + per_block_multiplier
+     };
+   }
+
+   int64_t add_gbm(uint64_t to_tokens, size_t num_standbys) {
       uint32_t seconds_per_day       = 24 * 3600;
       int64_t  useconds_per_day      = int64_t(seconds_per_day) * 1000'000ll;
       uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022
@@ -777,7 +794,11 @@ public:
       time_point gbm_final_time = gbm_initial_time + microseconds(useconds_in_gbm_period);
       const auto unstake_time = std::min(control->head_block_time(), gbm_final_time);
       const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
-      const double multiplier = standbys_activated ? gbm_inflation_multiplier : 2.0;
+      double multiplier = 2.0;
+      if(standbys_activated) {
+        const auto& infl_params = get_inflation_params(num_standbys);
+        multiplier = infl_params.gbm_inflation_multiplier;
+      }
       return to_tokens + (to_tokens / 5) * multiplier * (delta_time_usec / double(useconds_in_gbm_period));
    }
 
@@ -1134,8 +1155,16 @@ public:
       return all_checkout;
    };
 
-   void full_performances(uint32_t producer_blocks_performance_window,
-                          uint32_t standbys_blocks_performance_window,
+   uint32_t full_performances(const prod_vec_t& producer_names, const prod_vec_t& standby_names = prod_vec_t()) {
+     const auto& global_reward = get_global_reward();
+     uint32_t producer_blocks_performance_window = global_reward["producer_blocks_performance_window"].as<uint32_t>();
+     uint32_t standby_blocks_performance_window = global_reward["standby_blocks_performance_window"].as<uint32_t>();
+     bool random_standby_selection = global_reward["random_standby_selection"].as<bool>();
+     return full_performances(producer_blocks_performance_window, standby_blocks_performance_window, random_standby_selection, producer_names, standby_names);
+   }
+
+   uint32_t full_performances(uint32_t producer_blocks_performance_window,
+                          uint32_t standby_blocks_performance_window,
                           bool random_standby_selection,
                           const prod_vec_t& producer_names,
                           const prod_vec_t& standby_names = prod_vec_t()) {
@@ -1153,19 +1182,24 @@ public:
      prod_vec_t all_producer_names(producer_names);
      all_producer_names.insert(all_producer_names.end(), standby_names.begin(), standby_names.end());
 
+     uint32_t blocks_elapsed = 0;
+
      // This is just to speed up setting to full rewards performance
      setrwrdsenv(config::system_account_name, 2, 2, false);
-     while(!check_producers(all_producer_names, expected_perfs, false, false, producer_types)) {
+     while(!check_producers(all_producer_names, expected_perfs, true, false, producer_types)) {
        produce_blocks(504);
+       blocks_elapsed += 504;
      }
 
      // Now we're at full rewards performance,
      // but when we switch back to the perf window params, our perf window will not be maxed.
      // Go back to normal...
-     setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, random_standby_selection);
+     setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standby_blocks_performance_window, random_standby_selection);
      produce_blocks(21 * 12 * producer_blocks_performance_window / 12);
+     blocks_elapsed += 21 * 12 * producer_blocks_performance_window / 12;
      // Now we're at full rewards performance and the performance window should be maxed out
      check_producers(all_producer_names, expected_perfs, false, true, producer_types);
+     return blocks_elapsed;
    };
 
    // It can generate up to 26 producers in one call (quantity > 26 will be ignored)
