@@ -620,6 +620,11 @@ namespace eosiosystem {
       check( !transfer || from != receiver, "cannot use transfer flag if delegating to self" );
 
       changebw( from, receiver, stake_net_quantity, stake_cpu_quantity, transfer);
+
+      // notify decide of stake change
+      if (from == receiver) {
+         require_recipient("decide"_n);
+      }
    } // delegatebw
 
    void system_contract::undelegatebw( const name& from, const name& receiver,
@@ -633,6 +638,11 @@ namespace eosiosystem {
              "cannot undelegate bandwidth until the chain is activated (at least 15% of all tokens participate in voting)" );
 
       changebw( from, receiver, -unstake_net_quantity, -unstake_cpu_quantity, false);
+
+      // notify decide of stake change
+      if (from == receiver) {
+         require_recipient("decide"_n);
+      }
 
       // deal with genesis balance
       change_genesis(receiver);
