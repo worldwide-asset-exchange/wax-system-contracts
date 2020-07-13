@@ -432,7 +432,6 @@ namespace eosiosystem {
 
    void system_contract::resetperf(const name producer, uint32_t producer_type) {
      require_auth( producer );
-
      auto reward_it = _rewards.require_find(producer.value, "Rewards info for producer does not exist yet");
 
      auto current_blocktime = eosio::current_block_time();
@@ -444,9 +443,9 @@ namespace eosiosystem {
      // in order for the producer to have reached that performance window number of slots.
      uint32_t minimum_reset_interval = _greward.get_performance_window(producer_type_enum);
      if(producer_type_enum == reward_type::producer) {
-       minimum_reset_interval *= max_producers * 100 / (100 - standby_perc_blocks);
+       minimum_reset_interval *= max_producers / (1 - standby_ratio_blocks);
      } else {
-       minimum_reset_interval *= max_standbys * 100 / standby_perc_blocks;
+       minimum_reset_interval *= max_standbys / standby_ratio_blocks;
      }
 
      check(reward_it->get_counters(producer_type_enum).last_slot + minimum_reset_interval <= current_blocktime.slot, "Cannot reset performance before the minimum reset interval");

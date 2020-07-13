@@ -81,7 +81,8 @@ namespace eosiosystem {
    static constexpr uint32_t max_producers         = 21;
    static constexpr uint32_t blocks_per_round      = 12;
    static constexpr double   producer_perc_reward  = 0.60;             // Per block pay split 60:40 producers:standbys - when all producer and standby slots are filled
-   static constexpr double   standby_perc_blocks   = 1.0;              // Standby's will be selected for 1% of block production
+   static constexpr double   standby_ratio_blocks   = 0.01;            // Standby's will be selected for 1% of block production
+   static constexpr uint32_t standby_blocks_window  = 12 * 21 * 100;    // The ratio of producers to standbys will be examined over this window of blocks (2520, or 21 mimutes worth of blocks)
    static constexpr uint32_t num_performance_producers = 16;
    static constexpr uint32_t producer_performances_window = 1000;
 
@@ -244,7 +245,6 @@ namespace eosiosystem {
       struct global_rewards_counter_type {
          uint64_t              total_unpaid_blocks = 0;
          int64_t               perblock_bucket = 0;
-         uint64_t              block_count = 0;
       };
 
       bool activated = false;  // Producer/standby rewards activated 
@@ -259,7 +259,32 @@ namespace eosiosystem {
       bool random_standby_selection = true; // turn randomized standby selection on/off
       uint64_t last_standby_index = 0;
 
+      double avg_standby_blocks_ratio = 0.0;
+      uint32_t avg_standby_blocks_samples = 0;
+
       double avg_producer_performances = 0.5;
+
+      void update_standbys_blocks_ratio(uint32_t standby_blocks, uint32_t full_producer_blocks) {
+        uint32_t total_blocks = standby_blocks + full_producer_blocks;
+        total_blocks = std::min(total_blocks, standby_blocks_window);
+        standby_blocks = std::min(total_blocks, standby_blocks);  // Shouldn't really happen. If it does then standby_blocks_window is too low
+
+        avg_standby_blocks_samples = std::min(avg_standby_blocks_samples + total_blocks, standby_blocks_window);
+        if(avg_standby_blocks_samples == 0) {
+          // We don't want to crash the main loop, but this should never happen
+          return;
+        }
+
+        avg_standby_blocks_ratio = (standby_blocks + avg_standby_blocks_ratio * (avg_standby_blocks_samples - total_blocks)) / avg_standby_blocks_samples;
+      }
+
+      /**
+       * Returns true when the percent of standby produced
+       * blocks is less than 1% otherwise returns false
+       */
+      bool is_it_time_to_select_a_standby() const {
+        return activated && avg_standby_blocks_ratio < standby_ratio_blocks;
+      }
 
       void update_producer_performances(double new_performance) {
         avg_producer_performances = (new_performance + avg_producer_performances * (producer_performances_window - 1)) / producer_performances_window;
@@ -287,11 +312,16 @@ namespace eosiosystem {
          return it->second;
       }
 
-      void new_unpaid_block(reward_type type) {
+      void track_blocks(reward_type type, uint64_t produced_blocks, uint64_t missed_blocks) {
          auto& counters = get_counters(type);
 
-         counters.total_unpaid_blocks++;
-         counters.block_count++;
+         counters.total_unpaid_blocks += produced_blocks;
+
+         if(type == reward_type::standby) {
+           update_standbys_blocks_ratio(produced_blocks + missed_blocks, 0);
+         } else {
+           update_standbys_blocks_ratio(0, produced_blocks + missed_blocks);
+         }
       }
 
       uint32_t get_performance_window(reward_type producer_type) {
@@ -301,7 +331,7 @@ namespace eosiosystem {
       }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( eosio_global_reward, (activated)(counters)(proposed_top_producers)(current_producers)(producer_blocks_performance_window)(standby_blocks_performance_window)(random_standby_selection)(last_standby_index)(avg_producer_performances))
+      EOSLIB_SERIALIZE( eosio_global_reward, (activated)(counters)(proposed_top_producers)(current_producers)(producer_blocks_performance_window)(standby_blocks_performance_window)(random_standby_selection)(last_standby_index)(avg_standby_blocks_ratio)(avg_standby_blocks_samples)(avg_producer_performances))
    };
 
    /**
@@ -1499,7 +1529,6 @@ namespace eosiosystem {
          void propagate_weight_change( const voter_info& voter );
 
          void select_producers_into( uint64_t begin, uint64_t count, reward_type type, prod_vec_t& result ) const;
-         bool is_it_time_to_select_a_standby() const;
          size_t num_standbys() const;
          double calculate_producers_performance( const voter_info& voter );
          void track_blocks( const name &current_producer, uint32_t last_slot, uint32_t current_slot );

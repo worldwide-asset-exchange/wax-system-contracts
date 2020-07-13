@@ -42,6 +42,11 @@ using mvo = fc::mutable_variant_object;
    if (L < R) \
       BOOST_FAIL("[" << (L) << " < " << (R) << "] (should be >=)");
 
+#define BOOST_REQUIRE_LTE(L, R) \
+   if (L > R) \
+      BOOST_FAIL("[" << (L) << " > " << (R) << "] (should be <=)");
+
+
 #define BOOST_REQUIRE_WITHIN(L, R, limit) \
    if (L < R) { \
       BOOST_REQUIRE_GTE(limit, R - L); \
@@ -1096,6 +1101,52 @@ public:
          } else {
            produce_blocks(1);
            i++;
+         }
+      }
+   }
+
+   bool contains_producer(const vector<producer_key>& producer_keys, const account_name& producer) {
+     for(const auto& producer_key : producer_keys) {
+       if(producer_key.producer_name == producer) {
+         return true;
+       }
+     }
+     return false;
+   }
+
+   bool contains_producer(const prod_vec_t& producers, const account_name& producer) {
+     for(const auto& _producer : producers) {
+       if(_producer == producer) {
+         return true;
+       }
+     }
+     return false;
+   }
+
+   bool overlapping_producers(const vector<producer_key>& producer_keys, const prod_vec_t& producers) {
+     for(const auto& producer: producers) {
+       if(contains_producer(producer_keys, producer)) {
+         return true;
+       }
+     }
+     return false;
+   }
+
+   uint32_t flush_producers(const prod_vec_t& producers) {
+      uint32_t num_blocks = 0;
+      while(true) {
+         bool found = contains_producer(producers, control->head_block_producer()) ||
+                      contains_producer(producers, control->pending_block_producer()) ||
+                      overlapping_producers(control->active_producers().producers, producers) ||
+                      overlapping_producers(control->pending_producers().producers, producers) ||
+                      (control->proposed_producers() &&
+                      overlapping_producers(control->proposed_producers()->producers, producers));
+         bool schedule_activated = control->active_producers().version != control->pending_producers().version;
+         if(found || !schedule_activated) {
+           produce_blocks(1);
+           num_blocks++;
+         } else {
+           return num_blocks;
          }
       }
    }

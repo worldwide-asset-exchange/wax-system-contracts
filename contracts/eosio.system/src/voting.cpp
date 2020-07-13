@@ -99,24 +99,6 @@ namespace eosiosystem {
    }
 
    /**
-    * Returns true when the percent of standby produced
-    * blocks is less than 1% otherwise returns false
-    */
-   bool system_contract::is_it_time_to_select_a_standby() const {
-      auto& stb_cnt = _greward.get_counters(reward_type::standby);
-      auto& pro_cnt = _greward.get_counters(reward_type::producer);
-
-      uint64_t total = stb_cnt.block_count + pro_cnt.block_count;
-
-      if (total > 0) {
-         double percent = 100.0 * stb_cnt.block_count / total;
-         return percent < standby_perc_blocks;
-      }
-
-      return false;
-   }
-
-   /**
     * Records the curent block for performance and reward tracking as well as any recently missed blocks
     */
    void system_contract::track_blocks(const name &current_producer, uint32_t last_slot, uint32_t current_slot) {
@@ -124,7 +106,7 @@ namespace eosiosystem {
 
      if ( const auto it = _rewards.find( current_producer.value ); it != _rewards.end() ) {
        const auto producer_type = it->get_current_type();
-       _greward.new_unpaid_block(producer_type);
+       _greward.track_blocks(producer_type, 1, current_producer_missed_blocks);
 
        _rewards.modify( it, same_payer, [&](auto& rec ) {
           const uint32_t blocks_performance_window = _greward.get_performance_window(producer_type);
@@ -204,10 +186,12 @@ namespace eosiosystem {
          auto producer = producers[index].first;
          if (producer != current_producer) {
            if (auto reward_it = _rewards.find(producer.value); reward_it != _rewards.end()) {
-              const uint32_t blocks_performance_window = _greward.get_performance_window(reward_it->get_current_type());
-              _rewards.modify(reward_it, same_payer, [&](auto& rec) {
-                 rec.track_blocks(0, producer_missed_blocks, current_slot, blocks_performance_window);
-              });
+             const auto producer_type = reward_it->get_current_type();
+             const uint32_t blocks_performance_window = _greward.get_performance_window(producer_type);
+             _rewards.modify(reward_it, same_payer, [&](auto& rec) {
+               rec.track_blocks(0, producer_missed_blocks, last_missed_block_height, blocks_performance_window);
+             });
+             _greward.track_blocks(producer_type, 0, producer_missed_blocks);
            }
          } else {
            // We will return this value as the output of this function since the current producer will also
@@ -305,7 +289,7 @@ namespace eosiosystem {
 
       int64_t standby_index = -1;
 
-      if (is_it_time_to_select_a_standby()) {
+      if (_greward.is_it_time_to_select_a_standby()) {
          prod_vec_t standbys; standbys.reserve(max_standbys);
 
          // Pick the current max_standbys standbys

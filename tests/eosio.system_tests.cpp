@@ -1263,7 +1263,7 @@ BOOST_FIXTURE_TEST_CASE(voterproxy_claims, eosio_system_tester, * boost::unit_te
 
       const asset bob_balance = get_balance(N(bob111111111));
 
-      BOOST_REQUIRE(bob_balance > bob_initial_balance);
+      BOOST_REQUIRE_GT(bob_balance, bob_initial_balance);
    }
 
 } FC_LOG_AND_RETHROW()
@@ -1364,7 +1364,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_gstate_consistency, eosio_system_tester, * boo
 
    BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance(N(eosio.voters)).get_amount());
    double total_weight = votera["unpaid_voteshare_change_rate"].as<double>() + voterb["unpaid_voteshare_change_rate"].as<double>() + voterc["unpaid_voteshare_change_rate"].as<double>();
-   BOOST_REQUIRE(global_state["total_voteshare_change_rate"].as<double>() == total_weight);
+   BOOST_REQUIRE_EQUAL(global_state["total_voteshare_change_rate"].as<double>(), total_weight);
 
    time_point last_update = global_state["total_unpaid_voteshare_last_updated"].as<time_point>();
    double votera_unpaid_voteshare = votera["unpaid_voteshare"].as<double>() + votera["unpaid_voteshare_change_rate"].as<double>() * double((last_update - votera["unpaid_voteshare_last_updated"].as<time_point>()).count() / 1E6);
@@ -1649,7 +1649,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
       const asset supply  = get_token_supply();
       const asset balance = get_balance(N(producvotera));
 
-      BOOST_REQUIRE(supply.get_amount() - initial_supply.get_amount() / 5 >= balance.get_amount() - initial_balance.get_amount());
+      BOOST_REQUIRE_GTE(supply.get_amount() - initial_supply.get_amount() / 5, balance.get_amount() - initial_balance.get_amount());
 
       produce_block(fc::hours(24));
       // There should be no more rewards available
@@ -1742,7 +1742,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
       asset balance1 = get_balance(N(voter1));
       asset balance2 = get_balance(N(voter2));
 
-      BOOST_REQUIRE(5 > ((balance1.get_amount() - initial_balance1.get_amount()) / 2) - (balance2.get_amount() - initial_balance2.get_amount()));
+      BOOST_REQUIRE_GT(5, ((balance1.get_amount() - initial_balance1.get_amount()) / 2) - (balance2.get_amount() - initial_balance2.get_amount()));
    }
 
    // Validate unstaking and restaking rewards.
@@ -1775,7 +1775,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
       asset balance1 = get_balance(N(voter1));
       asset balance2 = get_balance(N(voter2));
 
-      BOOST_REQUIRE(2000 > (balance1.get_amount() - initial_balance1.get_amount()) / 2 - (balance2.get_amount() - initial_balance2.get_amount()));
+      BOOST_REQUIRE_GT(2000, (balance1.get_amount() - initial_balance1.get_amount()) / 2 - (balance2.get_amount() - initial_balance2.get_amount()));
    }
 
    // Updating votes.
@@ -1803,7 +1803,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
       asset balance2 = get_balance(N(voter2));
 
       // Check out if the 2000 extra grains is fine.
-      BOOST_REQUIRE(balance1.get_amount() - initial_balance1.get_amount() > balance2.get_amount() - initial_balance2.get_amount() + 2000);
+      BOOST_REQUIRE_GT(balance1.get_amount() - initial_balance1.get_amount(), balance2.get_amount() - initial_balance2.get_amount() + 2000);
    }
 
    // Claiming after unstaking
@@ -1996,7 +1996,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards, eosio_system_tester, * bo
       const asset supply  = get_token_supply();
       const asset balance = get_balance(N(producvotera));
 
-      BOOST_REQUIRE(supply.get_amount() - initial_supply.get_amount() / 5 >= balance.get_amount() - initial_balance.get_amount());
+      BOOST_REQUIRE_GTE(supply.get_amount() - initial_supply.get_amount() / 5, balance.get_amount() - initial_balance.get_amount());
 
       produce_block(fc::hours(24));
       // There should be no more rewards available
@@ -3176,6 +3176,8 @@ BOOST_FIXTURE_TEST_CASE(standbys_get_paid_the_same_despite_capacity_random, eosi
      blocks_0++;
    }
 
+   uint32_t ARBITRARY_LARGE_NUMBER_OF_BLOCKS = 50000;
+
    BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1a), N(claimrewards), mvo()("owner", "defstandby1a")));
    BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1b), N(claimrewards), mvo()("owner", "defstandby1b")));
    for(auto producer_name : producer_names) {
@@ -3195,7 +3197,7 @@ BOOST_FIXTURE_TEST_CASE(standbys_get_paid_the_same_despite_capacity_random, eosi
    produce_block(fc::hours(24));
    uint32_t blocks_1 = 0;
    uint32_t standby_a_blocks_1 = 0;
-   while(blocks_1 < 20000 || standby_a_blocks_1 < 12) {
+   while(blocks_1 < ARBITRARY_LARGE_NUMBER_OF_BLOCKS || standby_a_blocks_1 < 12) {
      if(control->head_block_producer() == N(defstandby1a)) standby_a_blocks_1++;
      produce_blocks(1);
      blocks_1++;
@@ -3220,12 +3222,13 @@ BOOST_FIXTURE_TEST_CASE(standbys_get_paid_the_same_despite_capacity_random, eosi
    uint32_t blocks_2 = 0;
    uint32_t standby_a_blocks_2 = 0;
    uint32_t standby_b_blocks_2 = 0;
-   while(blocks_2 < 20000 || standby_a_blocks_2 < 12 || standby_b_blocks_2 < 12) {
+   while(blocks_2 < ARBITRARY_LARGE_NUMBER_OF_BLOCKS || standby_a_blocks_2 < 12 || standby_b_blocks_2 < 12) {
      if(control->head_block_producer() == N(defstandby1a)) standby_a_blocks_2++;
      if(control->head_block_producer() == N(defstandby1b)) standby_b_blocks_2++;
      produce_blocks(1);
      blocks_2++;
    }
+   BOOST_REQUIRE_EQUAL(blocks_1, blocks_2);     // if these aren't equal, the test won't actually work, bum up ARBITRARY_LARGE_NUMBER_OF_BLOCKS
    BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1a), N(claimrewards), mvo()("owner", "defstandby1a")));
    BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1b), N(claimrewards), mvo()("owner", "defstandby1b")));
    for(auto producer_name : producer_names) {
@@ -3243,12 +3246,13 @@ BOOST_FIXTURE_TEST_CASE(standbys_get_paid_the_same_despite_capacity_random, eosi
    uint32_t blocks_3 = 0;
    uint32_t standby_a_blocks_3 = 0;
    uint32_t standby_b_blocks_3 = 0;
-   while(blocks_3 < 20000 || standby_a_blocks_3 < 12 || standby_b_blocks_3 < 12) {
+   while(blocks_3 < ARBITRARY_LARGE_NUMBER_OF_BLOCKS || standby_a_blocks_3 < 12 || standby_b_blocks_3 < 12) {
      if(control->head_block_producer() == N(defstandby1a)) standby_a_blocks_3++;
      if(control->head_block_producer() == N(defstandby1b)) standby_b_blocks_3++;
      produce_blocks(1);
      blocks_3++;
    }
+   BOOST_REQUIRE_EQUAL(blocks_2, blocks_3);     // if these aren't equal, the test won't actually work, bum up ARBITRARY_LARGE_NUMBER_OF_BLOCKS
    BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1a), N(claimrewards), mvo()("owner", "defstandby1a")));
    BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1b), N(claimrewards), mvo()("owner", "defstandby1b")));
    for(auto producer_name : producer_names) {
@@ -3303,6 +3307,8 @@ BOOST_FIXTURE_TEST_CASE(standbys_get_paid_the_same_despite_capacity_nonrandom, e
      blocks_0++;
    }
 
+   uint32_t ARBITRARY_LARGE_NUMBER_OF_BLOCKS = 5000;
+
    BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1a), N(claimrewards), mvo()("owner", "defstandby1a")));
    BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1b), N(claimrewards), mvo()("owner", "defstandby1b")));
    for(auto producer_name : producer_names) {
@@ -3322,7 +3328,7 @@ BOOST_FIXTURE_TEST_CASE(standbys_get_paid_the_same_despite_capacity_nonrandom, e
    produce_block(fc::hours(24));
    uint32_t blocks_1 = 0;
    uint32_t standby_a_blocks_1 = 0;
-   while(blocks_1 < 5000 || standby_a_blocks_1 < 12) {
+   while(blocks_1 < ARBITRARY_LARGE_NUMBER_OF_BLOCKS || standby_a_blocks_1 < 12) {
      if(control->head_block_producer() == N(defstandby1a)) standby_a_blocks_1++;
      produce_blocks(1);
      blocks_1++;
@@ -3347,12 +3353,13 @@ BOOST_FIXTURE_TEST_CASE(standbys_get_paid_the_same_despite_capacity_nonrandom, e
    uint32_t blocks_2 = 0;
    uint32_t standby_a_blocks_2 = 0;
    uint32_t standby_b_blocks_2 = 0;
-   while(blocks_2 < 5000 || standby_a_blocks_2 < 12 || standby_b_blocks_2 < 12) {
+   while(blocks_2 < ARBITRARY_LARGE_NUMBER_OF_BLOCKS || standby_a_blocks_2 < 12 || standby_b_blocks_2 < 12) {
      if(control->head_block_producer() == N(defstandby1a)) standby_a_blocks_2++;
      if(control->head_block_producer() == N(defstandby1b)) standby_b_blocks_2++;
      produce_blocks(1);
      blocks_2++;
    }
+   BOOST_REQUIRE_EQUAL(blocks_1, blocks_2);     // if these aren't equal, the test won't actually work, bum up ARBITRARY_LARGE_NUMBER_OF_BLOCKS
    BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1a), N(claimrewards), mvo()("owner", "defstandby1a")));
    BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1b), N(claimrewards), mvo()("owner", "defstandby1b")));
    for(auto producer_name : producer_names) {
@@ -3370,12 +3377,13 @@ BOOST_FIXTURE_TEST_CASE(standbys_get_paid_the_same_despite_capacity_nonrandom, e
    uint32_t blocks_3 = 0;
    uint32_t standby_a_blocks_3 = 0;
    uint32_t standby_b_blocks_3 = 0;
-   while(blocks_3 < 5000 || standby_a_blocks_3 < 12 || standby_b_blocks_3 < 12) {
+   while(blocks_3 < ARBITRARY_LARGE_NUMBER_OF_BLOCKS || standby_a_blocks_3 < 12 || standby_b_blocks_3 < 12) {
      if(control->head_block_producer() == N(defstandby1a)) standby_a_blocks_3++;
      if(control->head_block_producer() == N(defstandby1b)) standby_b_blocks_3++;
      produce_blocks(1);
      blocks_3++;
    }
+   BOOST_REQUIRE_EQUAL(blocks_2, blocks_3);     // if these aren't equal, the test won't actually work, bum up ARBITRARY_LARGE_NUMBER_OF_BLOCKS
    BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1a), N(claimrewards), mvo()("owner", "defstandby1a")));
    BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1b), N(claimrewards), mvo()("owner", "defstandby1b")));
    for(auto producer_name : producer_names) {
@@ -3597,15 +3605,19 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_reset_perf, eosio_system_t
   create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
   create_account_with_resources( N(producvoterb), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
 
-  prod_vec_t producer_names, standby_names;
-  producer_names.reserve(21);
-  standby_names.reserve(36);
+  prod_vec_t producer_names, standby_names_1, standby_names_2;
+  producer_names.reserve(22);
+  standby_names_1.reserve(26);
+  standby_names_2.reserve(26);
 
   // Create producers/standbys
-  gen_producers("defproducer", 21, producer_names);
+  gen_producers("defproducer", 22, producer_names);
   produce_block();
 
-  gen_producers("defstandby1", 21, standby_names);
+  gen_producers("defstandby1", 26, standby_names_1);
+  produce_block();
+
+  gen_producers("defstandby2", 26, standby_names_2);
   produce_block();
 
   transfer( config::system_account_name, "producvotera", core_sym::from_string("100000000.0000"), config::system_account_name);
@@ -3615,7 +3627,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_reset_perf, eosio_system_t
   BOOST_REQUIRE_EQUAL(success(), stake("producvoterb", core_sym::from_string("40000000.0000"), core_sym::from_string("40000000.0000")));
 
   BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+21)));
-  BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>(standby_names.begin(), standby_names.begin()+21)));
+  BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>(standby_names_1.begin(), standby_names_1.begin()+26)));
 
   uint32_t standbys_blocks_performance_window = 12;
   uint32_t producer_blocks_performance_window = 3 * 12;
@@ -3625,9 +3637,10 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_reset_perf, eosio_system_t
   auto minimum_producer_reset_window = 21 * producer_blocks_performance_window / .99;
   auto minimum_standbys_reset_window = 36 * standbys_blocks_performance_window / .01;
 
+  produce_blocks_up_to_producer(N(defproducera));         // make sure defproducera produces
   produce_blocks(2 * minimum_producer_reset_window);      // cycle through the producers to give them a non starting performance rating
-  BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>()));  // remove the main producers from production
-  produce_blocks_up_to_producer(N(defstandby1a)); // This ensures that defproducera is really out of rotation
+  BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin()+1, producer_names.begin()+22)));  // remove defproducera from top producers
+  produce_blocks_up_to_producer(N(defproducerv));         // make sure defproducera is out of production
   produce_block(fc::milliseconds(500 * minimum_producer_reset_window / 2));
   BOOST_REQUIRE_EQUAL(wasm_assert_msg("Cannot reset performance before the minimum reset interval"),
                                 push_action(N(defproducera), N(resetperf), mvo()("producer", "defproducera")("producer_type", 1)));
@@ -3636,16 +3649,15 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_reset_perf, eosio_system_t
   BOOST_REQUIRE_EQUAL(success(), push_action(N(defproducera), N(resetperf), mvo()("producer", "defproducera")("producer_type", 1)));
   BOOST_REQUIRE_EQUAL(get_performance("defproducera", 1), 0.66);
 
-  BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+21))); //bring back the main producers
-  BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>()));  // remove the standbys from production
-  produce_blocks_up_to_producer(N(defproducera));
-  BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>(standby_names.begin(), standby_names.begin()+21)));
+  BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+21)));   // bring back the main producers
+  BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>(standby_names_2.begin(), standby_names_2.begin()+26)));  // remove the standby_names_1 from production
+  flush_producers(standby_names_1);
+  BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>(standby_names_1.begin(), standby_names_1.begin()+26)));
   produce_blocks_up_to_producer(N(defstandby1a));
 
   BOOST_REQUIRE_EQUAL(success(), push_action(N(defstandby1a), N(resetperf), mvo()("producer", "defstandby1a")("producer_type", 2)));
-  BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>()));  // remove the standbys from production
-  produce_blocks_up_to_producer(N(defproducera));
-  produce_blocks_up_to_producer(N(defproduceru));       // flush out the standbys
+  BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), vector<account_name>(standby_names_2.begin(), standby_names_2.begin()+26)));  // remove the standbys from production
+  flush_producers(standby_names_1);
   produce_block(fc::milliseconds(500 * minimum_standbys_reset_window / 2));
   BOOST_REQUIRE_EQUAL(wasm_assert_msg("Cannot reset performance before the minimum reset interval"),
                                 push_action(N(defstandby1a), N(resetperf), mvo()("producer", "defstandby1a")("producer_type", 2)));
@@ -4298,7 +4310,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
 
       prod = get_producer_info("defproducera");
       const uint32_t unpaid_blocks = prod["unpaid_blocks"].as<uint32_t>();
-      BOOST_REQUIRE(1 < unpaid_blocks);
+      BOOST_REQUIRE_LT(1, unpaid_blocks);
 
       BOOST_REQUIRE_EQUAL(initial_tot_unpaid_blocks, unpaid_blocks);
 
@@ -4373,11 +4385,11 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
 
       prod = get_producer_info("defproducera");
       const uint32_t unpaid_blocks = prod["unpaid_blocks"].as<uint32_t>();
-      BOOST_REQUIRE(1 < unpaid_blocks);
+      BOOST_REQUIRE_LT(1, unpaid_blocks);
       BOOST_REQUIRE_EQUAL(initial_tot_unpaid_blocks, unpaid_blocks);
-      BOOST_REQUIRE(0 < prod["total_votes"].as<double>());
+      BOOST_REQUIRE_LT(0, prod["total_votes"].as<double>());
       BOOST_TEST(initial_tot_vote_weight, prod["total_votes"].as<double>());
-      BOOST_REQUIRE(0 < microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
+      BOOST_REQUIRE_LT(0, microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
 
       BOOST_REQUIRE_EQUAL(initial_tot_unpaid_blocks, unpaid_blocks);
 
@@ -4443,8 +4455,8 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
       const int64_t savings = get_balance(N(eosio.saving)).get_amount();
       // Amount issued per year is very close to the 5% inflation target. Small difference (500 tokens out of 50'000'000 issued)
       // is due to compounding every 8 hours in this test as opposed to theoretical continuous compounding
-      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.05)) - (supply.get_amount() - initial_supply.get_amount()));
-      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.03)) - (savings - initial_savings));
+      BOOST_REQUIRE_GT(500 * 10000, int64_t(double(initial_supply.get_amount()) * double(0.05)) - (supply.get_amount() - initial_supply.get_amount()));
+      BOOST_REQUIRE_GT(500 * 10000, int64_t(double(initial_supply.get_amount()) * double(0.03)) - (savings - initial_savings));
    }
 
 } FC_LOG_AND_RETHROW()
@@ -4595,9 +4607,9 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
       BOOST_REQUIRE_EQUAL(initial_tot_unpaid_blocks_prod, unpaid_blocks_prod);
 
       BOOST_REQUIRE_EQUAL(0, vo2map(reward_info["counters"])[rewStandby]["unpaid_blocks"].as<uint32_t>());
-      BOOST_REQUIRE(0 < prod["total_votes"].as<double>());
+      BOOST_REQUIRE_LT(0, prod["total_votes"].as<double>());
       BOOST_TEST(initial_tot_vote_weight, prod["total_votes"].as<double>());
-      BOOST_REQUIRE(0 < microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
+      BOOST_REQUIRE_LT(0, microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
 
       const asset initial_supply  = get_token_supply();
       const asset initial_balance = get_balance(N(defproducera));
@@ -5039,7 +5051,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
 
       prod = get_producer_info("defproducera");
       const uint32_t unpaid_blocks = prod["unpaid_blocks"].as<uint32_t>();
-      BOOST_REQUIRE(1 < unpaid_blocks);
+      BOOST_REQUIRE_LT(1, unpaid_blocks);
 
       BOOST_REQUIRE_EQUAL(initial_tot_unpaid_blocks, unpaid_blocks);
 
@@ -5103,10 +5115,10 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
 
       prod = get_producer_info("defproducera");
       const uint32_t unpaid_blocks = prod["unpaid_blocks"].as<uint32_t>();
-      BOOST_REQUIRE(1 < unpaid_blocks);
+      BOOST_REQUIRE_LT(1, unpaid_blocks);
       BOOST_REQUIRE_EQUAL(initial_tot_unpaid_blocks, unpaid_blocks);
-      BOOST_REQUIRE(0 < prod["total_votes"].as<double>());
-      BOOST_REQUIRE(0 < microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
+      BOOST_REQUIRE_LT(0, prod["total_votes"].as<double>());
+      BOOST_REQUIRE_LT(0, microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
 
       BOOST_REQUIRE_EQUAL(initial_tot_unpaid_blocks, unpaid_blocks);
 
@@ -5164,8 +5176,8 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
       const int64_t savings = get_balance(N(eosio.saving)).get_amount();
       // Amount issued per year is very close to the 5% inflation target. Small difference (500 tokens out of 50'000'000 issued)
       // is due to compounding every 8 hours in this test as opposed to theoretical continuous compounding
-      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.05)) - (supply.get_amount() - initial_supply.get_amount()));
-      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.03)) - (savings - initial_savings));
+      BOOST_REQUIRE_GT(500 * 10000, int64_t(double(initial_supply.get_amount()) * double(0.05)) - (supply.get_amount() - initial_supply.get_amount()));
+      BOOST_REQUIRE_GT(500 * 10000, int64_t(double(initial_supply.get_amount()) * double(0.03)) - (savings - initial_savings));
    }
 
 } FC_LOG_AND_RETHROW()
@@ -5323,7 +5335,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
       const int64_t from_perblock_bucket = initial_unpaid_blocks * expected_perblock_bucket / initial_tot_unpaid_blocks ;
       const int64_t from_pervote_bucket  = 0;
 
-      BOOST_REQUIRE( 1 >= abs(int32_t(initial_tot_unpaid_blocks - tot_unpaid_blocks) - int32_t(initial_unpaid_blocks - unpaid_blocks)) );
+      BOOST_REQUIRE_GTE( 1, abs(int32_t(initial_tot_unpaid_blocks - tot_unpaid_blocks) - int32_t(initial_unpaid_blocks - unpaid_blocks)) );
 
       if (from_pervote_bucket >= 100 * 10000) {
          BOOST_REQUIRE( within_one( from_perblock_bucket + from_pervote_bucket, balance.get_amount() - initial_balance.get_amount() ) );
@@ -5394,7 +5406,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
       const int64_t from_perblock_bucket = initial_unpaid_blocks * expected_perblock_bucket / initial_tot_unpaid_blocks ;
       const int64_t from_pervote_bucket  = 0;
 
-      BOOST_REQUIRE( 1 >= abs(int32_t(initial_tot_unpaid_blocks - tot_unpaid_blocks) - int32_t(initial_unpaid_blocks - unpaid_blocks)) );
+      BOOST_REQUIRE_GTE( 1, abs(int32_t(initial_tot_unpaid_blocks - tot_unpaid_blocks) - int32_t(initial_unpaid_blocks - unpaid_blocks)) );
       if (from_pervote_bucket >= 100 * 10000) {
          BOOST_REQUIRE( within_one( from_perblock_bucket + from_pervote_bucket, balance.get_amount() - initial_balance.get_amount() ) );
          BOOST_REQUIRE( within_one( expected_pervote_bucket - from_pervote_bucket, pervote_bucket ) );
@@ -5416,7 +5428,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
       const auto prod_name = producer_names[prod_index];
       BOOST_REQUIRE_EQUAL(success(),
                           push_action(prod_name, N(claimrewards), mvo()("owner", prod_name)));
-      //BOOST_REQUIRE(100 * 10000 <= get_balance(prod_name).get_amount());
+      //BOOST_REQUIRE_LTE(100 * 10000, get_balance(prod_name).get_amount());
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("already claimed rewards within past day"),
                           push_action(prod_name, N(claimrewards), mvo()("owner", prod_name)));
    }
@@ -5741,7 +5753,7 @@ BOOST_FIXTURE_TEST_CASE(producer_onblock_check, eosio_system_tester) try {
 
       BOOST_REQUIRE_EQUAL(success(),
                           push_action(producer_names.front(), N(claimrewards), mvo()("owner", producer_names.front())));
-      BOOST_REQUIRE(0 < get_balance(producer_names.front()).get_amount());
+      BOOST_REQUIRE_LT(0, get_balance(producer_names.front()).get_amount());
    }
 
    BOOST_CHECK_EQUAL( success(), unstake( "producvotera", core_sym::from_string("50.0000"), core_sym::from_string("50.0000") ) );
@@ -6225,7 +6237,7 @@ BOOST_FIXTURE_TEST_CASE(backward_rewards, eosio_system_tester) try {
    asset balance = get_balance(N(user11111111));
 
    //The rewards should be equal to the awarded tokens during the swap even if the swap was made after July 1st
-   BOOST_REQUIRE(core_sym::from_string("100000000.0000") - balance <=  core_sym::from_string("0.0001"));
+   BOOST_REQUIRE_LTE(core_sym::from_string("100000000.0000") - balance, core_sym::from_string("0.0001"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( vote_both_proxy_and_producers, eosio_system_tester ) try {
@@ -6710,7 +6722,7 @@ BOOST_FIXTURE_TEST_CASE( vote_producers_in_and_out, eosio_system_tester ) try {
       BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterd), { producer_names[new_prod_index] }));
       BOOST_REQUIRE_EQUAL(0, get_producer_info(producer_names[new_prod_index])["unpaid_blocks"].as<uint32_t>());
       produce_blocks(4 * 12 * 21);
-      BOOST_REQUIRE(0 < get_producer_info(producer_names[new_prod_index])["unpaid_blocks"].as<uint32_t>());
+      BOOST_REQUIRE_LT(0, get_producer_info(producer_names[new_prod_index])["unpaid_blocks"].as<uint32_t>());
       const uint32_t initial_unpaid_blocks = get_producer_info(producer_names[voted_out_index])["unpaid_blocks"].as<uint32_t>();
       produce_blocks(2 * 12 * 21);
       BOOST_REQUIRE_EQUAL(initial_unpaid_blocks, get_producer_info(producer_names[voted_out_index])["unpaid_blocks"].as<uint32_t>());
@@ -6861,8 +6873,8 @@ BOOST_FIXTURE_TEST_CASE( setram_effect, eosio_system_tester ) try {
                            push_action(config::system_account_name, N(setram), mvo()("max_ram_size", 80ll*1024 * 1024 * 1024)) );
 
       BOOST_REQUIRE_EQUAL( success(), sellram(name_b, bought_bytes_b ) );
-      BOOST_REQUIRE( core_sym::from_string("900.0000") < get_balance(name_b) );
-      BOOST_REQUIRE( core_sym::from_string("950.0000") > get_balance(name_b) );
+      BOOST_REQUIRE_LT( core_sym::from_string("900.0000"), get_balance(name_b) );
+      BOOST_REQUIRE_GT( core_sym::from_string("950.0000"), get_balance(name_b) );
    }
 
 } FC_LOG_AND_RETHROW()
@@ -7004,7 +7016,7 @@ BOOST_FIXTURE_TEST_CASE( setabi_bios, TESTER ) try {
       auto abi = fc::raw::pack(fc::json::from_string( (const char*)contracts::token_abi().data()).template as<abi_def>());
       auto result = fc::sha256::hash( (const char*)abi.data(), abi.size() );
 
-      BOOST_REQUIRE( abi_hash.hash == result );
+      BOOST_REQUIRE_EQUAL( abi_hash.hash, result );
    }
 
    set_abi( N(eosio.token), contracts::system_abi().data() );
@@ -7016,7 +7028,7 @@ BOOST_FIXTURE_TEST_CASE( setabi_bios, TESTER ) try {
       auto abi = fc::raw::pack(fc::json::from_string( (const char*)contracts::system_abi().data()).template as<abi_def>());
       auto result = fc::sha256::hash( (const char*)abi.data(), abi.size() );
 
-      BOOST_REQUIRE( abi_hash.hash == result );
+      BOOST_REQUIRE_EQUAL( abi_hash.hash, result );
    }
 } FC_LOG_AND_RETHROW()
 
@@ -7030,7 +7042,7 @@ BOOST_FIXTURE_TEST_CASE( setabi, eosio_system_tester ) try {
       auto abi = fc::raw::pack(fc::json::from_string( (const char*)contracts::token_abi().data()).template as<abi_def>());
       auto result = fc::sha256::hash( (const char*)abi.data(), abi.size() );
 
-      BOOST_REQUIRE( abi_hash.hash == result );
+      BOOST_REQUIRE_EQUAL( abi_hash.hash, result );
    }
 
    set_abi( N(eosio.token), contracts::system_abi().data() );
@@ -7042,7 +7054,7 @@ BOOST_FIXTURE_TEST_CASE( setabi, eosio_system_tester ) try {
       auto abi = fc::raw::pack(fc::json::from_string( (const char*)contracts::system_abi().data()).template as<abi_def>());
       auto result = fc::sha256::hash( (const char*)abi.data(), abi.size() );
 
-      BOOST_REQUIRE( abi_hash.hash == result );
+      BOOST_REQUIRE_EQUAL( abi_hash.hash, result );
    }
 } FC_LOG_AND_RETHROW()
 
@@ -7181,7 +7193,7 @@ BOOST_FIXTURE_TEST_CASE( buy_pin_sell_ram, eosio_system_tester ) try {
 
    auto tokens_received_by_selling_ram = get_balance( N(eosio) ) - eosio_original_balance;
 
-   BOOST_REQUIRE( double(tokens_paid_for_ram.get_amount() - tokens_received_by_selling_ram.get_amount()) / tokens_paid_for_ram.get_amount() < 0.01 );
+   BOOST_REQUIRE_LT( double(tokens_paid_for_ram.get_amount() - tokens_received_by_selling_ram.get_amount()) / tokens_paid_for_ram.get_amount(), 0.01 );
 
 } FC_LOG_AND_RETHROW()
 
@@ -7514,8 +7526,8 @@ BOOST_FIXTURE_TEST_CASE( claim_half_period_twice, eosio_system_tester ) try {
    claimgenesis( N(user11111111) );
    user1_balance = get_balance(N(user11111111));
    // Adding one_day_genesis_rewards because the last day cannot be claimed due the award was after the initial time
-   BOOST_REQUIRE( user1_balance <= core_sym::from_string("2.0000"));
-   BOOST_REQUIRE( user1_balance >= core_sym::from_string("1.9999"));
+   BOOST_REQUIRE_LTE( user1_balance, core_sym::from_string("2.0000"));
+   BOOST_REQUIRE_GTE( user1_balance, core_sym::from_string("1.9999"));
 
 } FC_LOG_AND_RETHROW()
 
@@ -7849,14 +7861,14 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self, eosio_system_te
 
    // so, user1's balance is now full period rewards
    // plus already unstaked liquid tokens
-   BOOST_REQUIRE(  genesis_tokens_user1 // -> full period equals initial genesis balance
+   BOOST_REQUIRE_GTE(  genesis_tokens_user1 // -> full period equals initial genesis balance
 		       + net_to_stake_user1
-		       + cpu_to_stake_user1
-             >= get_balance(N(user11111111)));
-   BOOST_REQUIRE(genesis_tokens_user1 // -> full period equals initial genesis balance
+		       + cpu_to_stake_user1,
+           get_balance(N(user11111111)));
+   BOOST_REQUIRE_LTE(genesis_tokens_user1 // -> full period equals initial genesis balance
 		       + net_to_stake_user1
-		       + cpu_to_stake_user1
-             <= get_balance(N(user11111111)) + core_sym::from_string("0.0001"));
+		       + cpu_to_stake_user1,
+           get_balance(N(user11111111)) + core_sym::from_string("0.0001"));
 
 } FC_LOG_AND_RETHROW()
 
@@ -7930,10 +7942,10 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self_no_unstake, eosi
 
    // so, user1's balance is now full period rewards
    // plus already unstaked liquid tokens
-   BOOST_REQUIRE(  genesis_tokens_user1 // -> full period equals initial genesis balance
-		      >= get_balance(N(user11111111)) );
-   BOOST_REQUIRE(genesis_tokens_user1 // -> full period equals initial genesis balance
-		      <= core_sym::from_string("0.0001") + get_balance(N(user11111111)) );
+   BOOST_REQUIRE_GTE( genesis_tokens_user1, // -> full period equals initial genesis balance
+		                  get_balance(N(user11111111)) );
+   BOOST_REQUIRE_LTE(genesis_tokens_user1, // -> full period equals initial genesis balance
+		                  core_sym::from_string("0.0001") + get_balance(N(user11111111)) );
 
 } FC_LOG_AND_RETHROW()
 
@@ -8014,8 +8026,8 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_someone_else, eosio_s
 
    // so, user1's balance is now full period rewards
    // plus already unstaked liquid tokens
-   BOOST_REQUIRE( locked_4_net + locked_4_cpu + half_locked_4_net >= get_balance(N(user11111111)));
-   BOOST_REQUIRE( locked_4_net + locked_4_cpu + half_locked_4_net - core_sym::from_string("0.0001") <= get_balance(N(user11111111)));
+   BOOST_REQUIRE_GTE( locked_4_net + locked_4_cpu + half_locked_4_net, get_balance(N(user11111111)));
+   BOOST_REQUIRE_LTE( locked_4_net + locked_4_cpu + half_locked_4_net - core_sym::from_string("0.0001"), get_balance(N(user11111111)));
 
 } FC_LOG_AND_RETHROW()
 
