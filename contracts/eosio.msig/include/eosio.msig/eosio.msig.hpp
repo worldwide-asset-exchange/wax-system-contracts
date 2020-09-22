@@ -114,7 +114,7 @@ namespace eosio {
          using invalidate_action = eosio::action_wrapper<"invalidate"_n, &multisig::invalidate>;
    };
 
-   struct [[eosio::table]] proposal {
+   struct [[eosio::table, eosio::contract("eosio.msig")]] proposal {
       name                                                            proposal_name;
       std::vector<char>                                               packed_transaction;
       eosio::eosio_msig_binary_extension< std::optional<time_point> > earliest_exec_time;
@@ -123,7 +123,7 @@ namespace eosio {
    };
    typedef eosio::multi_index< "proposal"_n, proposal > proposals;
 
-   struct [[eosio::table]] old_approvals_info {
+   struct [[eosio::table, eosio::contract("eosio.msig")]] old_approvals_info {
       name                            proposal_name;
       std::vector<permission_level>   requested_approvals;
       std::vector<permission_level>   provided_approvals;
@@ -137,7 +137,7 @@ namespace eosio {
       time_point       time;
    };
 
-   struct [[eosio::table]] approvals_info {
+   struct [[eosio::table, eosio::contract("eosio.msig")]] approvals_info {
       uint8_t                 version = 1;
       name                    proposal_name;
       //requested approval doesn't need to contain time, but we want requested approval
@@ -150,7 +150,7 @@ namespace eosio {
    };
    typedef eosio::multi_index< "approvals2"_n, approvals_info > approvals;
 
-   struct [[eosio::table]] invalidation {
+   struct [[eosio::table, eosio::contract("eosio.msig")]] invalidation {
       name         account;
       time_point   last_invalidation_time;
 
