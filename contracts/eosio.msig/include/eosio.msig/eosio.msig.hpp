@@ -117,7 +117,7 @@ namespace eosio {
    struct [[eosio::table, eosio::contract("eosio.msig")]] proposal {
       name                                                            proposal_name;
       std::vector<char>                                               packed_transaction;
-      eosio::eosio_msig_binary_extension< std::optional<time_point> > earliest_exec_time;
+      eosio::binary_extension< std::optional<time_point> >            earliest_exec_time;
 
       uint64_t primary_key()const { return proposal_name.value; }
    };
