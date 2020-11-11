@@ -3403,6 +3403,88 @@ BOOST_FIXTURE_TEST_CASE(standbys_get_paid_the_same_despite_capacity_nonrandom, e
    BOOST_REQUIRE_APROX(2 * (balance_standby_a_1 - balance_standby_a_0), balance_standby_a_3 - balance_standby_a_2 + balance_standby_b_3 - balance_standby_b_2, 0.01);
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(standbys_limit_below_max_random, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
+   cross_15_percent_threshold();
+   activaterewd();
+   const asset large_asset = core_sym::from_string("80.0000");
+   create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( N(producvoterb), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( N(producvoterc), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+
+   prod_vec_t producer_names, standby_names;
+   producer_names.reserve(21);
+   standby_names.reserve(36);
+
+   // Create producers/standbys
+   gen_producers("defproducer", 21, producer_names);
+   produce_block();
+
+   gen_producers("defstandby1", 26, standby_names);
+   produce_block();
+
+   gen_producers("defstandby2", 10, standby_names);
+   produce_block();
+
+   transfer( config::system_account_name, "producvotera", core_sym::from_string("100000000.0000"), config::system_account_name);
+   transfer( config::system_account_name, "producvoterb", core_sym::from_string("50000000.0000"), config::system_account_name);
+   transfer( config::system_account_name, "producvoterc", core_sym::from_string("30000000.0000"), config::system_account_name);
+
+   BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000")));
+   BOOST_REQUIRE_EQUAL(success(), stake("producvoterb", core_sym::from_string("20000000.0000"), core_sym::from_string("20000000.0000")));
+   BOOST_REQUIRE_EQUAL(success(), stake("producvoterc", core_sym::from_string("15000000.0000"), core_sym::from_string("15000000.0000")));
+
+   setrwrdsenv(config::system_account_name, 3*12, 12, true, 6);
+
+   BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+21)));
+
+   const vector<account_name> six_standbys(standby_names.begin(), standby_names.begin()+6);
+   BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterb), six_standbys));
+
+   const vector<account_name> thirty_standbys(standby_names.begin()+6, standby_names.begin()+36);
+   BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterc), thirty_standbys));
+
+   produce_block(fc::hours(24));
+
+   uint32_t ARBITRARY_LARGE_NUMBER_OF_BLOCKS = 50000;
+
+   produce_blocks(ARBITRARY_LARGE_NUMBER_OF_BLOCKS);
+
+   for(auto producer_name : producer_names) {
+     BOOST_REQUIRE_EQUAL(success(), push_action(producer_name, N(claimrewards), mvo()("owner", producer_name.to_string())));
+   }
+   for(auto standby_name : standby_names) {
+     BOOST_REQUIRE_EQUAL(success(), push_action(standby_name, N(claimrewards), mvo()("owner", standby_name.to_string())));
+   }
+
+   int64_t standbys_balance_total = 0;
+
+   for(int i = 0; i < 6; i++) {
+     auto standby_name = standby_names[i];
+     const int64_t balance_standby = get_balance(standby_name).get_amount();
+     BOOST_REQUIRE_GT(balance_standby, 0);
+     standbys_balance_total += balance_standby;
+   }
+
+   for(int i = 6; i < 36; i++) {
+     auto standby_name = standby_names[i];
+     const int64_t balance_standby = get_balance(standby_name).get_amount();
+     BOOST_REQUIRE_EQUAL(0, balance_standby);
+   }
+
+   int64_t producers_balance_total = 0;
+
+   for(auto producer_name : producer_names) {
+     const int64_t balance_producer = get_balance(producer_name).get_amount();
+     BOOST_REQUIRE_GT(balance_producer, 0);
+     producers_balance_total += balance_producer;
+   }
+
+   auto extrapolated_standbys_total = 36.0 * standbys_balance_total / 6;
+
+   // The extrapolated standby total should be 40 percent of rewards given to producers and standbys
+   BOOST_REQUIRE_APROX(extrapolated_standbys_total / (extrapolated_standbys_total + producers_balance_total), 0.4, 0.01);
+} FC_LOG_AND_RETHROW()
+
 BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_proxy_stability_random, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
    cross_15_percent_threshold();
    BOOST_REQUIRE_EQUAL( success(), push_action(N(alice1111111), N(regproxy), mvo()

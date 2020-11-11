@@ -18,6 +18,7 @@ namespace eosiosystem {
     _global(get_self(), get_self().value),
     _global2(get_self(), get_self().value),
     _globalreward(get_self(), get_self().value),
+    _globalrewardold(get_self(), get_self().value),
     _rammarket(get_self(), get_self().value),
     _proposers(get_self(), get_self().value),
     _proposals(get_self(), get_self().value),
@@ -30,6 +31,7 @@ namespace eosiosystem {
       _gstate2 = _global2.exists() ? _global2.get() : eosio_global_state2{};
       _wps_state = _wps_global.exists() ? _wps_global.get() : wps_global_state{};
       _greward = _globalreward.exists() ? _globalreward.get() : eosio_global_reward{};
+      _grewardold = _globalrewardold.exists() ? _globalrewardold.get() : eosio_global_reward_old{};
    }
 
    eosio_global_state system_contract::get_default_parameters() {
@@ -48,6 +50,7 @@ namespace eosiosystem {
       _global2.set( _gstate2, get_self() );
       _wps_global.set( _wps_state, get_self() );
       _globalreward.set( _greward, get_self() );
+      _globalrewardold.set( _grewardold, get_self() );
    }
 
    void system_contract::setram( uint64_t max_ram_size ) {
@@ -421,13 +424,15 @@ namespace eosiosystem {
       eosio::print("Standby rewards feature activated\n");
    }
 
-   void system_contract::setrwrdsenv(uint32_t producer_blocks_performance_window, uint32_t standby_blocks_performance_window, bool random_standby_selection) {
+   void system_contract::setrwrdsenv(uint32_t producer_blocks_performance_window, uint32_t standby_blocks_performance_window, bool random_standby_selection, uint32_t standbys_limit) {
      require_auth( get_self() );
      check(producer_blocks_performance_window > 0, "producer_blocks_performance_window must be > 0");
      check(standby_blocks_performance_window > 0, "standby_blocks_performance_window must be > 0");
+     check(standbys_limit <= max_standbys, "standbys_limit must be <= 36");
      _greward.producer_blocks_performance_window = producer_blocks_performance_window;
      _greward.standby_blocks_performance_window = standby_blocks_performance_window;
      _greward.random_standby_selection = random_standby_selection;
+     _greward.standbys_limit = standbys_limit;
    }
 
    void system_contract::resetperf(const name producer, uint32_t producer_type) {

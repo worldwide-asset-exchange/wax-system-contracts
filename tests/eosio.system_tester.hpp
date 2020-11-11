@@ -939,7 +939,7 @@ public:
    }
 
    fc::variant get_global_reward() {
-      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(glbreward), N(glbreward) );
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, N(glbreward2), N(glbreward2) );
       return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_reward", data, abi_serializer_max_time );
    }
 
@@ -1076,11 +1076,12 @@ public:
       return push_action(config::system_account_name, N(activaterewd), mvo());
    }
 
-   action_result setrwrdsenv( account_name account, uint32_t producer_blocks_performance_window, uint32_t standby_blocks_performance_window, bool random_standby_selection ) {
+   action_result setrwrdsenv( account_name account, uint32_t producer_blocks_performance_window, uint32_t standby_blocks_performance_window, bool random_standby_selection, uint32_t standbys_limit = max_standbys ) {
       return push_action(account, N(setrwrdsenv), mvo()
                           ("producer_blocks_performance_window",     producer_blocks_performance_window)
                           ("standby_blocks_performance_window",     standby_blocks_performance_window)
-                          ("random_standby_selection",     random_standby_selection));
+                          ("random_standby_selection",     random_standby_selection)
+                          ("standbys_limit",  standbys_limit));
    }
 
    void produce_blocks_up_to_producer(account_name name) {

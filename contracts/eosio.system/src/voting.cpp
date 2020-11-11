@@ -246,10 +246,10 @@ namespace eosiosystem {
    }
 
    size_t system_contract::num_standbys() const {
-      prod_vec_t standbys; standbys.reserve(max_standbys);
+      prod_vec_t standbys; standbys.reserve(_greward.standbys_limit);
 
-      // Pick the current max_standbys standbys
-      select_producers_into(max_producers, max_standbys, reward_type::standby, standbys);
+      // Pick the current standbys_limit number of standbys
+      select_producers_into(max_producers, _greward.standbys_limit, reward_type::standby, standbys);
       return standbys.size();
    }
 
@@ -290,10 +290,10 @@ namespace eosiosystem {
       int64_t standby_index = -1;
 
       if (_greward.is_it_time_to_select_a_standby()) {
-         prod_vec_t standbys; standbys.reserve(max_standbys);
+         prod_vec_t standbys; standbys.reserve(_greward.standbys_limit);
 
-         // Pick the current max_standbys standbys
-         select_producers_into(max_producers, max_standbys, reward_type::standby, standbys);
+         // Pick the current standbys_limit number of standbys
+         select_producers_into(max_producers, _greward.standbys_limit, reward_type::standby, standbys);
 
          if(standbys.size() > 0) {
            // sort by producer name, if both are equal it will sort by location
@@ -542,7 +542,7 @@ namespace eosiosystem {
 
        uint64_t i = 0;
 
-       for (auto it = idx.cbegin(); it != idx.cend() && i < max_producers + max_standbys; ++it, ++i) {
+       for (auto it = idx.cbegin(); it != idx.cend() && i < max_producers + _greward.standbys_limit; ++it, ++i) {
           if(i < max_producers) {
             producers.emplace(it->owner, true);
           } else {
