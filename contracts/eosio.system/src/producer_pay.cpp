@@ -33,7 +33,7 @@ namespace eosiosystem {
       _ds >> ignored1 >> previous;
 
       // TODO: uncomment and subsequently remove after upgrading testnet
-      // upgrade_rewards_table();
+      upgrade_rewards_table();
 
       if (_greward.activated) {
          checksum256 ignored2;
