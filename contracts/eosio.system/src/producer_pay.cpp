@@ -91,19 +91,20 @@ namespace eosiosystem {
          const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
          auto new_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
 
-         // Inflation gets split: 7/15 Savings, 1/5 Voters, 1/3 Producers (and split 60% to full bps, 40% to standbys),
+         // Inflation gets split: 2/5 Savings, 1/5 Voters, 2/5 Producers (and split 60% to full bps, 40% to standbys),
          // GBM receives a linearly deflating share over three years
          int64_t to_voters             = new_tokens / 5;
-         int64_t to_per_block_pay      = to_voters;
-         double adjusted_producer_perc_reward = producer_perc_reward;
+         int64_t to_per_block_pay      = to_voters; // Pre-standby's activation per block pay
+         double adjusted_producer_perc_reward = 1.0;
          if (_greward.activated) {
             // The standbys bucket gets added to in proportion to the number of standbys that are active,
             // so as to not overpay them when they are below capacity
-            double standby_perc_reward = (1.0 - adjusted_producer_perc_reward) * static_cast<double>(num_standbys()) / static_cast<double>(max_standbys);
-            adjusted_producer_perc_reward = adjusted_producer_perc_reward / (adjusted_producer_perc_reward + standby_perc_reward);
-            // This ensures full producers get the same payout as before standbys were introduced
-            // At full standby capacity, the ratio works out to 1/5 / 60% == 1/3 of inflation going to producers
-            to_per_block_pay /= adjusted_producer_perc_reward;
+            double standby_perc_reward = (1.0 - producer_perc_reward) * static_cast<double>(num_standbys()) / static_cast<double>(max_standbys);
+            // Multiply by 2 to reach at max 2/5 of inflation
+            // And scale per block pay accordingly down when # standbys < max_standbys
+            double producers_weight = producer_perc_reward + standby_perc_reward;
+            to_per_block_pay = 2 * producers_weight * to_per_block_pay;
+            adjusted_producer_perc_reward = producer_perc_reward / producers_weight;
          }
          int64_t to_per_block_pay_prod  = to_per_block_pay * adjusted_producer_perc_reward;
          int64_t to_per_block_pay_stb   = to_per_block_pay - to_per_block_pay_prod;

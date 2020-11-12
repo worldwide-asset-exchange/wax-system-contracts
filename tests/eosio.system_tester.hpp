@@ -780,8 +780,8 @@ public:
    inflation_params get_inflation_params(size_t num_standbys) {
      double adjusted_producer_perc_reward = producer_perc_reward_maxed_slots;
      double standby_perc_reward = (1.0 - adjusted_producer_perc_reward) * static_cast<double>(num_standbys) / static_cast<double>(max_standbys);
-     adjusted_producer_perc_reward = adjusted_producer_perc_reward / (adjusted_producer_perc_reward + standby_perc_reward);
-     double per_block_multiplier = 1.0 / adjusted_producer_perc_reward;
+     double per_block_multiplier = 2 * (producer_perc_reward_maxed_slots + standby_perc_reward);
+     adjusted_producer_perc_reward = producer_perc_reward_maxed_slots / (producer_perc_reward_maxed_slots + standby_perc_reward);
      return {
        .producer_perc_reward = adjusted_producer_perc_reward,
        .standby_perc_reward = 1 - adjusted_producer_perc_reward,

@@ -1915,7 +1915,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards, eosio_system_tester, * bo
       BOOST_REQUIRE_EQUAL(0, initial_voters_bucket); //no tokens were reserved yet
       BOOST_REQUIRE_EQUAL(voters_account_balance, voters_bucket);
 
-      BOOST_REQUIRE_EQUAL(add_gbm(new_tokens, 0), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_WITHIN(add_gbm(new_tokens, 0), supply.get_amount() - initial_supply.get_amount(), 1);
       BOOST_REQUIRE_GT(balance.get_amount(), initial_balance.get_amount());
       BOOST_REQUIRE_GTE(max_voter_reward, balance.get_amount() - initial_balance.get_amount());
 
@@ -4024,7 +4024,7 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay_performance_rewards, eosio_system_tester, 
       BOOST_REQUIRE_EQUAL(0, initial_voters_bucket); //no tokens were reserved yet
       BOOST_REQUIRE_EQUAL(voters_account_balance, voters_bucket);
 
-      BOOST_REQUIRE_EQUAL(add_gbm(new_tokens, 0), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_WITHIN(add_gbm(new_tokens, 0), supply.get_amount() - initial_supply.get_amount(), 1);
       BOOST_REQUIRE_GT(genesis_balance.get_amount(), initial_genesis_balance.get_amount());
       BOOST_REQUIRE_GTE(max_voter_reward, genesis_balance.get_amount() - initial_genesis_balance.get_amount());
 
@@ -4633,7 +4633,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
       BOOST_REQUIRE_EQUAL(0, initial_pervote_bucket);
 
       const auto& infl_params = get_inflation_params(0);
-      BOOST_REQUIRE_EQUAL(add_gbm(new_tokens, 0), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_WITHIN(add_gbm(new_tokens, 0), supply.get_amount() - initial_supply.get_amount(), 1);
       BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5 * infl_params.per_block_multiplier * infl_params.producer_perc_reward) , balance.get_amount() - initial_balance.get_amount());
       BOOST_REQUIRE_WITHIN(int64_t(new_tokens - (new_tokens / 5) * infl_params.gbm_inflation_multiplier), savings - initial_savings, 1);
 
@@ -4644,7 +4644,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
          BOOST_REQUIRE_EQUAL(from_perblock_bucket + from_pervote_bucket, balance.get_amount() - initial_balance.get_amount());
          BOOST_REQUIRE_EQUAL(0, pervote_bucket);
       } else {
-         BOOST_REQUIRE_EQUAL(from_perblock_bucket, balance.get_amount() - initial_balance.get_amount());
+         BOOST_REQUIRE_WITHIN(from_perblock_bucket, balance.get_amount() - initial_balance.get_amount(), 1);
          BOOST_REQUIRE_EQUAL(from_pervote_bucket, pervote_bucket);
       }
    }
@@ -4730,7 +4730,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_reward, eosio_system_tester, * boost::unit_
 
       const auto& infl_params = get_inflation_params(0);
 
-      BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year )), 0), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_WITHIN(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year )), 0), supply.get_amount() - initial_supply.get_amount(), 1);
       BOOST_REQUIRE_WITHIN((supply.get_amount() - initial_supply.get_amount()), add_gbm(5 * (savings - initial_savings) / infl_params.savings_inflation_portion, 0), 7);
 
 
