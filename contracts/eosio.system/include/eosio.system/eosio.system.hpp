@@ -337,32 +337,6 @@ namespace eosiosystem {
    };
 
    /**
-    * DEPRECATED Global counters for producer/standby rewards
-    * TODO: remove after upgrading testnet
-    */
-   struct [[eosio::table("glbreward"), eosio::contract("eosio.system")]] eosio_global_reward_old {
-      bool activated = false;  // Producer/standby rewards activated
-      std::map<uint32_t /*reward_type*/, global_rewards_counter_type> counters;
-      std::map<uint64_t /*version*/,     top_prod_vec_t> proposed_top_producers;
-      top_prod_vec_t current_producers;
-
-      // The number of blocks that will be used to sample each producer's performance making blocks
-      uint32_t producer_blocks_performance_window = default_producer_blocks_performance_window;
-      // Likewise for standbys
-      uint32_t standby_blocks_performance_window = default_standby_blocks_performance_window;
-      bool random_standby_selection = true; // turn randomized standby selection on/off
-      uint64_t last_standby_index = 0;
-
-      double avg_standby_blocks_ratio = 0.0;
-      uint32_t avg_standby_blocks_samples = 0;
-
-      double avg_producer_performances = 0.5;
-
-      // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( eosio_global_reward_old, (activated)(counters)(proposed_top_producers)(current_producers)(producer_blocks_performance_window)(standby_blocks_performance_window)(random_standby_selection)(last_standby_index)(avg_standby_blocks_ratio)(avg_standby_blocks_samples)(avg_producer_performances))
-   };
-
-   /**
     * Defines `producer_info` structure to be stored in `producer_info` table, added after version 1.0
     */
    struct [[eosio::table, eosio::contract("eosio.system")]] producer_info {
@@ -752,7 +726,6 @@ namespace eosiosystem {
     * Global rewards singleton
     */
    typedef eosio::singleton< "glbreward2"_n, eosio_global_reward > global_reward_singleton;
-   typedef eosio::singleton< "glbreward"_n, eosio_global_reward_old > global_reward_old_singleton;
 
    struct [[eosio::table, eosio::contract("eosio.system")]] user_resources {
       name          owner;
@@ -845,11 +818,9 @@ namespace eosiosystem {
          global_state_singleton  _global;
          global_state2_singleton _global2;
          global_reward_singleton _globalreward;
-         global_reward_old_singleton _globalrewardold;
          eosio_global_state      _gstate;
          eosio_global_state2     _gstate2;
          eosio_global_reward     _greward;
-         eosio_global_reward_old _grewardold;
          rammarket               _rammarket;
          proposer_table          _proposers;
          proposal_table          _proposals;
@@ -1567,7 +1538,6 @@ namespace eosiosystem {
          double calculate_producers_performance( const voter_info& voter );
          void track_blocks( const name &current_producer, uint32_t last_slot, uint32_t current_slot );
          uint32_t record_missed_blocks( const name &current_producer, uint32_t last_slot, uint32_t current_slot );
-         void upgrade_rewards_table();
 
          template <auto system_contract::*...Ptrs>
          class registration {

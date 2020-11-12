@@ -18,7 +18,6 @@ namespace eosiosystem {
     _global(get_self(), get_self().value),
     _global2(get_self(), get_self().value),
     _globalreward(get_self(), get_self().value),
-    _globalrewardold(get_self(), get_self().value),
     _rammarket(get_self(), get_self().value),
     _proposers(get_self(), get_self().value),
     _proposals(get_self(), get_self().value),
@@ -31,7 +30,6 @@ namespace eosiosystem {
       _gstate2 = _global2.exists() ? _global2.get() : eosio_global_state2{};
       _wps_state = _wps_global.exists() ? _wps_global.get() : wps_global_state{};
       _greward = _globalreward.exists() ? _globalreward.get() : eosio_global_reward{};
-      _grewardold = _globalrewardold.exists() ? _globalrewardold.get() : eosio_global_reward_old{};
    }
 
    eosio_global_state system_contract::get_default_parameters() {
@@ -50,7 +48,6 @@ namespace eosiosystem {
       _global2.set( _gstate2, get_self() );
       _wps_global.set( _wps_state, get_self() );
       _globalreward.set( _greward, get_self() );
-      _globalrewardold.set( _grewardold, get_self() );
    }
 
    void system_contract::setram( uint64_t max_ram_size ) {

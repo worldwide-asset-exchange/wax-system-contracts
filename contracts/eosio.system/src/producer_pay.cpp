@@ -32,9 +32,6 @@ namespace eosiosystem {
 
       _ds >> ignored1 >> previous;
 
-      // TODO: uncomment and subsequently remove after upgrading testnet
-      upgrade_rewards_table();
-
       if (_greward.activated) {
          checksum256 ignored2;
          uint32_t schedule_version;
@@ -250,45 +247,6 @@ namespace eosiosystem {
             }
          }
       }
-   }
-
-   // TODO: remove after upgrading testnet
-   void system_contract::upgrade_rewards_table() {
-      if(_grewardold.producer_blocks_performance_window == 0) {
-        return;
-      }
-
-      // This just proves the upgrade mechanism will work. Temporarily uncomment to test
-      // if(_grewardold.producer_blocks_performance_window != 1) {
-      //   _grewardold.activated = _greward.activated;
-      //   _grewardold.counters = _greward.counters;
-      //   _grewardold.proposed_top_producers = _greward.proposed_top_producers;
-      //   _grewardold.current_producers = _greward.current_producers;
-      //   _grewardold.producer_blocks_performance_window = _greward.producer_blocks_performance_window;
-      //   _grewardold.standby_blocks_performance_window = _greward.standby_blocks_performance_window;
-      //   _grewardold.random_standby_selection = _greward.random_standby_selection;
-      //   _grewardold.last_standby_index = _greward.last_standby_index;
-      //   _grewardold.avg_standby_blocks_ratio = _greward.avg_standby_blocks_ratio;
-      //   _grewardold.avg_standby_blocks_samples = _greward.avg_standby_blocks_samples;
-      //   _grewardold.avg_producer_performances = _greward.avg_producer_performances;
-      //   _grewardold.producer_blocks_performance_window = 1;
-      // } else {
-      //   _grewardold.producer_blocks_performance_window = _greward.producer_blocks_performance_window;
-      // }
-
-      _greward.activated = _grewardold.activated;
-      _greward.counters = _grewardold.counters;
-      _greward.proposed_top_producers = _grewardold.proposed_top_producers;
-      _greward.current_producers = _grewardold.current_producers;
-      _greward.producer_blocks_performance_window = _grewardold.producer_blocks_performance_window;
-      _greward.standby_blocks_performance_window = _grewardold.standby_blocks_performance_window;
-      _greward.random_standby_selection = _grewardold.random_standby_selection;
-      _greward.last_standby_index = _grewardold.last_standby_index;
-      _greward.avg_standby_blocks_ratio = _grewardold.avg_standby_blocks_ratio;
-      _greward.avg_standby_blocks_samples = _grewardold.avg_standby_blocks_samples;
-      _greward.avg_producer_performances = _grewardold.avg_producer_performances;
-
-      _grewardold.producer_blocks_performance_window = 0;
    }
 
    void system_contract::claimrewards( const name& owner ) {
