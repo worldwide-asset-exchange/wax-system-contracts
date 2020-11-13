@@ -2190,7 +2190,8 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_misc_scenarios_random, eos
    // standby i (index 8) will fail to produce
    vector<account_name> half_prods_half_standbys_one_failing_standby(producer_names.begin(), producer_names.begin()+8);
    half_prods_half_standbys_one_failing_standby.insert(half_prods_half_standbys_one_failing_standby.end(), standby_names.begin(), standby_names.begin() + 7);
-   half_prods_half_standbys_one_failing_standby.push_back(standby_names[8]);
+   auto failing_producer = standby_names[8];
+   half_prods_half_standbys_one_failing_standby.push_back(failing_producer);
    BOOST_REQUIRE_EQUAL(success(), vote(N(producvoterc), half_prods_half_standbys_one_failing_standby));
 
    // vote in the rest of the standbys
@@ -2207,7 +2208,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_performance_rewards_misc_scenarios_random, eos
 
    {
       setrwrdsenv(config::system_account_name, producer_blocks_performance_window, standbys_blocks_performance_window, true);
-      produce_blocks_skip_producer(2 * 36 * standbys_blocks_performance_window / .01, N(defstandby1i));  // cycle through the producers to set them all at close to full rewards scaling (except for the missed producer)
+      produce_blocks_skip_producer(2 * 36 * standbys_blocks_performance_window / .01, failing_producer);  // cycle through the producers to set them all at close to full rewards scaling (except for the missed producer)
 
       // substandby1q flakes out and deregisters
       BOOST_REQUIRE_EQUAL(success(), push_action(N(substandby1q), N(unregprod), mvo()("producer", "substandby1q")));

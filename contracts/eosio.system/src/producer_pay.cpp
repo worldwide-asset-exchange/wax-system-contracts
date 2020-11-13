@@ -194,8 +194,9 @@ namespace eosiosystem {
 
             if (const auto total_unpaid_blocks = curr_gcnt.total_unpaid_blocks; total_unpaid_blocks > 0) {
                if (curr_cnt.unpaid_blocks > 0) {
+                 // NOTE: Cast to double mitigates overflow issues
                  curr_info.per_block_pay +=
-                     curr_gcnt.perblock_bucket * curr_cnt.unpaid_blocks / total_unpaid_blocks;
+                     static_cast<double>(curr_gcnt.perblock_bucket) * curr_cnt.unpaid_blocks / total_unpaid_blocks;
                }
             }
 
