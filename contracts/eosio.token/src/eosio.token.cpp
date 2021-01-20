@@ -2,6 +2,8 @@
 
 namespace eosio {
 
+const name fee_account = name("eosio");
+
 void token::create( const name&   issuer,
                     const asset&  maximum_supply )
 {
@@ -23,6 +25,30 @@ void token::create( const name&   issuer,
     });
 }
 
+void token::setfee( const symbol& symbol, double fee_pct )
+{
+    check( symbol.is_valid(), "invalid symbol name" );
+    check( fee_pct >= 0 && fee_pct <= 1, "the fee from 0 to 1" );
+    stats statstable( get_self(), symbol.code().raw() );
+    auto existing = statstable.find( symbol.code().raw() );
+    check( existing != statstable.end(), "token with symbol does not exist, create token before setfee" );
+    const auto& st = *existing;
+
+    require_auth( st.issuer );
+
+    fees feestable( get_self(), symbol.code().raw() );
+    auto fees_itr = feestable.find( symbol.code().raw() );
+    if( fees_itr == feestable.end()){
+        feestable.emplace( st.issuer, [&]( auto& s ) {
+            s.currency_name = symbol;
+            s.fee_pct = fee_pct;
+        });
+    }else{
+        feestable.modify( fees_itr, same_payer, [&]( auto& s ) {
+            s.fee_pct = fee_pct;
+        });
+    }
+}
 
 void token::issue( const name& to, const asset& quantity, const string& memo )
 {
@@ -86,6 +112,13 @@ void token::transfer( const name&    from,
     stats statstable( get_self(), sym.raw() );
     const auto& st = statstable.get( sym.raw() );
 
+    fees feestable( get_self(), sym.raw() );
+    double fee_pct = 0;
+    auto fees_itr = feestable.find( sym.raw() );
+    if(fees_itr != feestable.end()){
+        fee_pct = fees_itr->fee_pct;
+    }
+
     require_recipient( from );
     require_recipient( to );
 
@@ -97,7 +130,18 @@ void token::transfer( const name&    from,
     auto payer = has_auth( to ) ? to : from;
 
     sub_balance( from, quantity );
-    add_balance( to, quantity, payer );
+
+    auto received_quantity = quantity;
+    auto fee_quantity = asset(0, quantity.symbol);
+    if( fee_pct > 0 ){
+        auto fee_amount = (uint64_t)( fee_pct / 100 * quantity.amount );
+        if( fee_amount > 0 ){
+            fee_quantity = asset( fee_amount, quantity.symbol );
+            received_quantity -= fee_quantity;
+            add_balance( fee_account, fee_quantity, payer );
+        }
+    }
+    add_balance( to, received_quantity, payer );
 }
 
 void token::sub_balance( const name& owner, const asset& value ) {

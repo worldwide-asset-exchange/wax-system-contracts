@@ -44,6 +44,7 @@ namespace eosio {
          [[eosio::action]]
          void create( const name&   issuer,
                       const asset&  maximum_supply);
+
          /**
           * Issue action.
           *
@@ -56,6 +57,21 @@ namespace eosio {
          [[eosio::action]]
          void issue( const name& to, const asset& quantity, const string& memo );
 
+         /**
+          * Set fee action.
+          *
+          * @details Allows `issuer` account to set the token fee.
+          * @param issuer - the account that creates the token,
+          * @param symbol - the token symbol.
+          * @param fee - the token fee.
+          * @pre Token symbol has to be valid,
+          * @pre Token symbol must be already created,
+          * @pre fee has to be smaller than 1 and greater or equal 0.
+          */
+
+         [[eosio::action]]
+         void setfee(const symbol& symbol, double fee );
+         
          /**
           * Retire action.
           *
@@ -148,6 +164,7 @@ namespace eosio {
          }
 
          using create_action = eosio::action_wrapper<"create"_n, &token::create>;
+         using setfee_action = eosio::action_wrapper<"setfee"_n, &token::setfee>;
          using issue_action = eosio::action_wrapper<"issue"_n, &token::issue>;
          using retire_action = eosio::action_wrapper<"retire"_n, &token::retire>;
          using transfer_action = eosio::action_wrapper<"transfer"_n, &token::transfer>;
@@ -168,8 +185,16 @@ namespace eosio {
             uint64_t primary_key()const { return supply.symbol.code().raw(); }
          };
 
+         struct [[eosio::table]] currency_fee {
+            symbol     currency_name;
+            double     fee_pct;
+
+            uint64_t primary_key()const { return currency_name.code().raw(); }
+         };
+
          typedef eosio::multi_index< "accounts"_n, account > accounts;
          typedef eosio::multi_index< "stat"_n, currency_stats > stats;
+         typedef eosio::multi_index< "fee"_n, currency_fee > fees;
 
          void sub_balance( const name& owner, const asset& value );
          void add_balance( const name& owner, const asset& value, const name& ram_payer );
