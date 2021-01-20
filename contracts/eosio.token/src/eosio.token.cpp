@@ -2,7 +2,7 @@
 
 namespace eosio {
 
-const name fee_account = name("eosio");
+const name fee_account = name("tkxfrfee.wax");
 
 void token::create( const name&   issuer,
                     const asset&  maximum_supply )

@@ -28,6 +28,21 @@ This action will not result any any tokens being issued into circulation.
 
 RAM will deducted from {{$action.account}}’s resources to create the necessary records.
 
+<h1 class="contract">setfee</h1>
+
+---
+spec_version: "0.2.0"
+title: Set Fee Token Transfers
+summary: 'Set fees for token transfers'
+icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
+---
+
+The token manager agrees to set token transfers fee with symbol .
+
+This action only allows set fee for existing token.
+
+RAM will deducted from {{issuer}}’s resources to create the necessary records.
+
 <h1 class="contract">issue</h1>
 
 ---
