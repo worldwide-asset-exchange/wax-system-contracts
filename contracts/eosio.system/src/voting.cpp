@@ -90,8 +90,14 @@ namespace eosiosystem {
          return;
       }
 
-      /// sort by producer name
-      std::sort( top_producers.begin(), top_producers.end() );
+      /// sort by producer location
+      std::sort( top_producers.begin(), top_producers.end(), [](const std::pair<eosio::producer_key,uint16_t> &a,
+                                                                const std::pair<eosio::producer_key,uint16_t> &b) {
+		 if (a.second == b.second) {
+		    return a.first < b.first;
+		 }
+		 return a.second < b.second;
+      });
 
       std::vector<eosio::producer_key> producers;
 
@@ -374,7 +380,7 @@ namespace eosiosystem {
          new_change_rate = voter_itr->last_vote_weight - voter_itr->proxied_vote_weight;
       }
       double change_rate_delta = new_change_rate - voter_itr->unpaid_voteshare_change_rate;
-      
+
       if (_gstate.total_unpaid_voteshare_last_updated != time_point() && _gstate.total_unpaid_voteshare_last_updated < current_time_point()) {
          _gstate.total_unpaid_voteshare += _gstate.total_voteshare_change_rate * double((ct - _gstate.total_unpaid_voteshare_last_updated).count() / 1E6);
       }
