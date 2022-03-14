@@ -23,7 +23,8 @@ namespace eosiosystem {
     _proposals(get_self(), get_self().value),
     _committees(get_self(), get_self().value),
     _reviewers(get_self(), get_self().value),
-    _wps_global(get_self(), get_self().value)
+    _wps_global(get_self(), get_self().value),
+    _ram_loan(get_self(), get_self().value)
    {
       //print( "construct system\n" );
       _gstate  = _global.exists() ? _global.get() : get_default_parameters();

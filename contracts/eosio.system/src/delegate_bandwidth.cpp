@@ -652,5 +652,105 @@ namespace eosiosystem {
       refunds_tbl.erase( req );
    }
 
+   /**
+    *  This action will transfer bytes ram of lender to receiver
+    */
+   void system_contract::loanram( const name& lender, const name& receiver, uint32_t bytes, uint32_t limit ) {
+      require_auth( lender );
+
+      check( lender != receiver, "cannot lend to self" );
+      check( is_account( receiver ), "receiver account does not exist");
+
+      uint128_t ram_loan_id = build_ram_loan_id(lender, receiver);
+      auto loan_itr = _ram_loan.find(ram_loan_id);
+      if ( loan_itr == _ram_loan.end() ) {
+        check(limit >= bytes, "bytes can not greater than limit");
+        _ram_loan.emplace( lender, [&]( auto& ram ) {
+            ram.lender = lender;
+            ram.receiver = receiver;
+            ram.bytes = bytes;
+            ram.limit = limit;
+        });
+      } else {
+        check(limit >= loan_itr->bytes + bytes, "bytes can not greater than limit");
+        _ram_loan.modify( loan_itr, lender, [&]( auto& ram ) {
+            ram.bytes += bytes;
+            ram.limit = limit;
+        });
+      }
+
+      sub_ram(lender, bytes);
+      add_ram(receiver, bytes, lender);
+   }
+
+   /**
+    *  This action claim bytes ram lender has lended to receiver
+    */
+   void system_contract::unloanram( const name& lender, const name& receiver, uint32_t bytes) {
+      require_auth( lender );
+
+      check( lender != receiver, "cannot unlend to self" );
+      check( is_account( receiver ), "receiver account does not exist");
+
+      uint128_t ram_loan_id = build_ram_loan_id(lender, receiver);
+      auto loan_itr = _ram_loan.find(ram_loan_id);
+      check(loan_itr != _ram_loan.end(), "loan does not exist");
+
+      check(loan_itr->bytes >= bytes, "can not unloan more than lended");
+      if (loan_itr->bytes == bytes) {
+         _ram_loan.erase(loan_itr);
+      } else {
+         _ram_loan.modify( loan_itr, lender, [&]( auto& ram ) {
+            ram.bytes -= bytes;
+         });
+      }
+
+      sub_ram(receiver, bytes);
+      add_ram(lender, bytes, lender);
+   }
+
+   void system_contract::sub_ram( const name& owner, uint32_t bytes ) {
+      user_resources_table  userres( get_self(), owner.value );
+      auto res_itr = userres.find(owner.value);
+
+      check(res_itr != userres.end(), "not user resource found");
+      
+      check(res_itr->ram_bytes >= bytes, "overdrawn ram quota");
+      userres.modify( res_itr, owner, [&]( auto& res ) {
+          res.ram_bytes -= bytes;
+      });
+
+      auto voter_itr = _voters.find( res_itr->owner.value );
+      if( voter_itr == _voters.end() || !has_field( voter_itr->flags1, voter_info::flags1_fields::ram_managed ) ) {
+         int64_t ram_bytes, net, cpu;
+         get_resource_limits( res_itr->owner, ram_bytes, net, cpu );
+         set_resource_limits( res_itr->owner, res_itr->ram_bytes + ram_gift_bytes, net, cpu );
+      }
+    }
+
+    void system_contract::add_ram( const name& owner, uint32_t bytes, const name& ram_payer )
+    { 
+      user_resources_table  userres( get_self(), owner.value );
+      auto res_itr = userres.find( owner.value );
+      if( res_itr ==  userres.end() ) {
+        res_itr = userres.emplace( ram_payer, [&]( auto& res ) {
+            res.owner = owner;
+            res.net_weight = asset( 0, core_symbol() );
+            res.cpu_weight = asset( 0, core_symbol() );
+            res.ram_bytes = bytes;
+        });
+      } else {
+        userres.modify( res_itr, same_payer, [&]( auto& res ) {
+            res.ram_bytes += bytes;
+        });
+      }
+
+      auto voter_itr = _voters.find( res_itr->owner.value );
+      if( voter_itr == _voters.end() || !has_field( voter_itr->flags1, voter_info::flags1_fields::ram_managed ) ) {
+         int64_t ram_bytes, net, cpu;
+         get_resource_limits( res_itr->owner, ram_bytes, net, cpu );
+         set_resource_limits( res_itr->owner, res_itr->ram_bytes + ram_gift_bytes, net, cpu );
+      }
+    }
 
 } //namespace eosiosystem

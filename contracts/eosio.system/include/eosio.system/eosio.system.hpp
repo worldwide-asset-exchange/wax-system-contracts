@@ -479,6 +479,29 @@ namespace eosiosystem {
       EOSLIB_SERIALIZE( user_resources, (owner)(net_weight)(cpu_weight)(ram_bytes) )
    };
 
+   static inline uint128_t build_ram_loan_id(name lender, name receiver) {
+      return static_cast<uint128_t>(lender.value)  | (static_cast<uint128_t>(receiver.value) << 64);
+   }
+
+   struct [[eosio::table, eosio::contract("eosio.system")]] ram_loan {
+      name          lender;
+      name          receiver;
+      int64_t       bytes = 0;
+      int64_t       limit = 0;
+
+      uint128_t primary_key() const { return build_ram_loan_id(lender, receiver); }
+      uint64_t by_lender() const { return lender.value; }
+      uint64_t by_receiver() const { return receiver.value; }
+
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE( ram_loan, (lender)(receiver)(bytes)(limit) )
+   };
+
+   typedef eosio::multi_index< "ramloan"_n, ram_loan,
+            indexed_by< "lender"_n, const_mem_fun<ram_loan, uint64_t, &ram_loan::by_lender>  >,
+            indexed_by<"receiver"_n, const_mem_fun<ram_loan, uint64_t, &ram_loan::by_receiver>  >
+    > ram_loan_table;
+
    /**
     *  Every user 'from' has a scope/table that uses every receipient 'to' as the primary key.
     */
@@ -567,6 +590,7 @@ namespace eosiosystem {
          reviewer_table          _reviewers;
          wps_global_state_singleton _wps_global;
          wps_global_state        _wps_state;
+         ram_loan_table          _ram_loan;
 
       public:
          static constexpr eosio::name active_permission{"active"_n};
@@ -812,6 +836,12 @@ namespace eosiosystem {
           */
          [[eosio::action]]
          void sellram( const name& account, int64_t bytes );
+
+         [[eosio::action]]
+         void loanram( const name& lender, const name& receiver, uint32_t bytes, uint32_t limit );
+
+         [[eosio::action]]
+         void unloanram( const name& lender, const name& receiver, uint32_t bytes);
 
          /**
           * Refund action.
@@ -1224,6 +1254,10 @@ namespace eosiosystem {
                                                double shares_rate, bool reset_to_zero = false );
          double update_total_votepay_share( const time_point& ct,
                                             double additional_shares_delta = 0.0, double shares_rate_delta = 0.0 );
+
+         void add_ram( const name& owner, uint32_t bytes, const name& ram_payer );
+
+         void sub_ram( const name& owner, uint32_t bytes );
 
          template <auto system_contract::*...Ptrs>
          class registration {
