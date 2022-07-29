@@ -325,9 +325,8 @@ namespace eosiosystem {
    }
 
    void system_contract::claimgbmvote(const name owner) {
-      int64_t reward = collect_voter_reward(owner);
-
-      send_genesis_token( voters_account, owner, asset(reward, core_symbol()));
+      // gbm is expired, this action does a regular voterclaim now
+      voterclaim(owner);
    }
 
    int64_t system_contract::collect_voter_reward(const name owner) {
