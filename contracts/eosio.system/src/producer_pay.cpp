@@ -74,12 +74,12 @@ namespace eosiosystem {
          const auto unstake_time = std::min(current_time_point(), gbm_final_time);
          const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
          auto new_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
-         // needs to be 1/2 Savings, 1/5 Voters, GBM receives a linearly deflating share over three years
-         auto to_voters        = new_tokens / 5;
-         auto to_per_block_pay = to_voters;
+         // needs to be 2/5 Savings, 2/5 Voters, 1/5 producers, GBM receives a linearly deflating share over three years, which has already expired as of July 1 2022
+         auto to_per_block_pay = new_tokens / 5;
+         auto to_voters        = 2 * to_per_block_pay;
          auto to_savings       = new_tokens - (to_voters + to_per_block_pay);
-         auto to_gbm           = to_voters * 2 * (delta_time_usec / double(useconds_in_gbm_period));
-         new_tokens           += to_gbm;
+         auto to_gbm           = to_voters * (delta_time_usec / double(useconds_in_gbm_period));
+         new_tokens           += to_gbm;    // always 0 as of July 1, 2022
 
          {
             token::issue_action issue_act{ token_account, { {get_self(), active_permission} } };
@@ -101,6 +101,7 @@ namespace eosiosystem {
       }
    }
 
+   // as_gbm is deprecated and maintained only for backwards compatibility with existing actions
    void system_contract::claim_producer_rewards( const name owner, bool as_gbm ) {
       require_auth( owner );
 
@@ -161,12 +162,8 @@ namespace eosiosystem {
       });
 
       if( producer_per_block_pay > 0 ) {
-         if(as_gbm){
-            send_genesis_token( bpay_account, owner, asset(producer_per_block_pay, core_symbol()));
-         }else {
-            token::transfer_action transfer_act{ token_account, { {bpay_account, active_permission}, {owner, active_permission} } };
-            transfer_act.send( bpay_account, owner, asset(producer_per_block_pay, core_symbol()), "producer block pay" );
-         }
+        token::transfer_action transfer_act{ token_account, { {bpay_account, active_permission}, {owner, active_permission} } };
+        transfer_act.send( bpay_account, owner, asset(producer_per_block_pay, core_symbol()), "producer block pay" );
       }
    }
 

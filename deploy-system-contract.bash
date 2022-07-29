@@ -19,7 +19,7 @@ then
     [[ "$0" = "$BASH_SOURCE" ]] && exit 1 || return 1 # handle exits from shell or function but don't exit interactive shell
 fi
 
-production_url=https://chain.wax.io
+production_url=https://wax.greymass.com
 
 chain_url=$production_url
 
@@ -40,8 +40,7 @@ $EOSC vault create --import --vault-file $TEMP_VAULT_FILE
 make clean # if this fails, do `sudo make clean`
 rm $DEPLOYMENT_FILE
 make dev-docker-all
-$CLEOS set contract eosio ./build/contracts/eosio.system/ -x 604800 -s -d --json > $DEPLOYMENT_FILE
-$EOSC multisig cancel $PROPOSER_ACCOUNT $PROPOSAL_NAME $PROPOSER_ACCOUNT --vault-file $TEMP_VAULT_FILE || echo "Proposal did not already exist - excellent"
+$EOSC system setcontract eosio ./build/contracts/eosio.system/eosio.system.wasm ./build/contracts/eosio.system/eosio.system.abi --write-transaction $DEPLOYMENT_FILE --skip-sign --expiration 604800
 $EOSC multisig propose $PROPOSER_ACCOUNT $PROPOSAL_NAME $DEPLOYMENT_FILE --request admin.wax --with-subaccounts --vault-file $TEMP_VAULT_FILE
 echo "use this command to review the multisig proposal: '$EOSC multisig review $PROPOSER_ACCOUNT $PROPOSAL_NAME'"
 echo "use this command to execute the multisig proposal: '$EOSC multisig exec $PROPOSER_ACCOUNT $PROPOSAL_NAME $PROPOSER_ACCOUNT' (You will probably need to create a vault for your proposer account 'eosc vault create --import')"

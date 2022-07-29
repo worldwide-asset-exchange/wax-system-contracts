@@ -1579,7 +1579,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
       BOOST_REQUIRE_EQUAL(0, voters_bucket); // all tokens were already distributed
 
       BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5), balance.get_amount() - initial_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5) * 2, balance.get_amount() - initial_balance.get_amount());
    }
 
    {
@@ -1630,7 +1630,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
       BOOST_REQUIRE_EQUAL(0, voters_bucket); // all tokens were already distributed
 
       BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5), balance.get_amount() - initial_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5) * 2, balance.get_amount() - initial_balance.get_amount());
    }
 
    // Voting less than 16 producers should award no rewards
@@ -1714,8 +1714,8 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
       asset balance2 = get_balance(N(voter2)) - initial_balance2;
       asset supply = get_token_supply();
 
-      uint64_t voters_inflation = (mid_term_supply.get_amount() - initial_supply.get_amount()) / 5 
-         + (supply.get_amount() - mid_term_supply.get_amount()) / 5;
+      uint64_t voters_inflation = 2 * (mid_term_supply.get_amount() - initial_supply.get_amount()) / 5 
+         + 2 * (supply.get_amount() - mid_term_supply.get_amount()) / 5;
 
       // Both voters should get almost the same reward (the difference is caused by the 0.5 seconds between claims).
       BOOST_REQUIRE(5 > balance1.get_amount() - balance2.get_amount());
@@ -1778,7 +1778,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
       asset balance1 = get_balance(N(voter1));
       asset balance2 = get_balance(N(voter2));
 
-      BOOST_REQUIRE(2000 > (balance1.get_amount() - initial_balance1.get_amount()) / 2 - (balance2.get_amount() - initial_balance2.get_amount()));
+      BOOST_REQUIRE(4000 > (balance1.get_amount() - initial_balance1.get_amount()) / 2 - (balance2.get_amount() - initial_balance2.get_amount()));
    }
 
    // Updating votes.
@@ -1805,8 +1805,8 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
       asset balance1 = get_balance(N(voter1));
       asset balance2 = get_balance(N(voter2));
 
-      // Check out if the 2000 extra grains is fine.
-      BOOST_REQUIRE(balance1.get_amount() - initial_balance1.get_amount() > balance2.get_amount() - initial_balance2.get_amount() + 2000);
+      // Check out if the 4000 extra grains is fine.
+      BOOST_REQUIRE(balance1.get_amount() - initial_balance1.get_amount() > balance2.get_amount() - initial_balance2.get_amount() + 4000);
    }
 
    // Claiming after unstaking
@@ -1920,7 +1920,7 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
       BOOST_REQUIRE_EQUAL(0, voters_bucket); // all tokens were already distributed
 
       BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5), genesis_balance.get_amount() - initial_genesis_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(0, genesis_balance.get_amount() - initial_genesis_balance.get_amount());
    }
 
    {
@@ -1971,7 +1971,7 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
       BOOST_REQUIRE_EQUAL(0, voters_bucket); // all tokens were already distributed
 
       BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5), genesis_balance.get_amount() - initial_genesis_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(0, genesis_balance.get_amount() - initial_genesis_balance.get_amount());
    }
 
    // Voting less than 16 producers should award no rewards
@@ -1990,7 +1990,7 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
       const asset supply  = get_token_supply();
       const asset genesis_balance = get_genesis_balance(N(producvotera));
 
-      BOOST_REQUIRE((supply.get_amount() - initial_supply.get_amount()) / 5 >= genesis_balance.get_amount() - initial_genesis_balance.get_amount());
+      BOOST_REQUIRE(0 == genesis_balance.get_amount() - initial_genesis_balance.get_amount());
 
       produce_block(fc::hours(24));
       // There should be no more rewards available
@@ -2146,7 +2146,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
       BOOST_REQUIRE_EQUAL(0, initial_pervote_bucket);
 
       BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 2), savings - initial_savings);
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 3), savings - initial_savings);
       BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5), balance.get_amount() - initial_balance.get_amount());
 
       int64_t from_perblock_bucket = int64_t( initial_supply.get_amount() * double(secs_between_fills) * (continuous_rate / 5.) / secs_per_year ) ;
@@ -2219,7 +2219,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
 
       BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year ) )),
                           supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE(5 > ((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 5) * 2) -
+      BOOST_REQUIRE(5 > ((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 5) * 3) -
                           add_gbm(savings - initial_savings));
 
       int64_t to_producer        = int64_t( (double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate) / usecs_per_year ) / 5;
@@ -2261,7 +2261,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
       // Amount issued per year is very close to the 6% inflation target. Small difference (500 tokens out of 50'000'000 issued)
       // is due to compounding every 8 hours in this test as opposed to theoretical continuous compounding
       BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.06)) - (supply.get_amount() - initial_supply.get_amount()));
-      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.03)) - (savings - initial_savings));
+      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.02)) - (savings - initial_savings));
    }
 
 } FC_LOG_AND_RETHROW()
@@ -2333,13 +2333,8 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
       BOOST_REQUIRE_EQUAL(0, initial_perblock_bucket);
 
       BOOST_REQUIRE_EQUAL(add_gbm(new_tokens), supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 2), savings - initial_savings);
-      BOOST_REQUIRE_EQUAL(new_tokens / 5, genesis_balance.get_amount() - initial_genesis_balance.get_amount());
-
-      int64_t from_perblock_bucket = int64_t( initial_supply.get_amount() * double(secs_between_fills) * (continuous_rate/ 5.) / secs_per_year ) ;
-
-
-      BOOST_REQUIRE_EQUAL(from_perblock_bucket, genesis_balance.get_amount() - initial_genesis_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 3), savings - initial_savings);
+      BOOST_REQUIRE_EQUAL(0, genesis_balance.get_amount() - initial_genesis_balance.get_amount());
    }
 
    {
@@ -2395,13 +2390,10 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
 
       BOOST_REQUIRE_EQUAL(add_gbm(int64_t( ( double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate / usecs_per_year )) ),
                           supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE(5 > ((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 5) * 2) -
+      BOOST_REQUIRE(5 > ((supply.get_amount() - initial_supply.get_amount()) - ((supply.get_amount() - initial_supply.get_amount()) / 5) * 3) -
                           add_gbm(savings - initial_savings));
-
-      int64_t to_producer        = int64_t( (double(initial_supply.get_amount()) * double(usecs_between_fills) * continuous_rate) / usecs_per_year ) / 5;
-      int64_t to_perblock_bucket = to_producer;
       
-      BOOST_REQUIRE_EQUAL(to_perblock_bucket, genesis_balance.get_amount() - initial_genesis_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(0, genesis_balance.get_amount() - initial_genesis_balance.get_amount());
    }
 
    // defproducerb tries to claim rewards but he's not on the list
@@ -2430,7 +2422,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
       // Amount issued per year is very close to the 6% inflation target. Small difference (500 tokens out of 50'000'000 issued)
       // is due to compounding every 8 hours in this test as opposed to theoretical continuous compounding
       BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.06)) - (supply.get_amount() - initial_supply.get_amount()));
-      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.03)) - (savings - initial_savings));
+      BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.02)) - (savings - initial_savings));
    }
 
 } FC_LOG_AND_RETHROW()
@@ -2577,7 +2569,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
       const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * cont_rate / usecs_per_year;
       BOOST_REQUIRE_EQUAL( add_gbm(int64_t(expected_supply_growth)), supply.get_amount() - initial_supply.get_amount() );
 
-      BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth)/5 * 2), savings - initial_savings );
+      BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth)/5 * 3), savings - initial_savings );
 
       const int64_t expected_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (cont_rate / 5.) / usecs_per_year );
       const int64_t expected_pervote_bucket  = 0;
@@ -2648,7 +2640,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
 
       const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * cont_rate / usecs_per_year;
       BOOST_REQUIRE_EQUAL( add_gbm(int64_t(expected_supply_growth)), supply.get_amount() - initial_supply.get_amount() );
-      BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth) / 5 * 2), savings - initial_savings );
+      BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth) / 5 * 3), savings - initial_savings );
 
       const int64_t expected_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (cont_rate/ 5.) / usecs_per_year )
                                                + initial_perblock_bucket;

@@ -1,12 +1,25 @@
 # Changelog
 
-## Pending (wax-1.7.0-X.Y.Z)
+## Pending (wax-2.1.12-X.Y.Z)
 
 BREAKING CHANGES:
 
 FEATURES:
 
 IMPROVEMENTS:
+
+BUG FIXES:
+
+## wax-2.10.12-3.0.0
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
+- voters reward bumped to 2%
+- producers sorted by location
+- genesis tokens no longer submitted on claimgbmprod nor claimgbmvote. GBM is over and these actions are equivament to claimrewards and voterclaim, respectively
 
 BUG FIXES:
 
