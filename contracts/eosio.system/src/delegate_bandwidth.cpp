@@ -8,9 +8,6 @@
 #include <eosio.system/eosio.system.hpp>
 #include <eosio.token/eosio.token.hpp>
 
-#include "name_bidding.cpp"
-// Unfortunately, this is needed until CDT fixes the duplicate symbol error with eosio::send_deferred
-
 namespace eosiosystem {
 
    using eosio::asset;
@@ -36,7 +33,7 @@ namespace eosiosystem {
 
 
    /**
-    *  When buying ram the payer irreversiblly transfers quant to system contract and only
+    *  When buying ram the payer irreversibly transfers quant to system contract and only
     *  the receiver may reclaim the tokens via the sellram action. The receiver pays for the
     *  storage of all database records associated with this action.
     *
@@ -160,9 +157,10 @@ namespace eosiosystem {
    }
 
    void validate_b1_vesting( int64_t stake ) {
-      const int64_t base_time = 1527811200; /// 2018-06-01
+      const int64_t base_time = 1527811200; /// Friday, June 1, 2018 12:00:00 AM UTC
+      const int64_t current_time = 1638921540; /// Tuesday, December 7, 2021 11:59:00 PM UTC
       const int64_t max_claimable = 100'000'000'0000ll;
-      const int64_t claimable = int64_t(max_claimable * double(current_time_point().sec_since_epoch() - base_time) / (10*seconds_per_year) );
+      const int64_t claimable = int64_t(max_claimable * double(current_time - base_time) / (10*seconds_per_year) );
 
       check( max_claimable - claimable <= stake, "b1 can only claim their tokens over 10 years" );
    }
@@ -328,7 +326,7 @@ namespace eosiosystem {
                                       from
             );
             out.delay_sec = refund_delay_sec;
-            eosio::cancel_deferred( from.value ); // TODO: Remove this line when replacing deferred trxs is fixed
+            eosio::cancel_deferred( from.value ); // TODO: Remove this line when replacing deferred transactions is fixed
             out.send( from.value, from, true );
          } else {
             eosio::cancel_deferred( from.value );
@@ -629,7 +627,7 @@ namespace eosiosystem {
       check( unstake_cpu_quantity >= zero_asset, "must unstake a positive amount" );
       check( unstake_net_quantity >= zero_asset, "must unstake a positive amount" );
       check( unstake_cpu_quantity.amount + unstake_net_quantity.amount > 0, "must unstake a positive amount" );
-      check( _gstate.total_activated_stake >= min_activated_stake,
+      check( _gstate.thresh_activated_stake_time != time_point(),
              "cannot undelegate bandwidth until the chain is activated (at least 15% of all tokens participate in voting)" );
 
       changebw( from, receiver, -unstake_net_quantity, -unstake_cpu_quantity, false);

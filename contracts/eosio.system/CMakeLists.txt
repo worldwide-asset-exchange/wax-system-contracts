@@ -1,22 +1,32 @@
-add_contract(eosio.system eosio.system
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/eosio.system.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/delegate_bandwidth.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/exchange_state.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/native.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/producer_pay.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/voting.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/wps.cpp
-)
+add_contract(
+  eosio.system
+  eosio.system
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/eosio.system.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/delegate_bandwidth.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/exchange_state.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/name_bidding.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/native.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/producer_pay.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/voting.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/limit_auth_changes.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/block_info.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/wps.cpp)
 
-target_include_directories(eosio.system
-   PUBLIC
-   ${CMAKE_CURRENT_SOURCE_DIR}/include
-   ${CMAKE_CURRENT_SOURCE_DIR}/../eosio.token/include)
+if(SYSTEM_CONFIGURABLE_WASM_LIMITS)
+  target_compile_definitions(eosio.system PUBLIC SYSTEM_CONFIGURABLE_WASM_LIMITS)
+endif()
 
-set_target_properties(eosio.system
-   PROPERTIES
-   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+if(SYSTEM_BLOCKCHAIN_PARAMETERS)
+  target_compile_definitions(eosio.system PUBLIC SYSTEM_BLOCKCHAIN_PARAMETERS)
+endif()
 
-configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/ricardian/eosio.system.contracts.md.in ${CMAKE_CURRENT_BINARY_DIR}/ricardian/eosio.system.contracts.md @ONLY )
+target_include_directories(eosio.system PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+                                               ${CMAKE_CURRENT_SOURCE_DIR}/../eosio.token/include)
 
-target_compile_options( eosio.system PUBLIC -R${CMAKE_CURRENT_SOURCE_DIR}/ricardian -R${CMAKE_CURRENT_BINARY_DIR}/ricardian )
+set_target_properties(eosio.system PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ricardian/eosio.system.contracts.md.in
+               ${CMAKE_CURRENT_BINARY_DIR}/ricardian/eosio.system.contracts.md @ONLY)
+
+target_compile_options(eosio.system PUBLIC -R${CMAKE_CURRENT_SOURCE_DIR}/ricardian
+                                           -R${CMAKE_CURRENT_BINARY_DIR}/ricardian)

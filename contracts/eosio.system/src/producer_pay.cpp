@@ -2,7 +2,7 @@
 #include <eosio.token/eosio.token.hpp>
 
 namespace eosiosystem {
-   
+
    using eosio::current_time_point;
    using eosio::microseconds;
    using eosio::token;
@@ -12,17 +12,25 @@ namespace eosiosystem {
 
       require_auth(get_self());
 
+      // Deserialize needed fields from block header.
       block_timestamp timestamp;
-      name producer;
-      _ds >> timestamp >> producer;
+      name            producer;
+      uint16_t        confirmed;
+      checksum256     previous_block_id;
+
+      _ds >> timestamp >> producer >> confirmed >> previous_block_id;
+      (void)confirmed; // Only to suppress warning since confirmed is not used.
+
+      // Add latest block information to blockinfo table.
+      add_to_blockinfo_table(previous_block_id, timestamp);
 
       // _gstate2.last_block_num is not used anywhere in the system contract code anymore.
       // Although this field is deprecated, we will continue updating it for now until the last_block_num field
       // is eventually completely removed, at which point this line can be removed.
       _gstate2.last_block_num = timestamp;
 
-      /** until activated stake crosses this threshold no new rewards are paid */
-      if( _gstate.total_activated_stake < min_activated_stake )
+      /** until activation, no new rewards are paid */
+      if( _gstate.thresh_activated_stake_time == time_point() )
          return;
 
       if( _gstate.last_pervote_bucket_fill == time_point() )  /// start the presses
@@ -108,7 +116,7 @@ namespace eosiosystem {
       const auto& prod = _producers.get( owner.value );
       check( prod.active(), "producer does not have an active key" );
 
-      check( _gstate.total_activated_stake >= min_activated_stake,
+      check( _gstate.thresh_activated_stake_time != time_point(),
                     "cannot claim rewards until the chain is activated (at least 15% of all tokens participate in voting)" );
 
       const auto ct = current_time_point();
