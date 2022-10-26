@@ -746,12 +746,12 @@ public:
    }
 
    asset get_genesis_unclaimed_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
-      vector<char> data = get_row_by_account( config::system_account_name, act, "genesis"_n, balance_symbol.to_symbol_code().value );
+      vector<char> data = get_row_by_account( config::system_account_name, act, "genesis"_n, account_name(balance_symbol.to_symbol_code().value) );
       return data.empty() ? asset(0, balance_symbol) : abi_ser.binary_to_variant("genesis_tokens", data, abi_serializer_max_time)["unclaimed_balance"].as<asset>();
    }
 
    asset get_genesis_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
-      vector<char> data = get_row_by_account( config::system_account_name, act, "genesis"_n, balance_symbol.to_symbol_code().value );
+      vector<char> data = get_row_by_account( config::system_account_name, act, "genesis"_n, account_name(balance_symbol.to_symbol_code().value) );
       return data.empty() ? asset(0, balance_symbol) : abi_ser.binary_to_variant("genesis_tokens", data, abi_serializer_max_time)["balance"].as<asset>();
    }
 
@@ -797,7 +797,7 @@ public:
    }
 
    fc::variant get_genesis( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
-      vector<char> data = get_row_by_account( config::system_account_name, act, "genesis"_n, balance_symbol.to_symbol_code().value );
+      vector<char> data = get_row_by_account( config::system_account_name, act, "genesis"_n, account_name(balance_symbol.to_symbol_code().value) );
       return data.empty() ? fc::variant() : abi_ser.binary_to_variant("genesis_tokens", data, abi_serializer_max_time);
    }
 
