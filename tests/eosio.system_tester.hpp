@@ -32,8 +32,8 @@ public:
    void basic_setup() {
       produce_blocks( 2 );
 
-      create_accounts({ N(eosio.token), N(eosio.ram), N(eosio.ramfee), N(eosio.stake),
-               N(eosio.bpay), N(eosio.voters), N(eosio.saving), N(eosio.names), "eosio.rex"_n });
+      create_accounts({ "eosio.token"_n, "eosio.ram"_n, "eosio.ramfee"_n, "eosio.stake"_n,
+               "eosio.bpay"_n, "eosio.voters"_n, "eosio.saving"_n, "eosio.names"_n, "eosio.rex"_n });
 
       produce_blocks( 100 );
       set_code( "eosio.token"_n, contracts::token_wasm());
@@ -247,22 +247,22 @@ public:
 
    action_result awardgenesis( const account_name& receiver, const asset& tokens, uint64_t nonce ) {
       return push_action(
-	         N(genesis.wax),
-	         N(awardgenesis),
+	         "genesis.wax"_n,
+	         "awardgenesis"_n,
 		 mvo()( "receiver",receiver)("tokens",tokens)("nonce",nonce) );
    }
 
    action_result delgenesis( uint64_t nonce ) {
       return push_action(
-	         N(genesis.wax),
-	         N(delgenesis),
+	         "genesis.wax"_n,
+	         "delgenesis"_n,
 		 mvo()("nonce",nonce) );
    }
 
    action_result claimgenesis( const account_name& claimer ) {
       return push_action(
 	         claimer,
-	         N(claimgenesis),
+	         "claimgenesis"_n,
 		 mvo()( "claimer",claimer) );
    }
 
@@ -746,12 +746,12 @@ public:
    }
 
    asset get_genesis_unclaimed_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
-      vector<char> data = get_row_by_account( config::system_account_name, act, N(genesis), balance_symbol.to_symbol_code().value );
+      vector<char> data = get_row_by_account( config::system_account_name, act, "genesis"_n, balance_symbol.to_symbol_code().value );
       return data.empty() ? asset(0, balance_symbol) : abi_ser.binary_to_variant("genesis_tokens", data, abi_serializer_max_time)["unclaimed_balance"].as<asset>();
    }
 
    asset get_genesis_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
-      vector<char> data = get_row_by_account( config::system_account_name, act, N(genesis), balance_symbol.to_symbol_code().value );
+      vector<char> data = get_row_by_account( config::system_account_name, act, "genesis"_n, balance_symbol.to_symbol_code().value );
       return data.empty() ? asset(0, balance_symbol) : abi_ser.binary_to_variant("genesis_tokens", data, abi_serializer_max_time)["balance"].as<asset>();
    }
 
@@ -784,7 +784,7 @@ public:
    }
 
    fc::variant get_delegated_bw( const account_name& act ) {
-      vector<char> data = get_row_by_account( config::system_account_name, act, N(delband), act );
+      vector<char> data = get_row_by_account( config::system_account_name, act, "delband"_n, act );
       return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "delegated_bandwidth", data, abi_serializer_max_time );
    }
 
@@ -797,7 +797,7 @@ public:
    }
 
    fc::variant get_genesis( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
-      vector<char> data = get_row_by_account( config::system_account_name, act, N(genesis), balance_symbol.to_symbol_code().value );
+      vector<char> data = get_row_by_account( config::system_account_name, act, "genesis"_n, balance_symbol.to_symbol_code().value );
       return data.empty() ? fc::variant() : abi_ser.binary_to_variant("genesis_tokens", data, abi_serializer_max_time);
    }
 

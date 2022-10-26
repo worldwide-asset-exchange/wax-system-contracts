@@ -1438,23 +1438,23 @@ BOOST_FIXTURE_TEST_CASE(voterproxy_claims, eosio_system_tester, * boost::unit_te
 
    // Voter proxies its votes and claims rewards (happy path)
    {
-      BOOST_REQUIRE_EQUAL(success(), push_action( N(alice1111111), N(regproxy), mvo()("proxy", "alice1111111")("isproxy", true)));
-      REQUIRE_MATCHING_OBJECT(proxy("alice1111111"), get_voter_info("alice1111111"));
+      BOOST_REQUIRE_EQUAL(success(), push_action( "alice1111111"_n, "regproxy"_n, mvo()("proxy", "alice1111111")("isproxy", true)));
+      REQUIRE_MATCHING_OBJECT(proxy("alice1111111"_n), get_voter_info("alice1111111"));
 
       issue_and_transfer( "alice1111111", core_sym::from_string("1000.0000"),  config::system_account_name );
       issue_and_transfer( "bob111111111", core_sym::from_string("1000.0000"),  config::system_account_name );
-      const asset bob_initial_balance = get_balance(N(bob111111111));
+      const asset bob_initial_balance = get_balance("bob111111111"_n);
 
       //bob111111111 chooses alice1111111 as a proxy
       BOOST_REQUIRE_EQUAL( success(), stake( "bob111111111", core_sym::from_string("100.0002"), core_sym::from_string("50.0001") ) );
-      BOOST_REQUIRE_EQUAL( success(), vote( N(bob111111111), vector<account_name>(), "alice1111111" ) );
+      BOOST_REQUIRE_EQUAL( success(), vote( "bob111111111"_n, vector<account_name>(), "alice1111111" ) );
       BOOST_TEST_REQUIRE( stake2votes(core_sym::from_string("150.0003")) == get_voter_info( "alice1111111" )["proxied_vote_weight"].as_double() );
 
       produce_block(fc::hours(24));
 
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(bob111111111), N(voterclaim), mvo()("owner", "bob111111111")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("bob111111111"_n, "voterclaim"_n, mvo()("owner", "bob111111111")));
 
-      const asset bob_balance = get_balance(N(bob111111111));
+      const asset bob_balance = get_balance("bob111111111"_n);
 
       BOOST_REQUIRE(bob_balance > bob_initial_balance);
    }
@@ -1489,19 +1489,19 @@ BOOST_FIXTURE_TEST_CASE(voterproxy_rate, eosio_system_tester, * boost::unit_test
    {
       issue_and_transfer( "alice1111111", core_sym::from_string("1000.0000"),  config::system_account_name );
       BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111", core_sym::from_string("100.0002"), core_sym::from_string("50.0001") ) );
-      BOOST_REQUIRE_EQUAL(success(), vote(N(alice1111111), vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
+      BOOST_REQUIRE_EQUAL(success(), vote("alice1111111"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
 
       produce_block(fc::hours(1));
 
-      BOOST_REQUIRE_EQUAL(success(), push_action( N(producera), N(regproxy), mvo()("proxy", "producera")("isproxy", true)));
-      REQUIRE_MATCHING_OBJECT(proxy("producera"), get_voter_info("producera"));
-      BOOST_REQUIRE_EQUAL( success(), vote( N(alice1111111), vector<account_name>(), "producera" ) );
+      BOOST_REQUIRE_EQUAL(success(), push_action( "producera"_n, "regproxy"_n, mvo()("proxy", "producera")("isproxy", true)));
+      REQUIRE_MATCHING_OBJECT(proxy("producera"_n), get_voter_info("producera"));
+      BOOST_REQUIRE_EQUAL( success(), vote( "alice1111111"_n, vector<account_name>(), "producera" ) );
 
       auto initial_change_rate = get_voter_info("alice1111111" )["unpaid_voteshare_change_rate"].as_double();
 
       produce_block(fc::hours(24*7*13));
 
-      BOOST_REQUIRE_EQUAL( success(), vote( N(alice1111111), vector<account_name>(), "producera" ) );
+      BOOST_REQUIRE_EQUAL( success(), vote( "alice1111111"_n, vector<account_name>(), "producera" ) );
       auto current_change_rate = get_voter_info("alice1111111" )["unpaid_voteshare_change_rate"].as_double();
       BOOST_REQUIRE_EQUAL(initial_change_rate * 2, current_change_rate);
    }
@@ -1512,9 +1512,9 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_gstate_consistency, eosio_system_tester, * boo
    // invariant: the global state total_unpaid_voteshare and total_voteshare_change_rate values should match the sum of all voters
 
    const asset large_asset = core_sym::from_string("80.0000");
-   create_account_with_resources( N(votera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-   create_account_with_resources( N(voterb), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-   create_account_with_resources( N(voterc), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "votera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "voterb"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "voterc"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
 
    std::vector<account_name> producer_names;
    {
@@ -1544,18 +1544,18 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_gstate_consistency, eosio_system_tester, * boo
    BOOST_REQUIRE_EQUAL(success(), stake("voterb", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
    BOOST_REQUIRE_EQUAL(success(), stake("voterc", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000")));
 
-   BOOST_REQUIRE_EQUAL(success(), vote(N(votera), vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
-   BOOST_REQUIRE_EQUAL(success(), vote(N(voterb), vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
-   BOOST_REQUIRE_EQUAL(success(), vote(N(voterc), vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
+   BOOST_REQUIRE_EQUAL(success(), vote("votera"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
+   BOOST_REQUIRE_EQUAL(success(), vote("voterb"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
+   BOOST_REQUIRE_EQUAL(success(), vote("voterc"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
 
    produce_block(fc::hours(1));
 
    auto global_state = get_global_state();
-   auto votera = get_voter_info( N(votera) );
-   auto voterb = get_voter_info( N(voterb) );
-   auto voterc = get_voter_info( N(voterc) );
+   auto votera = get_voter_info( "votera"_n );
+   auto voterb = get_voter_info( "voterb"_n );
+   auto voterc = get_voter_info( "voterc"_n );
 
-   BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance(N(eosio.voters)).get_amount());
+   BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance("eosio.voters"_n).get_amount());
    double total_weight = votera["unpaid_voteshare_change_rate"].as<double>() + voterb["unpaid_voteshare_change_rate"].as<double>() + voterc["unpaid_voteshare_change_rate"].as<double>();
    BOOST_REQUIRE(global_state["total_voteshare_change_rate"].as<double>() == total_weight);
 
@@ -1568,15 +1568,15 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_gstate_consistency, eosio_system_tester, * boo
    produce_block(fc::hours(1));
 
    // Testing after some voters claim and some change their vote to less than 16 producers
-   BOOST_REQUIRE_EQUAL(success(), push_action(N(votera), N(voterclaim), mvo()("owner", "votera")));
-   BOOST_REQUIRE_EQUAL(success(), vote(N(voterb), vector<account_name>(producer_names.begin(), producer_names.begin()+15)));
+   BOOST_REQUIRE_EQUAL(success(), push_action("votera"_n, "voterclaim"_n, mvo()("owner", "votera")));
+   BOOST_REQUIRE_EQUAL(success(), vote("voterb"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+15)));
 
    global_state = get_global_state();
-   votera = get_voter_info( N(votera) );
-   voterb = get_voter_info( N(voterb) );
-   voterc = get_voter_info( N(voterc) );
+   votera = get_voter_info( "votera"_n );
+   voterb = get_voter_info( "voterb"_n );
+   voterc = get_voter_info( "voterc"_n );
 
-   BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance(N(eosio.voters)).get_amount());
+   BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance("eosio.voters"_n).get_amount());
    total_weight = votera["unpaid_voteshare_change_rate"].as<double>() + voterb["unpaid_voteshare_change_rate"].as<double>() + voterc["unpaid_voteshare_change_rate"].as<double>();
    BOOST_TEST(global_state["total_voteshare_change_rate"].as<double>() == total_weight);
 
@@ -1594,11 +1594,11 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_gstate_consistency, eosio_system_tester, * boo
    BOOST_REQUIRE_EQUAL(success(), stake("votera", core_sym::from_string("25000000.0000"), core_sym::from_string("25000000.0000")));
 
    global_state = get_global_state();
-   votera = get_voter_info( N(votera) );
-   voterb = get_voter_info( N(voterb) );
-   voterc = get_voter_info( N(voterc) );
+   votera = get_voter_info( "votera"_n );
+   voterb = get_voter_info( "voterb"_n );
+   voterc = get_voter_info( "voterc"_n );
 
-   BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance(N(eosio.voters)).get_amount());
+   BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance("eosio.voters"_n).get_amount());
    total_weight = votera["unpaid_voteshare_change_rate"].as<double>() + voterb["unpaid_voteshare_change_rate"].as<double>() + voterc["unpaid_voteshare_change_rate"].as<double>();
    BOOST_TEST(global_state["total_voteshare_change_rate"].as<double>() == total_weight);
 
@@ -1611,17 +1611,17 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_gstate_consistency, eosio_system_tester, * boo
 
    produce_block(fc::hours(2));
    // Testing after some voters unstake tokens
-   BOOST_REQUIRE_EQUAL(success(), push_action(N(voterb), N(voterclaim), mvo()("owner", "voterb")));
+   BOOST_REQUIRE_EQUAL(success(), push_action("voterb"_n, "voterclaim"_n, mvo()("owner", "voterb")));
    BOOST_REQUIRE_EQUAL(success(), unstake("votera", core_sym::from_string("50000000.0000"), core_sym::from_string("50000000.0000")));
 
    produce_block(fc::hours(4));
 
    global_state = get_global_state();
-   votera = get_voter_info( N(votera) );
-   voterb = get_voter_info( N(voterb) );
-   voterc = get_voter_info( N(voterc) );
+   votera = get_voter_info( "votera"_n );
+   voterb = get_voter_info( "voterb"_n );
+   voterc = get_voter_info( "voterc"_n );
 
-   BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance(N(eosio.voters)).get_amount());
+   BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance("eosio.voters"_n).get_amount());
    total_weight = votera["unpaid_voteshare_change_rate"].as<double>() + voterb["unpaid_voteshare_change_rate"].as<double>() + voterc["unpaid_voteshare_change_rate"].as<double>();
    BOOST_TEST(global_state["total_voteshare_change_rate"].as<double>() == total_weight);
 
@@ -1634,19 +1634,19 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_gstate_consistency, eosio_system_tester, * boo
    produce_block(fc::days(21));
 
    // Testing after some voters renew their vote
-   BOOST_REQUIRE_EQUAL(success(), vote(N(votera), vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
-   BOOST_REQUIRE_EQUAL(success(), vote(N(voterb), vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
+   BOOST_REQUIRE_EQUAL(success(), vote("votera"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
+   BOOST_REQUIRE_EQUAL(success(), vote("voterb"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
 
    produce_block(fc::days(7));
 
-   BOOST_REQUIRE_EQUAL(success(), vote(N(votera), vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
+   BOOST_REQUIRE_EQUAL(success(), vote("votera"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
 
    global_state = get_global_state();
-   votera = get_voter_info( N(votera) );
-   voterb = get_voter_info( N(voterb) );
-   voterc = get_voter_info( N(voterc) );
+   votera = get_voter_info( "votera"_n );
+   voterb = get_voter_info( "voterb"_n );
+   voterc = get_voter_info( "voterc"_n );
 
-   BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance(N(eosio.voters)).get_amount());
+   BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance("eosio.voters"_n).get_amount());
    total_weight = votera["unpaid_voteshare_change_rate"].as<double>() + voterb["unpaid_voteshare_change_rate"].as<double>() + voterc["unpaid_voteshare_change_rate"].as<double>();
    BOOST_TEST(global_state["total_voteshare_change_rate"].as<double>() == total_weight);
 
@@ -1659,15 +1659,15 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_gstate_consistency, eosio_system_tester, * boo
 
    //testing after a year
    produce_block(fc::days(365));
-   BOOST_REQUIRE_EQUAL(success(), push_action(N(votera), N(voterclaim), mvo()("owner", "votera")));
-   BOOST_REQUIRE_EQUAL(success(), push_action(N(voterc), N(voterclaim), mvo()("owner", "voterc")));
+   BOOST_REQUIRE_EQUAL(success(), push_action("votera"_n, "voterclaim"_n, mvo()("owner", "votera")));
+   BOOST_REQUIRE_EQUAL(success(), push_action("voterc"_n, "voterclaim"_n, mvo()("owner", "voterc")));
 
    global_state = get_global_state();
-   votera = get_voter_info( N(votera) );
-   voterb = get_voter_info( N(voterb) );
-   voterc = get_voter_info( N(voterc) );
+   votera = get_voter_info( "votera"_n );
+   voterb = get_voter_info( "voterb"_n );
+   voterc = get_voter_info( "voterc"_n );
 
-   BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance(N(eosio.voters)).get_amount());
+   BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance("eosio.voters"_n).get_amount());
    total_weight = votera["unpaid_voteshare_change_rate"].as<double>() + voterb["unpaid_voteshare_change_rate"].as<double>() + voterc["unpaid_voteshare_change_rate"].as<double>();
    BOOST_TEST(global_state["total_voteshare_change_rate"].as<double>() == total_weight);
 
@@ -1688,8 +1688,8 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
    const double secs_per_year   = 52 * 7 * 24 * 3600;
 
    const asset large_asset = core_sym::from_string("80.0000");
-   create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-   create_account_with_resources( N(producvoterb), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "producvotera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "producvoterb"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
 
    std::vector<account_name> producer_names;
    {
@@ -1718,24 +1718,24 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
    BOOST_REQUIRE_EQUAL(success(), stake("producvoterb", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
 
    BOOST_REQUIRE_EQUAL(wasm_assert_msg("cannot claim rewards until the chain is activated (at least 15% of all tokens participate in voting)"),
-                       push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
+                       push_action("producvotera"_n, "voterclaim"_n, mvo()("owner", "producvotera")));
 
-   BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
+   BOOST_REQUIRE_EQUAL(success(), vote("producvotera"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
 
    // Try to claim reward before voting.
    BOOST_REQUIRE_EQUAL(wasm_assert_msg("you need to vote first! unpaid_voteshare_last_updated is zero."),
-                       push_action(N(producvoterb), N(voterclaim), mvo()("owner", "producvoterb")));
+                       push_action("producvoterb"_n, "voterclaim"_n, mvo()("owner", "producvoterb")));
 
    // Try claims rewards before there are rewards available.
    {
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("no rewards available."),
-                       push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
+                       push_action("producvotera"_n, "voterclaim"_n, mvo()("owner", "producvotera")));
    }
 
    // Try to claim rewards with a non voter account.
    {
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("voter does not exist."),
-                          push_action(N(defproducera), N(voterclaim), mvo()("owner", "defproducera")));
+                          push_action("defproducera"_n, "voterclaim"_n, mvo()("owner", "defproducera")));
    }
 
    // producvotera is the only voter and should get all staker rewards
@@ -1745,24 +1745,24 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
       const auto     initial_global_state              = get_global_state();
       const uint64_t initial_claim_time                = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
       const int64_t  initial_voters_bucket             = initial_global_state["voters_bucket"].as<int64_t>();
-      const int64_t  initial_voters_account_balance    = get_balance(N(eosio.voters)).get_amount();
+      const int64_t  initial_voters_account_balance    = get_balance("eosio.voters"_n).get_amount();
       const uint32_t initial_tot_unpaid_voteshare      = initial_global_state["total_unpaid_voteshare"].as<uint32_t>();
 
       const asset initial_supply  = get_token_supply();
-      const asset initial_balance = get_balance(N(producvotera));
+      const asset initial_balance = get_balance("producvotera"_n);
 
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("producvotera"_n, "voterclaim"_n, mvo()("owner", "producvotera")));
 
       const auto     global_state            = get_global_state();
       const uint64_t claim_time              = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
       const int64_t  voters_bucket           = global_state["voters_bucket"].as<int64_t>();
-      const int64_t  voters_account_balance  = get_balance(N(eosio.voters)).get_amount();
+      const int64_t  voters_account_balance  = get_balance("eosio.voters"_n).get_amount();
       const uint32_t tot_unpaid_voteshare    = global_state["total_unpaid_voteshare"].as<uint32_t>();
 
       const asset supply  = get_token_supply();
-      const asset balance = get_balance(N(producvotera));
+      const asset balance = get_balance("producvotera"_n);
 
-      auto voter = get_voter_info( N(producvotera) );
+      auto voter = get_voter_info( "producvotera"_n );
 
       BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( voter["last_claim_time"] ));
 
@@ -1781,14 +1781,14 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
 
    {
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("already claimed rewards within past day"),
-                          push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
+                          push_action("producvotera"_n, "voterclaim"_n, mvo()("owner", "producvotera")));
    }
 
    // producvotera waits for 23 hours and 55 minutes, can't claim rewards yet
    {
       produce_block(fc::seconds(23 * 3600 + 55 * 60));
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("already claimed rewards within past day"),
-                          push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
+                          push_action("producvotera"_n, "voterclaim"_n, mvo()("owner", "producvotera")));
    }
 
    // wait 5 more minutes, producvotera can now claim rewards again
@@ -1798,24 +1798,24 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
       const auto     initial_global_state              = get_global_state();
       const uint64_t initial_claim_time                = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
       const int64_t  initial_voters_bucket             = initial_global_state["voters_bucket"].as<int64_t>();
-      const int64_t  initial_voters_account_balance    = get_balance(N(eosio.voters)).get_amount();
+      const int64_t  initial_voters_account_balance    = get_balance("eosio.voters"_n).get_amount();
       const uint32_t initial_tot_unpaid_voteshare      = initial_global_state["total_unpaid_voteshare"].as<uint32_t>();
 
       const asset initial_supply  = get_token_supply();
-      const asset initial_balance = get_balance(N(producvotera));
+      const asset initial_balance = get_balance("producvotera"_n);
 
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("producvotera"_n, "voterclaim"_n, mvo()("owner", "producvotera")));
 
       const auto     global_state            = get_global_state();
       const uint64_t claim_time              = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
       const int64_t  voters_bucket           = global_state["voters_bucket"].as<int64_t>();
-      const int64_t  voters_account_balance  = get_balance(N(eosio.voters)).get_amount();
+      const int64_t  voters_account_balance  = get_balance("eosio.voters"_n).get_amount();
       const uint32_t tot_unpaid_voteshare    = global_state["total_unpaid_voteshare"].as<uint32_t>();
 
       const asset supply  = get_token_supply();
-      const asset balance = get_balance(N(producvotera));
+      const asset balance = get_balance("producvotera"_n);
 
-      auto voter = get_voter_info( N(producvotera) );
+      auto voter = get_voter_info( "producvotera"_n );
 
       BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( voter["last_claim_time"] ));
 
@@ -1835,23 +1835,23 @@ BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tole
       produce_block(fc::hours(24));
 
       // Voter 1 changes it's vote to only 15 producer
-      BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+15)));
+      BOOST_REQUIRE_EQUAL(success(), vote("producvotera"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+15)));
 
       const asset initial_supply  = get_token_supply();
-      const asset initial_balance = get_balance(N(producvotera));
+      const asset initial_balance = get_balance("producvotera"_n);
 
       // Claims remaining rewards from the previous period
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("producvotera"_n, "voterclaim"_n, mvo()("owner", "producvotera")));
 
       const asset supply  = get_token_supply();
-      const asset balance = get_balance(N(producvotera));
+      const asset balance = get_balance("producvotera"_n);
 
       BOOST_REQUIRE(supply.get_amount() - initial_supply.get_amount() / 5 >= balance.get_amount() - initial_balance.get_amount());
 
       produce_block(fc::hours(24));
       // There should be no more rewards available
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("no rewards available."),
-                       push_action(N(producvotera), N(voterclaim), mvo()("owner", "producvotera")));
+                       push_action("producvotera"_n, "voterclaim"_n, mvo()("owner", "producvotera")));
    }
 } FC_LOG_AND_RETHROW()
 
@@ -1861,8 +1861,8 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
    const double secs_per_year   = 52 * 7 * 24 * 3600;
 
    const asset large_asset = core_sym::from_string("80.0000");
-   create_account_with_resources(N(voter1), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
-   create_account_with_resources(N(voter2), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
+   create_account_with_resources("voter1"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
+   create_account_with_resources("voter2"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset);
 
    std::vector<account_name> producer_names;
    {
@@ -1893,22 +1893,22 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
       BOOST_REQUIRE_EQUAL(success(), stake("voter1", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
       BOOST_REQUIRE_EQUAL(success(), stake("voter2", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
 
-      asset initial_balance1 = get_balance(N(voter1));
-      asset initial_balance2 = get_balance(N(voter2));
+      asset initial_balance1 = get_balance("voter1"_n);
+      asset initial_balance2 = get_balance("voter2"_n);
       asset initial_supply = get_token_supply();
 
-      BOOST_REQUIRE_EQUAL(success(), vote(N(voter1), vector<account_name>(producer_names.begin(), producer_names.end())));
-      BOOST_REQUIRE_EQUAL(success(), vote(N(voter2), vector<account_name>(producer_names.begin(), producer_names.end())));
+      BOOST_REQUIRE_EQUAL(success(), vote("voter1"_n, vector<account_name>(producer_names.begin(), producer_names.end())));
+      BOOST_REQUIRE_EQUAL(success(), vote("voter2"_n, vector<account_name>(producer_names.begin(), producer_names.end())));
 
       produce_blocks(1200);
 
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter1), N(voterclaim), mvo()("owner", "voter1")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter1"_n, "voterclaim"_n, mvo()("owner", "voter1")));
       asset mid_term_supply = get_token_supply();
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter2), N(voterclaim), mvo()("owner", "voter2")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter2"_n, "voterclaim"_n, mvo()("owner", "voter2")));
 
       auto global_state = get_global_state();
-      asset balance1 = get_balance(N(voter1)) - initial_balance1;
-      asset balance2 = get_balance(N(voter2)) - initial_balance2;
+      asset balance1 = get_balance("voter1"_n) - initial_balance1;
+      asset balance2 = get_balance("voter2"_n) - initial_balance2;
       asset supply = get_token_supply();
 
       uint64_t voters_inflation = 2 * (mid_term_supply.get_amount() - initial_supply.get_amount()) / 5
@@ -1928,19 +1928,19 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
 
       produce_block(fc::hours(24));
       // Clean pending rewards by claiming in both accounts
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter1), N(voterclaim), mvo()("owner", "voter1")));
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter2), N(voterclaim), mvo()("owner", "voter2")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter1"_n, "voterclaim"_n, mvo()("owner", "voter1")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter2"_n, "voterclaim"_n, mvo()("owner", "voter2")));
 
-      asset initial_balance1 = get_balance(N(voter1));
-      asset initial_balance2 = get_balance(N(voter2));
+      asset initial_balance1 = get_balance("voter1"_n);
+      asset initial_balance2 = get_balance("voter2"_n);
 
       produce_block(fc::hours(24));
 
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter1), N(voterclaim), mvo()("owner", "voter1")));
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter2), N(voterclaim), mvo()("owner", "voter2")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter1"_n, "voterclaim"_n, mvo()("owner", "voter1")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter2"_n, "voterclaim"_n, mvo()("owner", "voter2")));
 
-      asset balance1 = get_balance(N(voter1));
-      asset balance2 = get_balance(N(voter2));
+      asset balance1 = get_balance("voter1"_n);
+      asset balance2 = get_balance("voter2"_n);
 
       BOOST_REQUIRE(5 > ((balance1.get_amount() - initial_balance1.get_amount()) / 2) - (balance2.get_amount() - initial_balance2.get_amount()));
    }
@@ -1952,11 +1952,11 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
 
       produce_block(fc::hours(24));
       // Clean pending rewards by claiming in both accounts
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter1), N(voterclaim), mvo()("owner", "voter1")));
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter2), N(voterclaim), mvo()("owner", "voter2")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter1"_n, "voterclaim"_n, mvo()("owner", "voter1")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter2"_n, "voterclaim"_n, mvo()("owner", "voter2")));
 
-      asset initial_balance1 = get_balance(N(voter1));
-      asset initial_balance2 = get_balance(N(voter2));
+      asset initial_balance1 = get_balance("voter1"_n);
+      asset initial_balance2 = get_balance("voter2"_n);
 
       produce_block(fc::hours(120));
 
@@ -1966,14 +1966,14 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
 
       produce_block(fc::hours(120));
 
-      BOOST_REQUIRE_EQUAL(success(), vote(N(voter1), vector<account_name>(producer_names.begin(), producer_names.end())));
-      BOOST_REQUIRE_EQUAL(success(), vote(N(voter2), vector<account_name>(producer_names.begin(), producer_names.end())));
+      BOOST_REQUIRE_EQUAL(success(), vote("voter1"_n, vector<account_name>(producer_names.begin(), producer_names.end())));
+      BOOST_REQUIRE_EQUAL(success(), vote("voter2"_n, vector<account_name>(producer_names.begin(), producer_names.end())));
 
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter1), N(voterclaim), mvo()("owner", "voter1")));
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter2), N(voterclaim), mvo()("owner", "voter2")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter1"_n, "voterclaim"_n, mvo()("owner", "voter1")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter2"_n, "voterclaim"_n, mvo()("owner", "voter2")));
 
-      asset balance1 = get_balance(N(voter1));
-      asset balance2 = get_balance(N(voter2));
+      asset balance1 = get_balance("voter1"_n);
+      asset balance2 = get_balance("voter2"_n);
 
       BOOST_REQUIRE(4000 > (balance1.get_amount() - initial_balance1.get_amount()) / 2 - (balance2.get_amount() - initial_balance2.get_amount()));
    }
@@ -1982,25 +1982,25 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
    {
       BOOST_REQUIRE_EQUAL(success(), stake("voter2", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
 
-      asset initial_balance1 = get_balance(N(voter1));
-      asset initial_balance2 = get_balance(N(voter2));
+      asset initial_balance1 = get_balance("voter1"_n);
+      asset initial_balance2 = get_balance("voter2"_n);
 
       produce_block(fc::hours(24 * 7));
-      BOOST_REQUIRE_EQUAL(success(), vote(N(voter1), vector<account_name>(producer_names.begin(), producer_names.end())));
-      BOOST_REQUIRE_EQUAL(success(), vote(N(voter2), vector<account_name>(producer_names.begin(), producer_names.end())));
+      BOOST_REQUIRE_EQUAL(success(), vote("voter1"_n, vector<account_name>(producer_names.begin(), producer_names.end())));
+      BOOST_REQUIRE_EQUAL(success(), vote("voter2"_n, vector<account_name>(producer_names.begin(), producer_names.end())));
       produce_block(fc::hours(24 * 7));
-      BOOST_REQUIRE_EQUAL(success(), vote(N(voter1), vector<account_name>(producer_names.begin(), producer_names.end())));
+      BOOST_REQUIRE_EQUAL(success(), vote("voter1"_n, vector<account_name>(producer_names.begin(), producer_names.end())));
       produce_block(fc::hours(24 * 7));
-      BOOST_REQUIRE_EQUAL(success(), vote(N(voter1), vector<account_name>(producer_names.begin(), producer_names.end())));
+      BOOST_REQUIRE_EQUAL(success(), vote("voter1"_n, vector<account_name>(producer_names.begin(), producer_names.end())));
       produce_block(fc::hours(24 * 7));
-      BOOST_REQUIRE_EQUAL(success(), vote(N(voter1), vector<account_name>(producer_names.begin(), producer_names.end())));
+      BOOST_REQUIRE_EQUAL(success(), vote("voter1"_n, vector<account_name>(producer_names.begin(), producer_names.end())));
       produce_block(fc::hours(24 * 7));
 
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter1), N(voterclaim), mvo()("owner", "voter1")));
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter2), N(voterclaim), mvo()("owner", "voter2")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter1"_n, "voterclaim"_n, mvo()("owner", "voter1")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter2"_n, "voterclaim"_n, mvo()("owner", "voter2")));
 
-      asset balance1 = get_balance(N(voter1));
-      asset balance2 = get_balance(N(voter2));
+      asset balance1 = get_balance("voter1"_n);
+      asset balance2 = get_balance("voter2"_n);
 
       // Check out if the 4000 extra grains is fine.
       BOOST_REQUIRE(balance1.get_amount() - initial_balance1.get_amount() > balance2.get_amount() - initial_balance2.get_amount() + 4000);
@@ -2013,12 +2013,12 @@ BOOST_FIXTURE_TEST_CASE(multiple_voters, eosio_system_tester, * boost::unit_test
       produce_block(fc::hours(24));
 
       // First claim should pass because there are pending rewards for voter2.
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter1), N(voterclaim), mvo()("owner", "voter1")));
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter2), N(voterclaim), mvo()("owner", "voter2")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter1"_n, "voterclaim"_n, mvo()("owner", "voter1")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter2"_n, "voterclaim"_n, mvo()("owner", "voter2")));
 
       produce_block(fc::hours(24));
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(voter1), N(voterclaim), mvo()("owner", "voter1")));
-      BOOST_REQUIRE_EQUAL(wasm_assert_msg("no rewards available."), push_action(N(voter2), N(voterclaim), mvo()("owner", "voter2")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("voter1"_n, "voterclaim"_n, mvo()("owner", "voter1")));
+      BOOST_REQUIRE_EQUAL(wasm_assert_msg("no rewards available."), push_action("voter2"_n, "voterclaim"_n, mvo()("owner", "voter2")));
    }
 } FC_LOG_AND_RETHROW()
 
@@ -2029,8 +2029,8 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
    const double secs_per_year   = 52 * 7 * 24 * 3600;
 
    const asset large_asset = core_sym::from_string("80.0000");
-   create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-   create_account_with_resources( N(producvoterb), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "producvotera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "producvoterb"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
 
    std::vector<account_name> producer_names;
    {
@@ -2059,24 +2059,24 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
    BOOST_REQUIRE_EQUAL(success(), stake("producvoterb", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
 
    BOOST_REQUIRE_EQUAL(wasm_assert_msg("cannot claim rewards until the chain is activated (at least 15% of all tokens participate in voting)"),
-                       push_action(N(producvotera), N(claimgbmvote), mvo()("owner", "producvotera")));
+                       push_action("producvotera"_n, "claimgbmvote"_n, mvo()("owner", "producvotera")));
 
-   BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
+   BOOST_REQUIRE_EQUAL(success(), vote("producvotera"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+16)));
 
    // Try to claim reward before voting.
    BOOST_REQUIRE_EQUAL(wasm_assert_msg("you need to vote first! unpaid_voteshare_last_updated is zero."),
-                       push_action(N(producvoterb), N(claimgbmvote), mvo()("owner", "producvoterb")));
+                       push_action("producvoterb"_n, "claimgbmvote"_n, mvo()("owner", "producvoterb")));
 
    // Try claims rewards before there are rewards available.
    {
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("no rewards available."),
-                       push_action(N(producvotera), N(claimgbmvote), mvo()("owner", "producvotera")));
+                       push_action("producvotera"_n, "claimgbmvote"_n, mvo()("owner", "producvotera")));
    }
 
    // Try to claim rewards with a non voter account.
    {
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("voter does not exist."),
-                          push_action(N(defproducera), N(claimgbmvote), mvo()("owner", "defproducera")));
+                          push_action("defproducera"_n, "claimgbmvote"_n, mvo()("owner", "defproducera")));
    }
 
    // producvotera is the only voter and should get all staker rewards
@@ -2086,24 +2086,24 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
       const auto     initial_global_state              = get_global_state();
       const uint64_t initial_claim_time                = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
       const int64_t  initial_voters_bucket             = initial_global_state["voters_bucket"].as<int64_t>();
-      const int64_t  initial_voters_account_balance    = get_balance(N(eosio.voters)).get_amount();
+      const int64_t  initial_voters_account_balance    = get_balance("eosio.voters"_n).get_amount();
       const uint32_t initial_tot_unpaid_voteshare      = initial_global_state["total_unpaid_voteshare"].as<uint32_t>();
 
       const asset initial_supply  = get_token_supply();
-      const asset initial_genesis_balance = get_genesis_balance(N(producvotera));
+      const asset initial_genesis_balance = get_genesis_balance("producvotera"_n);
 
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(claimgbmvote), mvo()("owner", "producvotera")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("producvotera"_n, "claimgbmvote"_n, mvo()("owner", "producvotera")));
 
       const auto     global_state            = get_global_state();
       const uint64_t claim_time              = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
       const int64_t  voters_bucket           = global_state["voters_bucket"].as<int64_t>();
-      const int64_t  voters_account_balance  = get_balance(N(eosio.voters)).get_amount();
+      const int64_t  voters_account_balance  = get_balance("eosio.voters"_n).get_amount();
       const uint32_t tot_unpaid_voteshare    = global_state["total_unpaid_voteshare"].as<uint32_t>();
 
       const asset supply  = get_token_supply();
-      const asset genesis_balance = get_genesis_balance(N(producvotera));
+      const asset genesis_balance = get_genesis_balance("producvotera"_n);
 
-      auto voter = get_voter_info( N(producvotera) );
+      auto voter = get_voter_info( "producvotera"_n );
 
       BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( voter["last_claim_time"] ));
 
@@ -2122,14 +2122,14 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
 
    {
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("already claimed rewards within past day"),
-                          push_action(N(producvotera), N(claimgbmvote), mvo()("owner", "producvotera")));
+                          push_action("producvotera"_n, "claimgbmvote"_n, mvo()("owner", "producvotera")));
    }
 
    // producvotera waits for 23 hours and 55 minutes, can't claim rewards yet
    {
       produce_block(fc::seconds(23 * 3600 + 55 * 60));
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("already claimed rewards within past day"),
-                          push_action(N(producvotera), N(claimgbmvote), mvo()("owner", "producvotera")));
+                          push_action("producvotera"_n, "claimgbmvote"_n, mvo()("owner", "producvotera")));
    }
 
    // wait 5 more minutes, producvotera can now claim rewards again
@@ -2139,24 +2139,24 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
       const auto     initial_global_state              = get_global_state();
       const uint64_t initial_claim_time                = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
       const int64_t  initial_voters_bucket             = initial_global_state["voters_bucket"].as<int64_t>();
-      const int64_t  initial_voters_account_balance    = get_balance(N(eosio.voters)).get_amount();
+      const int64_t  initial_voters_account_balance    = get_balance("eosio.voters"_n).get_amount();
       const uint32_t initial_tot_unpaid_voteshare      = initial_global_state["total_unpaid_voteshare"].as<uint32_t>();
 
       const asset initial_supply  = get_token_supply();
-      const asset initial_genesis_balance = get_genesis_balance(N(producvotera));
+      const asset initial_genesis_balance = get_genesis_balance("producvotera"_n);
 
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(claimgbmvote), mvo()("owner", "producvotera")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("producvotera"_n, "claimgbmvote"_n, mvo()("owner", "producvotera")));
 
       const auto     global_state            = get_global_state();
       const uint64_t claim_time              = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
       const int64_t  voters_bucket           = global_state["voters_bucket"].as<int64_t>();
-      const int64_t  voters_account_balance  = get_balance(N(eosio.voters)).get_amount();
+      const int64_t  voters_account_balance  = get_balance("eosio.voters"_n).get_amount();
       const uint32_t tot_unpaid_voteshare    = global_state["total_unpaid_voteshare"].as<uint32_t>();
 
       const asset supply  = get_token_supply();
-      const asset genesis_balance = get_genesis_balance(N(producvotera));
+      const asset genesis_balance = get_genesis_balance("producvotera"_n);
 
-      auto voter = get_voter_info( N(producvotera) );
+      auto voter = get_voter_info( "producvotera"_n );
 
       BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( voter["last_claim_time"] ));
 
@@ -2176,53 +2176,53 @@ BOOST_FIXTURE_TEST_CASE(voter_gbm_pay, eosio_system_tester, * boost::unit_test::
       produce_block(fc::hours(24));
 
       // Voter 1 changes it's vote to only 15 producer
-      BOOST_REQUIRE_EQUAL(success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+15)));
+      BOOST_REQUIRE_EQUAL(success(), vote("producvotera"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+15)));
 
       const asset initial_supply  = get_token_supply();
-      const asset initial_genesis_balance = get_genesis_balance(N(producvotera));
+      const asset initial_genesis_balance = get_genesis_balance("producvotera"_n);
 
       // Claims remaining rewards from the previous period
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(producvotera), N(claimgbmvote), mvo()("owner", "producvotera")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("producvotera"_n, "claimgbmvote"_n, mvo()("owner", "producvotera")));
 
       const asset supply  = get_token_supply();
-      const asset genesis_balance = get_genesis_balance(N(producvotera));
+      const asset genesis_balance = get_genesis_balance("producvotera"_n);
 
       BOOST_REQUIRE(0 == genesis_balance.get_amount() - initial_genesis_balance.get_amount());
 
       produce_block(fc::hours(24));
       // There should be no more rewards available
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("no rewards available."),
-                       push_action(N(producvotera), N(claimgbmvote), mvo()("owner", "producvotera")));
+                       push_action("producvotera"_n, "claimgbmvote"_n, mvo()("owner", "producvotera")));
    }
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(gbm_burns_on_immature_balance, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
   cross_15_percent_threshold();
 
-  create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+  create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
   // This transfer creates a sub_balance for genesis.wax account
-  transfer( N(eosio), N(genesis.wax), core_sym::from_string("100000000.0000"), N(eosio) );
+  transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("100000000.0000"), "eosio"_n );
 
   uint64_t nonce = 1;
   asset genesis_tokens_user1{core_sym::from_string("5000.0000")};
-  awardgenesis(N(user11111111), genesis_tokens_user1, nonce);
+  awardgenesis("user11111111"_n, genesis_tokens_user1, nonce);
 
   produce_block( fc::days(1) ); //Wait until July 1st
   produce_block( fc::days(1096 / 2) );
 
-  BOOST_REQUIRE_EQUAL(success(), unstake( N(user11111111), N(user11111111), core_sym::from_string("2500.0000"), core_sym::from_string("2500.0000")));
+  BOOST_REQUIRE_EQUAL(success(), unstake( "user11111111"_n, "user11111111"_n, core_sym::from_string("2500.0000"), core_sym::from_string("2500.0000")));
   produce_blocks(1);
 
-  auto balance = get_balance(N(genesis.wax)).get_amount();
+  auto balance = get_balance("genesis.wax"_n).get_amount();
   const double tolerance = 1e-5;   // ~0.000028%
   // We burned and extra ~2500 due to an early genesis withdrawal
   auto expected = core_sym::from_string("99992500.0000").get_amount();
   // balance is within and greater than or equal to expected, meaning we are not left with a deficit.
   // Ie. we can always cover the genesis rewards outstanding
   BOOST_REQUIRE(within_and_gte(balance, expected, expected * tolerance));
-  claimgenesis(N(user11111111));
-  balance = get_balance(N(genesis.wax)).get_amount();
+  claimgenesis("user11111111"_n);
+  balance = get_balance("genesis.wax"_n).get_amount();
   // We claimed the reward earned for half maturity genesis coins, clearing all remaining coins reserved
   expected = core_sym::from_string("99990000.0000").get_amount();
   BOOST_REQUIRE(within_and_gte(balance, expected, 1));
@@ -2231,46 +2231,46 @@ BOOST_FIXTURE_TEST_CASE(gbm_burns_on_immature_balance, eosio_system_tester, * bo
 BOOST_FIXTURE_TEST_CASE(gbm_does_not_burn_matured_balance, eosio_system_tester, * boost::unit_test::tolerance(1e-5)) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+   create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transfer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("100000000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("100000000.0000"), "eosio"_n );
 
    uint64_t nonce = 1;
    asset genesis_tokens_user1{core_sym::from_string("5000.0000")};
-   awardgenesis(N(user11111111), genesis_tokens_user1, nonce);
+   awardgenesis("user11111111"_n, genesis_tokens_user1, nonce);
 
    produce_block( fc::days(1) ); //Wait until July 1st
    produce_block( fc::days(1096) );
 
-   BOOST_REQUIRE_EQUAL(success(), unstake( N(user11111111), N(user11111111), core_sym::from_string("2500.0000"), core_sym::from_string("2500.0000")));
+   BOOST_REQUIRE_EQUAL(success(), unstake( "user11111111"_n, "user11111111"_n, core_sym::from_string("2500.0000"), core_sym::from_string("2500.0000")));
    produce_blocks(1);
 
    // No coins were burned because the genesis award reached full maturity
-   BOOST_REQUIRE_EQUAL(get_balance(N(genesis.wax)), core_sym::from_string("99995000.0000"));
-   claimgenesis(N(user11111111));
+   BOOST_REQUIRE_EQUAL(get_balance("genesis.wax"_n), core_sym::from_string("99995000.0000"));
+   claimgenesis("user11111111"_n);
    // Claiming the fully mature genesis rewards clears the amount reserved
-   BOOST_REQUIRE_EQUAL(get_balance(N(genesis.wax)), core_sym::from_string("99990000.0000"));
+   BOOST_REQUIRE_EQUAL(get_balance("genesis.wax"_n), core_sym::from_string("99990000.0000"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(gbm_burning_preminted_invalid_values, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+   create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transfer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("100000000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("100000000.0000"), "eosio"_n );
 
    uint64_t nonce = 1;
    asset genesis_tokens_user1{core_sym::from_string("5000.0000")};
-   awardgenesis(N(user11111111), genesis_tokens_user1, nonce);
+   awardgenesis("user11111111"_n, genesis_tokens_user1, nonce);
 
    produce_block( fc::days(1) ); //Wait until July 1st
    produce_block( fc::days(1096 / 4) );
 
-   BOOST_REQUIRE_EQUAL(wasm_assert_msg("insufficient staked net bandwidth"), unstake( N(user11111111), N(user11111111), core_sym::from_string("3000.0000"), core_sym::from_string("3000.0000")));
-   BOOST_REQUIRE_EQUAL(wasm_assert_msg("must unstake a positive amount"), unstake( N(user11111111), N(user11111111), core_sym::from_string("0.0000"), core_sym::from_string("0.0000")));
-   BOOST_REQUIRE_EQUAL(wasm_assert_msg("must unstake a positive amount"), unstake( N(user11111111), N(user11111111), core_sym::from_string("-10.0000"), core_sym::from_string("-10.0000")));
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("insufficient staked net bandwidth"), unstake( "user11111111"_n, "user11111111"_n, core_sym::from_string("3000.0000"), core_sym::from_string("3000.0000")));
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("must unstake a positive amount"), unstake( "user11111111"_n, "user11111111"_n, core_sym::from_string("0.0000"), core_sym::from_string("0.0000")));
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("must unstake a positive amount"), unstake( "user11111111"_n, "user11111111"_n, core_sym::from_string("-10.0000"), core_sym::from_string("-10.0000")));
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
@@ -2470,22 +2470,22 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
    const double secs_per_year   = 52 * 7 * 24 * 3600;
 
    const asset large_asset = core_sym::from_string("80.0000");
-   create_account_with_resources( N(defproducera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-   create_account_with_resources( N(defproducerb), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-   create_account_with_resources( N(defproducerc), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "defproducera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "defproducerb"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "defproducerc"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
 
-   create_account_with_resources( N(producvotera), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-   create_account_with_resources( N(producvoterb), config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "producvotera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "producvoterb"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
 
-   BOOST_REQUIRE_EQUAL(success(), regproducer(N(defproducera)));
+   BOOST_REQUIRE_EQUAL(success(), regproducer("defproducera"_n));
    produce_block(fc::hours(24));
-   auto prod = get_producer_info( N(defproducera) );
+   auto prod = get_producer_info( "defproducera"_n );
    BOOST_REQUIRE_EQUAL("defproducera", prod["owner"].as_string());
    BOOST_REQUIRE_EQUAL(0, prod["total_votes"].as_double());
 
    transfer( config::system_account_name, "producvotera", core_sym::from_string("400000000.0000"), config::system_account_name);
    BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
-   BOOST_REQUIRE_EQUAL(success(), vote( N(producvotera), { N(defproducera) }));
+   BOOST_REQUIRE_EQUAL(success(), vote( "producvotera"_n, { "defproducera"_n }));
    // defproducera is the only active producer
    // produce enough blocks so new schedule kicks in and defproducera produces some blocks
    {
@@ -2494,7 +2494,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
       const auto     initial_global_state      = get_global_state();
       const uint64_t initial_claim_time        = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
       const int64_t  initial_perblock_bucket   = initial_global_state["perblock_bucket"].as<int64_t>();
-      const int64_t  initial_savings           = get_balance(N(eosio.saving)).get_amount();
+      const int64_t  initial_savings           = get_balance("eosio.saving"_n).get_amount();
       const uint32_t initial_tot_unpaid_blocks = initial_global_state["total_unpaid_blocks"].as<uint32_t>();
 
       prod = get_producer_info("defproducera");
@@ -2504,21 +2504,21 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
       BOOST_REQUIRE_EQUAL(initial_tot_unpaid_blocks, unpaid_blocks);
 
       const asset initial_supply  = get_token_supply();
-      const asset initial_genesis_balance = get_genesis_balance(N(defproducera));
+      const asset initial_genesis_balance = get_genesis_balance("defproducera"_n);
 
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(defproducera), N(claimgbmprod), mvo()("owner", "defproducera")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera")));
 
       const auto     global_state      = get_global_state();
       const uint64_t claim_time        = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
       const int64_t  perblock_bucket   = global_state["perblock_bucket"].as<int64_t>();
-      const int64_t  savings           = get_balance(N(eosio.saving)).get_amount();
+      const int64_t  savings           = get_balance("eosio.saving"_n).get_amount();
       const uint32_t tot_unpaid_blocks = global_state["total_unpaid_blocks"].as<uint32_t>();
 
       prod = get_producer_info("defproducera");
       BOOST_REQUIRE_EQUAL(1, prod["unpaid_blocks"].as<uint32_t>());
       BOOST_REQUIRE_EQUAL(1, tot_unpaid_blocks);
       const asset supply  = get_token_supply();
-      const asset genesis_balance = get_genesis_balance(N(defproducera));
+      const asset genesis_balance = get_genesis_balance("defproducera"_n);
 
       BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
 
@@ -2536,14 +2536,14 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
 
    {
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("already claimed rewards within past day"),
-                          push_action(N(defproducera), N(claimgbmprod), mvo()("owner", "defproducera")));
+                          push_action("defproducera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera")));
    }
 
    // defproducera waits for 23 hours and 55 minutes, can't claim rewards yet
    {
       produce_block(fc::seconds(23 * 3600 + 55 * 60));
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("already claimed rewards within past day"),
-                          push_action(N(defproducera), N(claimgbmprod), mvo()("owner", "defproducera")));
+                          push_action("defproducera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera")));
    }
 
    // wait 5 more minutes, defproducera can now claim rewards again
@@ -2553,7 +2553,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
       const auto     initial_global_state      = get_global_state();
       const uint64_t initial_claim_time        = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
       const int64_t  initial_perblock_bucket   = initial_global_state["perblock_bucket"].as<int64_t>();
-      const int64_t  initial_savings           = get_balance(N(eosio.saving)).get_amount();
+      const int64_t  initial_savings           = get_balance("eosio.saving"_n).get_amount();
       const uint32_t initial_tot_unpaid_blocks = initial_global_state["total_unpaid_blocks"].as<uint32_t>();
 
       prod = get_producer_info("defproducera");
@@ -2566,21 +2566,21 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
       BOOST_REQUIRE_EQUAL(initial_tot_unpaid_blocks, unpaid_blocks);
 
       const asset initial_supply  = get_token_supply();
-      const asset initial_genesis_balance = get_genesis_balance(N(defproducera));
+      const asset initial_genesis_balance = get_genesis_balance("defproducera"_n);
 
-      BOOST_REQUIRE_EQUAL(success(), push_action(N(defproducera), N(claimgbmprod), mvo()("owner", "defproducera")));
+      BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera")));
 
       const auto global_state          = get_global_state();
       const uint64_t claim_time        = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
       const int64_t  perblock_bucket   = global_state["perblock_bucket"].as<int64_t>();
-      const int64_t  savings           = get_balance(N(eosio.saving)).get_amount();
+      const int64_t  savings           = get_balance("eosio.saving"_n).get_amount();
       const uint32_t tot_unpaid_blocks = global_state["total_unpaid_blocks"].as<uint32_t>();
 
       prod = get_producer_info("defproducera");
       BOOST_REQUIRE_EQUAL(1, prod["unpaid_blocks"].as<uint32_t>());
       BOOST_REQUIRE_EQUAL(1, tot_unpaid_blocks);
       const asset supply  = get_token_supply();
-      const asset genesis_balance = get_genesis_balance(N(defproducera));
+      const asset genesis_balance = get_genesis_balance("defproducera"_n);
 
       BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
       auto usecs_between_fills = claim_time - initial_claim_time;
@@ -2596,26 +2596,26 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
    // defproducerb tries to claim rewards but he's not on the list
    {
       BOOST_REQUIRE_EQUAL(wasm_assert_msg("unable to find key"),
-                          push_action(N(defproducerb), N(claimgbmprod), mvo()("owner", "defproducerb")));
+                          push_action("defproducerb"_n, "claimgbmprod"_n, mvo()("owner", "defproducerb")));
    }
 
    // test stability over a year
    {
-      regproducer(N(defproducerb));
-      regproducer(N(defproducerc));
+      regproducer("defproducerb"_n);
+      regproducer("defproducerc"_n);
       produce_block(fc::hours(24));
       const asset   initial_supply  = get_token_supply();
-      const int64_t initial_savings = get_balance(N(eosio.saving)).get_amount();
+      const int64_t initial_savings = get_balance("eosio.saving"_n).get_amount();
       for (uint32_t i = 0; i < 7 * 52; ++i) {
          produce_block(fc::seconds(8 * 3600));
-         BOOST_REQUIRE_EQUAL(success(), push_action(N(defproducerc), N(claimgbmprod), mvo()("owner", "defproducerc")));
+         BOOST_REQUIRE_EQUAL(success(), push_action("defproducerc"_n, "claimgbmprod"_n, mvo()("owner", "defproducerc")));
          produce_block(fc::seconds(8 * 3600));
-         BOOST_REQUIRE_EQUAL(success(), push_action(N(defproducerb), N(claimgbmprod), mvo()("owner", "defproducerb")));
+         BOOST_REQUIRE_EQUAL(success(), push_action("defproducerb"_n, "claimgbmprod"_n, mvo()("owner", "defproducerb")));
          produce_block(fc::seconds(8 * 3600));
-         BOOST_REQUIRE_EQUAL(success(), push_action(N(defproducera), N(claimgbmprod), mvo()("owner", "defproducera")));
+         BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera")));
       }
       const asset   supply  = get_token_supply();
-      const int64_t savings = get_balance(N(eosio.saving)).get_amount();
+      const int64_t savings = get_balance("eosio.saving"_n).get_amount();
       // Amount issued per year is very close to the 6% inflation target. Small difference (500 tokens out of 50'000'000 issued)
       // is due to compounding every 8 hours in this test as opposed to theoretical continuous compounding
       BOOST_REQUIRE(500 * 10000 > int64_t(double(initial_supply.get_amount()) * double(0.06)) - (supply.get_amount() - initial_supply.get_amount()));
@@ -4005,22 +4005,22 @@ BOOST_FIXTURE_TEST_CASE( voters_actions_affect_proxy_and_producers, eosio_system
 BOOST_FIXTURE_TEST_CASE(big_genesis_rewards, eosio_system_tester) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+   create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
                                  core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("200000000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("200000000.0000"), "eosio"_n );
 
    uint64_t nonce = 1;
    asset genesis_tokens_user1{core_sym::from_string("100000000.0000")};
-   awardgenesis(N(user11111111), genesis_tokens_user1, nonce);
+   awardgenesis("user11111111"_n, genesis_tokens_user1, nonce);
 
    produce_blocks(1);
    produce_block( fc::days(1) ); //Wait until July 1st
    produce_block( fc::days(1096) );
 
-   claimgenesis(N(user11111111));
-   asset balance = get_balance(N(user11111111));
+   claimgenesis("user11111111"_n);
+   asset balance = get_balance("user11111111"_n);
 
    BOOST_REQUIRE_EQUAL(balance, core_sym::from_string("100000000.0000"));
 } FC_LOG_AND_RETHROW()
@@ -4028,74 +4028,74 @@ BOOST_FIXTURE_TEST_CASE(big_genesis_rewards, eosio_system_tester) try {
 BOOST_FIXTURE_TEST_CASE(genesis_rewards, eosio_system_tester) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+   create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
                                  core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
-   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   transfer( "eosio"_n, "user11111111"_n, core_sym::from_string("100.0000"), "eosio"_n );
 
-   asset prev_balance = get_balance(N(user11111111));
+   asset prev_balance = get_balance("user11111111"_n);
    uint64_t nonce = 1;
    asset genesis_tokens_user1{core_sym::from_string("20.0000")};
-   awardgenesis(N(user11111111), genesis_tokens_user1, nonce);
+   awardgenesis("user11111111"_n, genesis_tokens_user1, nonce);
    produce_blocks(1);
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
    // Wait 1 day and claim period reward tokens
    produce_block( fc::days(1) );
-   claimgenesis(N(user11111111));
+   claimgenesis("user11111111"_n);
 
    // 20 / 1096 = 0.0182
    asset rewards_1_day{core_sym::from_string("0.0182")};
-   BOOST_REQUIRE_EQUAL(get_balance(N(user11111111)), prev_balance + rewards_1_day);
+   BOOST_REQUIRE_EQUAL(get_balance("user11111111"_n), prev_balance + rewards_1_day);
 
    // Locks 40.0000 more
    nonce = 2;
    genesis_tokens_user1 = core_sym::from_string("40.0000");
-   awardgenesis(N(user11111111), genesis_tokens_user1, nonce);
+   awardgenesis("user11111111"_n, genesis_tokens_user1, nonce);
 
    // Wait 1 day and claim period reward tokens
    produce_block( fc::days(1) );
-   claimgenesis(N(user11111111));
+   claimgenesis("user11111111"_n);
 
    // 60 * 2 / 1096 = 0.1094 (including backward rewards)
    asset rewards_2nd_day = core_sym::from_string("0.1094");
-   BOOST_REQUIRE_EQUAL(get_balance(N(user11111111)), prev_balance + rewards_2nd_day);
+   BOOST_REQUIRE_EQUAL(get_balance("user11111111"_n), prev_balance + rewards_2nd_day);
 
-   BOOST_REQUIRE_EQUAL(success(), unstake(N(user11111111), N(user11111111), core_sym::from_string("20.0000"), core_sym::from_string("20.0000")));
-   prev_balance = get_balance(N(user11111111));
+   BOOST_REQUIRE_EQUAL(success(), unstake("user11111111"_n, "user11111111"_n, core_sym::from_string("20.0000"), core_sym::from_string("20.0000")));
+   prev_balance = get_balance("user11111111"_n);
 
    // Wait 1 day and claim period reward tokens
    produce_block( fc::days(1) );
-   claimgenesis(N(user11111111));
+   claimgenesis("user11111111"_n);
 
    // 20 / 1096 = 0.0182
    rewards_1_day = core_sym::from_string("0.0182");
-   BOOST_REQUIRE_EQUAL(get_balance(N(user11111111)), prev_balance + rewards_1_day);
+   BOOST_REQUIRE_EQUAL(get_balance("user11111111"_n), prev_balance + rewards_1_day);
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(del_genesis_rewards, eosio_system_tester) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+   create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
                                  core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
-   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   transfer( "eosio"_n, "user11111111"_n, core_sym::from_string("100.0000"), "eosio"_n );
 
-   asset prev_balance = get_balance(N(user11111111));
+   asset prev_balance = get_balance("user11111111"_n);
    uint64_t nonce = 1;
-   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   awardgenesis("user11111111"_n, core_sym::from_string("20.0000"), nonce);
    produce_blocks(1);
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
-   auto staked = get_delegated_bw(N(user11111111));
+   auto staked = get_delegated_bw("user11111111"_n);
 
    BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("10.0000"));
    BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("10.0000"));
@@ -4104,221 +4104,221 @@ BOOST_FIXTURE_TEST_CASE(del_genesis_rewards, eosio_system_tester) try {
    BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
 
    // should clear the genesis balance
-   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   BOOST_REQUIRE_EQUAL(get_genesis_balance("user11111111"_n), core_sym::from_string("0.0000"));
    produce_blocks(1);
 
-   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_delegated_bw("user11111111"_n).is_null());
 
    // should throw since the refund entry should be deleted
-   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_refund_request("user11111111"_n).is_null());
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(del_genesis_rewards_unstake_all, eosio_system_tester) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+   create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
                                  core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
-   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   transfer( "eosio"_n, "user11111111"_n, core_sym::from_string("100.0000"), "eosio"_n );
 
-   asset prev_balance = get_balance(N(user11111111));
+   asset prev_balance = get_balance("user11111111"_n);
    uint64_t nonce = 1;
-   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   awardgenesis("user11111111"_n, core_sym::from_string("20.0000"), nonce);
    produce_blocks(1);
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
-   auto staked = get_delegated_bw(N(user11111111));
+   auto staked = get_delegated_bw("user11111111"_n);
 
    BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("10.0000"));
    BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("10.0000"));
 
-   BOOST_REQUIRE_EQUAL( success(), unstake( N(user11111111), N(user11111111), core_sym::from_string("10.0000"), core_sym::from_string("10.0000") ));
+   BOOST_REQUIRE_EQUAL( success(), unstake( "user11111111"_n, "user11111111"_n, core_sym::from_string("10.0000"), core_sym::from_string("10.0000") ));
 
    produce_blocks( 1 );
    BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
 
    // should clear the genesis balance
-   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   BOOST_REQUIRE_EQUAL(get_genesis_balance("user11111111"_n), core_sym::from_string("0.0000"));
    produce_blocks(1);
 
-   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_delegated_bw("user11111111"_n).is_null());
 
-   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_refund_request("user11111111"_n).is_null());
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(del_genesis_rewards_unstake_partial_net, eosio_system_tester) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+   create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
                                  core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
-   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   transfer( "eosio"_n, "user11111111"_n, core_sym::from_string("100.0000"), "eosio"_n );
 
-   asset prev_balance = get_balance(N(user11111111));
+   asset prev_balance = get_balance("user11111111"_n);
    uint64_t nonce = 1;
-   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   awardgenesis("user11111111"_n, core_sym::from_string("20.0000"), nonce);
    produce_blocks(1);
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
-   auto staked = get_delegated_bw(N(user11111111));
+   auto staked = get_delegated_bw("user11111111"_n);
 
    BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("10.0000"));
    BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("10.0000"));
 
-   unstake( N(user11111111), N(user11111111), core_sym::from_string("5.0000"), core_sym::from_string("0.0000") );
+   unstake( "user11111111"_n, "user11111111"_n, core_sym::from_string("5.0000"), core_sym::from_string("0.0000") );
 
    produce_blocks( 1 );
    BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
 
    // should clear the genesis balance
-   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   BOOST_REQUIRE_EQUAL(get_genesis_balance("user11111111"_n), core_sym::from_string("0.0000"));
    produce_blocks(1);
 
-   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_delegated_bw("user11111111"_n).is_null());
 
-   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_refund_request("user11111111"_n).is_null());
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(del_genesis_rewards_unstake_partial_cpu, eosio_system_tester) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+   create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
                                  core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
-   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   transfer( "eosio"_n, "user11111111"_n, core_sym::from_string("100.0000"), "eosio"_n );
 
-   asset prev_balance = get_balance(N(user11111111));
+   asset prev_balance = get_balance("user11111111"_n);
    uint64_t nonce = 1;
-   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   awardgenesis("user11111111"_n, core_sym::from_string("20.0000"), nonce);
    produce_blocks(1);
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
-   auto staked = get_delegated_bw(N(user11111111));
+   auto staked = get_delegated_bw("user11111111"_n);
 
    BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("10.0000"));
    BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("10.0000"));
 
-   unstake( N(user11111111), N(user11111111), core_sym::from_string("0.0000"), core_sym::from_string("5.0000") );
+   unstake( "user11111111"_n, "user11111111"_n, core_sym::from_string("0.0000"), core_sym::from_string("5.0000") );
 
    produce_blocks( 1 );
    BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
 
    // should clear the genesis balance
-   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   BOOST_REQUIRE_EQUAL(get_genesis_balance("user11111111"_n), core_sym::from_string("0.0000"));
    produce_blocks(1);
 
-   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_delegated_bw("user11111111"_n).is_null());
 
-   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_refund_request("user11111111"_n).is_null());
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(del_genesis_rewards_unstake_full_net, eosio_system_tester) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+   create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
                                  core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
-   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   transfer( "eosio"_n, "user11111111"_n, core_sym::from_string("100.0000"), "eosio"_n );
 
-   asset prev_balance = get_balance(N(user11111111));
+   asset prev_balance = get_balance("user11111111"_n);
    uint64_t nonce = 1;
-   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   awardgenesis("user11111111"_n, core_sym::from_string("20.0000"), nonce);
    produce_blocks(1);
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
-   auto staked = get_delegated_bw(N(user11111111));
+   auto staked = get_delegated_bw("user11111111"_n);
 
    BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("10.0000"));
    BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("10.0000"));
 
-   unstake( N(user11111111), N(user11111111), core_sym::from_string("10.0000"), core_sym::from_string("0.0000") );
+   unstake( "user11111111"_n, "user11111111"_n, core_sym::from_string("10.0000"), core_sym::from_string("0.0000") );
 
    produce_blocks( 1 );
    BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
 
    // should clear the genesis balance
-   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   BOOST_REQUIRE_EQUAL(get_genesis_balance("user11111111"_n), core_sym::from_string("0.0000"));
    produce_blocks(1);
 
-   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_delegated_bw("user11111111"_n).is_null());
 
-   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_refund_request("user11111111"_n).is_null());
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(del_genesis_rewards_unstake_full_cpu, eosio_system_tester) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+   create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
                                  core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
-   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   transfer( "eosio"_n, "user11111111"_n, core_sym::from_string("100.0000"), "eosio"_n );
 
-   asset prev_balance = get_balance(N(user11111111));
+   asset prev_balance = get_balance("user11111111"_n);
    uint64_t nonce = 1;
-   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   awardgenesis("user11111111"_n, core_sym::from_string("20.0000"), nonce);
    produce_blocks(1);
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
-   auto staked = get_delegated_bw(N(user11111111));
+   auto staked = get_delegated_bw("user11111111"_n);
 
    BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("10.0000"));
    BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("10.0000"));
 
-   unstake( N(user11111111), N(user11111111), core_sym::from_string("0.0000"), core_sym::from_string("10.0000") );
+   unstake( "user11111111"_n, "user11111111"_n, core_sym::from_string("0.0000"), core_sym::from_string("10.0000") );
 
    produce_blocks( 1 );
    BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
 
    // should clear the genesis balance
-   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   BOOST_REQUIRE_EQUAL(get_genesis_balance("user11111111"_n), core_sym::from_string("0.0000"));
    produce_blocks(1);
 
-   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_delegated_bw("user11111111"_n).is_null());
 
-   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_refund_request("user11111111"_n).is_null());
 } FC_LOG_AND_RETHROW()
 
 
 BOOST_FIXTURE_TEST_CASE(del_genesis_double_rewards, eosio_system_tester) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+   create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
                                  core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
-   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   transfer( "eosio"_n, "user11111111"_n, core_sym::from_string("100.0000"), "eosio"_n );
 
-   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), 1);
+   awardgenesis("user11111111"_n, core_sym::from_string("20.0000"), 1);
    produce_blocks(1);
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
-   awardgenesis(N(user11111111), core_sym::from_string("30.0000"), 2);
+   awardgenesis("user11111111"_n, core_sym::from_string("30.0000"), 2);
    produce_blocks(1);
 
-   auto staked = get_delegated_bw(N(user11111111));
+   auto staked = get_delegated_bw("user11111111"_n);
 
    BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("25.0000"));
    BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("25.0000"));
@@ -4327,52 +4327,52 @@ BOOST_FIXTURE_TEST_CASE(del_genesis_double_rewards, eosio_system_tester) try {
    BOOST_REQUIRE_EQUAL( success(), delgenesis(2));
 
    // should clear the genesis balance
-   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("20.0000"));
-   staked = get_delegated_bw(N(user11111111));
+   BOOST_REQUIRE_EQUAL(get_genesis_balance("user11111111"_n), core_sym::from_string("20.0000"));
+   staked = get_delegated_bw("user11111111"_n);
 
    BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("0.0000"));
    BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("20.0000"));
 
-   BOOST_REQUIRE(get_refund_request(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_refund_request("user11111111"_n).is_null());
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(del_genesis_rewards_extra_stake, eosio_system_tester) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+   create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
                                  core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
-   transfer( N(eosio), N(user11111111), core_sym::from_string("100.0000"), N(eosio) );
+   transfer( "eosio"_n, "user11111111"_n, core_sym::from_string("100.0000"), "eosio"_n );
 
-   asset prev_balance = get_balance(N(user11111111));
+   asset prev_balance = get_balance("user11111111"_n);
    uint64_t nonce = 1;
-   awardgenesis(N(user11111111), core_sym::from_string("20.0000"), nonce);
+   awardgenesis("user11111111"_n, core_sym::from_string("20.0000"), nonce);
    produce_blocks(1);
 
-   BOOST_REQUIRE_EQUAL( success(), stake(N(user11111111), N(user11111111), core_sym::from_string("5.0000"), core_sym::from_string("5.0000")));
+   BOOST_REQUIRE_EQUAL( success(), stake("user11111111"_n, "user11111111"_n, core_sym::from_string("5.0000"), core_sym::from_string("5.0000")));
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
-   auto staked = get_delegated_bw(N(user11111111));
+   auto staked = get_delegated_bw("user11111111"_n);
 
    BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), core_sym::from_string("15.0000"));
    BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), core_sym::from_string("15.0000"));
 
-   unstake( N(user11111111), N(user11111111), core_sym::from_string("5.0000"), core_sym::from_string("5.0000") );
+   unstake( "user11111111"_n, "user11111111"_n, core_sym::from_string("5.0000"), core_sym::from_string("5.0000") );
 
    produce_blocks( 1 );
    BOOST_REQUIRE_EQUAL( success(), delgenesis(nonce));
 
    // should clear the genesis balance
-   BOOST_REQUIRE_EQUAL(get_genesis_balance(N(user11111111)), core_sym::from_string("0.0000"));
+   BOOST_REQUIRE_EQUAL(get_genesis_balance("user11111111"_n), core_sym::from_string("0.0000"));
    produce_blocks(1);
 
-   BOOST_REQUIRE(get_delegated_bw(N(user11111111)).is_null());
+   BOOST_REQUIRE(get_delegated_bw("user11111111"_n).is_null());
 
-   auto refund = get_refund_request(N(user11111111));
+   auto refund = get_refund_request("user11111111"_n);
    BOOST_REQUIRE_EQUAL(refund["net_amount"].as<asset>(), core_sym::from_string("0.0000"));
    BOOST_REQUIRE_EQUAL(refund["cpu_amount"].as<asset>(), core_sym::from_string("10.0000"));
 
@@ -4381,11 +4381,11 @@ BOOST_FIXTURE_TEST_CASE(del_genesis_rewards_extra_stake, eosio_system_tester) tr
 BOOST_FIXTURE_TEST_CASE(backward_rewards, eosio_system_tester) try {
    cross_15_percent_threshold();
 
-   create_account_with_resources(N(user11111111), config::system_account_name, core_sym::from_string("100.0000"), false,
+   create_account_with_resources("user11111111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
                                  core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("200000000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("200000000.0000"), "eosio"_n );
 
    uint64_t nonce = 1;
    asset genesis_tokens_user1{core_sym::from_string("100000000.0000")};
@@ -4393,12 +4393,12 @@ BOOST_FIXTURE_TEST_CASE(backward_rewards, eosio_system_tester) try {
    produce_blocks(1);
    produce_block( fc::days(30) ); // Wait until August 30th
 
-   awardgenesis(N(user11111111), genesis_tokens_user1, nonce);
+   awardgenesis("user11111111"_n, genesis_tokens_user1, nonce);
 
    produce_block( fc::days(1067) ); // Waits until 1 day passing the end of the reward period.
 
-   claimgenesis(N(user11111111));
-   asset balance = get_balance(N(user11111111));
+   claimgenesis("user11111111"_n);
+   asset balance = get_balance("user11111111"_n);
 
    //The rewards should be equal to the awarded tokens during the swap even if the swap was made after July 1st
    BOOST_REQUIRE(core_sym::from_string("100000000.0000") - balance <=  core_sym::from_string("0.0001"));
@@ -5458,19 +5458,19 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_duplicated_nonce, eosio_system_tester ) t
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = {N(user11111111), N(user22222222) };
+   const std::vector<account_name> accounts = {"user11111111"_n, "user22222222"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
    const asset genesis_tokens_user2{core_sym::from_string("1.0000")};
 
-   BOOST_REQUIRE_EQUAL(success(), awardgenesis( N(user11111111), genesis_tokens_user1, nonce));
-   BOOST_REQUIRE_EQUAL(wasm_assert_msg("Duplicated call: nonce already exists."), awardgenesis( N(user22222222), genesis_tokens_user2, nonce));
+   BOOST_REQUIRE_EQUAL(success(), awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce));
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("Duplicated call: nonce already exists."), awardgenesis( "user22222222"_n, genesis_tokens_user2, nonce));
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( award_genesis, eosio_system_tester ) try {
@@ -5478,21 +5478,21 @@ BOOST_FIXTURE_TEST_CASE( award_genesis, eosio_system_tester ) try {
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = {N(user11111111), N(user22222222), N(user33333333) };
+   const std::vector<account_name> accounts = {"user11111111"_n, "user22222222"_n, "user33333333"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
    const asset genesis_tokens_user2{core_sym::from_string("1.0000")};
    const asset genesis_tokens_user3{core_sym::from_string("73.0000")};
 
-   auto r1 = awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1);
-   auto r2 = awardgenesis( N(user22222222), genesis_tokens_user2, nonce + 2);
-   auto r3 = awardgenesis( N(user33333333), genesis_tokens_user3, nonce + 3);
+   auto r1 = awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1);
+   auto r2 = awardgenesis( "user22222222"_n, genesis_tokens_user2, nonce + 2);
+   auto r3 = awardgenesis( "user33333333"_n, genesis_tokens_user3, nonce + 3);
 
    // Check all actions succeed
    BOOST_REQUIRE_EQUAL( success(), r1 );
@@ -5500,9 +5500,9 @@ BOOST_FIXTURE_TEST_CASE( award_genesis, eosio_system_tester ) try {
    BOOST_REQUIRE_EQUAL( success(), r3 );
 
    // Check the right tokens (amount and symbol) where locked
-   BOOST_REQUIRE_EQUAL( core_sym::from_string("2.0000"), get_genesis_balance( N(user11111111) ) );
-   BOOST_REQUIRE_EQUAL( core_sym::from_string("1.0000"), get_genesis_balance( N(user22222222) ) );
-   BOOST_REQUIRE_EQUAL( core_sym::from_string("73.0000"), get_genesis_balance( N(user33333333) ) );
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("2.0000"), get_genesis_balance( "user11111111"_n ) );
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("1.0000"), get_genesis_balance( "user22222222"_n ) );
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("73.0000"), get_genesis_balance( "user33333333"_n ) );
 
    // Check new staked resources match
    auto user1_resources   = get_total_stake( "user11111111" );
@@ -5524,26 +5524,26 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_too_late, eosio_system_tester ) try {
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = {N(user11111111), N(user22222222) };
+   const std::vector<account_name> accounts = {"user11111111"_n, "user22222222"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
    const asset genesis_tokens_user2{core_sym::from_string("1.0000")};
 
    // Lock genesis tokens to users
-   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1);
-   awardgenesis( N(user22222222), genesis_tokens_user2, nonce + 2);
+   awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1);
+   awardgenesis( "user22222222"_n, genesis_tokens_user2, nonce + 2);
 
    // user11111111 claims full period rewards 1 year after period end
    produce_block(fc::days(3*365 + 366));
-   BOOST_REQUIRE_EQUAL( success(), claimgenesis( N(user11111111) ));
+   BOOST_REQUIRE_EQUAL( success(), claimgenesis( "user11111111"_n ));
 
-   BOOST_REQUIRE_EQUAL( core_sym::from_string("2.0000"), get_balance(N(user11111111)));
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("2.0000"), get_balance("user11111111"_n));
 
 } FC_LOG_AND_RETHROW()
 
@@ -5551,30 +5551,30 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_no_rewards_yet, eosio_system_tester ) try
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = {N(user11111111), N(user22222222), N(user33333333) };
+   const std::vector<account_name> accounts = {"user11111111"_n, "user22222222"_n, "user33333333"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
    const asset genesis_tokens_user2{core_sym::from_string("1.0000")};
    const asset genesis_tokens_user3{core_sym::from_string("73.0000")};
 
    // Lock genesis tokens to users
-   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1);
-   awardgenesis( N(user22222222), genesis_tokens_user2, nonce + 2);
-   awardgenesis( N(user33333333), genesis_tokens_user3, nonce + 3);
+   awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1);
+   awardgenesis( "user22222222"_n, genesis_tokens_user2, nonce + 2);
+   awardgenesis( "user33333333"_n, genesis_tokens_user3, nonce + 3);
 
    // Wait 23h 55m hours
    produce_block(fc::seconds(23 * 3600 + 55 * 60));
 
    // All claim actions fail because time period elapsed since locking is less than 1 day
-   BOOST_REQUIRE_EQUAL( wasm_assert_msg("already claimed rewards within past day"), claimgenesis( N(user11111111) ) );
-   BOOST_REQUIRE_EQUAL( wasm_assert_msg("already claimed rewards within past day"), claimgenesis( N(user22222222) ) );
-   BOOST_REQUIRE_EQUAL( wasm_assert_msg("already claimed rewards within past day"), claimgenesis( N(user33333333) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("already claimed rewards within past day"), claimgenesis( "user11111111"_n ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("already claimed rewards within past day"), claimgenesis( "user22222222"_n ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("already claimed rewards within past day"), claimgenesis( "user33333333"_n ) );
 
 } FC_LOG_AND_RETHROW()
 
@@ -5582,22 +5582,22 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_1_day_rewards, eosio_system_tester ) try 
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = {N(user11111111), N(user22222222), N(user33333333) };
+   const std::vector<account_name> accounts = {"user11111111"_n, "user22222222"_n, "user33333333"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
    const asset genesis_tokens_user2{core_sym::from_string("1.0000")};
    const asset genesis_tokens_user3{core_sym::from_string("73.0000")};
 
    // Lock genesis tokens to users
-   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1);
-   awardgenesis( N(user22222222), genesis_tokens_user2, nonce + 2);
-   awardgenesis( N(user33333333), genesis_tokens_user3, nonce + 3);
+   awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1);
+   awardgenesis( "user22222222"_n, genesis_tokens_user2, nonce + 2);
+   awardgenesis( "user33333333"_n, genesis_tokens_user3, nonce + 3);
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
@@ -5605,14 +5605,14 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_1_day_rewards, eosio_system_tester ) try 
    produce_block( fc::days(1) );
 
    // Send rewarded tokens back to users
-   claimgenesis( N(user11111111) );
-   claimgenesis( N(user22222222) );
-   claimgenesis( N(user33333333) );
+   claimgenesis( "user11111111"_n );
+   claimgenesis( "user22222222"_n );
+   claimgenesis( "user33333333"_n );
 
    // Get users' balances
-   const asset user1_balance = get_balance(N(user11111111));
-   const asset user2_balance = get_balance(N(user22222222));
-   const asset user3_balance = get_balance(N(user33333333));
+   const asset user1_balance = get_balance("user11111111"_n);
+   const asset user2_balance = get_balance("user22222222"_n);
+   const asset user3_balance = get_balance("user33333333"_n);
 
    // "genesis.wax" locked 2.0000 tokens to user11111111
    // after 1 day, user11111111 claims the corresponding inflation for this one-day period.
@@ -5650,22 +5650,22 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_3_years_reward, eosio_system_tester ) try
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = {N(user11111111), N(user22222222), N(user33333333) };
+   const std::vector<account_name> accounts = {"user11111111"_n, "user22222222"_n, "user33333333"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    //const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
    //const asset genesis_tokens_user2{core_sym::from_string("1.0000")};
    const asset genesis_tokens_user3{core_sym::from_string("73.0000")};
 
    // Lock genesis tokens to users
-   //awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1);
-   //awardgenesis( N(user22222222), genesis_tokens_user2, nonce + 2);
-   awardgenesis( N(user33333333), genesis_tokens_user3, nonce + 3);
+   //awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1);
+   //awardgenesis( "user22222222"_n, genesis_tokens_user2, nonce + 2);
+   awardgenesis( "user33333333"_n, genesis_tokens_user3, nonce + 3);
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
@@ -5673,14 +5673,14 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_3_years_reward, eosio_system_tester ) try
    produce_block( fc::days(1096) );
 
    // Send rewarded tokens back to users
-   //claimgenesis( N(user11111111) );
-   //claimgenesis( N(user22222222) );
-   claimgenesis( N(user33333333) );
+   //claimgenesis( "user11111111"_n );
+   //claimgenesis( "user22222222"_n );
+   claimgenesis( "user33333333"_n );
 
    // Get users' balances
-   //const asset user1_balance = get_balance(N(user11111111));
-   //const asset user2_balance = get_balance(N(user22222222));
-   const asset user3_balance = get_balance(N(user33333333));
+   //const asset user1_balance = get_balance("user11111111"_n);
+   //const asset user2_balance = get_balance("user22222222"_n);
+   const asset user3_balance = get_balance("user33333333"_n);
 
 
    // "genesis.wax" locked 2.0000 tokens to user11111111
@@ -5720,13 +5720,13 @@ BOOST_FIXTURE_TEST_CASE( claim_more_than_once_a_day, eosio_system_tester ) try {
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = {N(user11111111) };
+   const std::vector<account_name> accounts = {"user11111111"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    // tokens to lock for user11111111
    const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
@@ -5735,19 +5735,19 @@ BOOST_FIXTURE_TEST_CASE( claim_more_than_once_a_day, eosio_system_tester ) try {
    produce_block( fc::days(1) ); //Wait until July 1st
 
    // Lock genesis tokens to users
-   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
+   awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1 );
 
    // claiming tokens once an hour within 1 day since lock-up
    for(auto i=1; i <= 23 ; ++i) {
      produce_block( fc::hours(1) );
-     BOOST_REQUIRE_EQUAL( wasm_assert_msg("already claimed rewards within past day"), claimgenesis( N(user11111111) ) );
+     BOOST_REQUIRE_EQUAL( wasm_assert_msg("already claimed rewards within past day"), claimgenesis( "user11111111"_n ) );
    }
 
    // complete wait-period of 1 day and claim rewards
    produce_block( fc::hours(1) );
-   claimgenesis( N(user11111111) );
+   claimgenesis( "user11111111"_n );
 
-   const asset user1_balance = get_balance(N(user11111111));
+   const asset user1_balance = get_balance("user11111111"_n);
    BOOST_REQUIRE_EQUAL( core_sym::from_string("0.0018"), user1_balance );
 
 } FC_LOG_AND_RETHROW()
@@ -5756,32 +5756,32 @@ BOOST_FIXTURE_TEST_CASE( claim_half_period_twice, eosio_system_tester ) try {
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = { N(user11111111) };
+   const std::vector<account_name> accounts = { "user11111111"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    // tokens to lock for user11111111
    const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
    asset user1_balance;
 
    // Lock genesis tokens to user11111111
-   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
+   awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1 );
    produce_block( fc::hours(24) );
 
    // Wait initial 1.5 years (1096/2 days) and claim first half period reward tokens
    produce_block( fc::days(548) );
-   claimgenesis( N(user11111111) );
-   user1_balance = get_balance(N(user11111111));
+   claimgenesis( "user11111111"_n );
+   user1_balance = get_balance("user11111111"_n);
    BOOST_REQUIRE_EQUAL( core_sym::from_string("1.0000"), user1_balance );
 
    // Wait last 1.5 years (1096/2 days) and claim second half period reward tokens
    produce_block( fc::days(548) );
-   claimgenesis( N(user11111111) );
-   user1_balance = get_balance(N(user11111111));
+   claimgenesis( "user11111111"_n );
+   user1_balance = get_balance("user11111111"_n);
    // Adding one_day_genesis_rewards because the last day cannot be claimed due the award was after the initial time
    BOOST_REQUIRE( user1_balance <= core_sym::from_string("2.0000"));
    BOOST_REQUIRE( user1_balance >= core_sym::from_string("1.9999"));
@@ -5792,37 +5792,37 @@ BOOST_FIXTURE_TEST_CASE( claim_once_a_day_during_until_final_day, eosio_system_t
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = { N(user11111111) };
+   const std::vector<account_name> accounts = { "user11111111"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    // tokens to lock for user11111111912
    const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
 
    // Lock genesis tokens to user11111111
-   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
+   awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1 );
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
-   auto genesis_info = get_genesis(N(user11111111));
+   auto genesis_info = get_genesis("user11111111"_n);
 
    // Check acc is incrementally equal
    asset acc = core_sym::from_string("0.0000");
    for(auto i=1; i <= 1096; ++i) { //The test chain starts on July 1st 2019
      produce_block( fc::days(1) );
      acc += core_sym::from_string("0.0018");
-     BOOST_REQUIRE_EQUAL(success(), claimgenesis( N(user11111111) ));
-     BOOST_REQUIRE_EQUAL( acc, get_balance(N(user11111111)) );
+     BOOST_REQUIRE_EQUAL(success(), claimgenesis( "user11111111"_n ));
+     BOOST_REQUIRE_EQUAL( acc, get_balance("user11111111"_n) );
    }
 
    // Check that we cannot claim any more after July 1st 2022
    produce_block( fc::days(1) );
-   claimgenesis( N(user11111111) );
-   BOOST_REQUIRE_EQUAL( acc, get_balance(N(user11111111)) );
+   claimgenesis( "user11111111"_n );
+   BOOST_REQUIRE_EQUAL( acc, get_balance("user11111111"_n) );
 
 } FC_LOG_AND_RETHROW()
 
@@ -5831,13 +5831,13 @@ BOOST_FIXTURE_TEST_CASE( unstake_all_genesis_balance_after_1_day, eosio_system_t
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = { N(user11111111) };
+   const std::vector<account_name> accounts = { "user11111111"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    // tokens to lock for user11111111
    const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
@@ -5846,23 +5846,23 @@ BOOST_FIXTURE_TEST_CASE( unstake_all_genesis_balance_after_1_day, eosio_system_t
    const asset rewards_1_day_user1{core_sym::from_string("0.0018")};
 
    // Lock genesis tokens to user11111111
-   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
+   awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1 );
 
    produce_block( fc::hours(24) ); // Wait until July 1st
 
    // unstake locked amount one day after locking
    produce_block( fc::hours(24) );
-   BOOST_REQUIRE_EQUAL( success(), unstake( N(user11111111), N(user11111111), core_sym::from_string("1.0000"), core_sym::from_string("1.0000") ) );
-   auto genesis_info = get_genesis(N(user11111111));
+   BOOST_REQUIRE_EQUAL( success(), unstake( "user11111111"_n, "user11111111"_n, core_sym::from_string("1.0000"), core_sym::from_string("1.0000") ) );
+   auto genesis_info = get_genesis("user11111111"_n);
    BOOST_REQUIRE_EQUAL( rewards_1_day_user1, genesis_info["unclaimed_balance"].as<asset>() );
 
    // after 2 days and 23 hours since unstaking genesis balance should be zero
    produce_block( fc::hours(3*24 - 1) );
-   BOOST_REQUIRE_EQUAL( 0, get_balance(N(user11111111)).get_amount() );
+   BOOST_REQUIRE_EQUAL( 0, get_balance("user11111111"_n).get_amount() );
 
    // completing 3 days wait, staked funds should be paid back
    produce_block( fc::hours(1) );
-   BOOST_REQUIRE_EQUAL( genesis_tokens_user1 , get_balance( N(user11111111) ) );
+   BOOST_REQUIRE_EQUAL( genesis_tokens_user1 , get_balance( "user11111111"_n ) );
 
 } FC_LOG_AND_RETHROW()
 
@@ -5871,13 +5871,13 @@ BOOST_FIXTURE_TEST_CASE( unstake_without_decreasing_genesis_balance, eosio_syste
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = { N(user11111111) };
+   const std::vector<account_name> accounts = { "user11111111"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    // tokens to lock for user11111111
    const asset genesis_tokens_user1{core_sym::from_string("2.0000")};
@@ -5886,28 +5886,28 @@ BOOST_FIXTURE_TEST_CASE( unstake_without_decreasing_genesis_balance, eosio_syste
    const asset rewards_1_day_user1{core_sym::from_string("0.0018")};
 
    // Lock genesis tokens to user11111111
-   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
+   awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1 );
 
    // tokens to stake besides genesis balance
    const asset net_tokens_user1{core_sym::from_string("10.0000")};
    const asset cpu_tokens_user1{core_sym::from_string("10.0000")};
 
    // Stake-transer non-genesis tokens to user11111111
-   stake_with_transfer( N(eosio), N(user11111111), net_tokens_user1, cpu_tokens_user1 );
+   stake_with_transfer( "eosio"_n, "user11111111"_n, net_tokens_user1, cpu_tokens_user1 );
 
    // Wait 1 day and unstake non-genesis tokens
    produce_block( fc::hours(24) );
-   BOOST_REQUIRE_EQUAL( success(), unstake( N(user11111111), N(user11111111), net_tokens_user1, cpu_tokens_user1 ) );
+   BOOST_REQUIRE_EQUAL( success(), unstake( "user11111111"_n, "user11111111"_n, net_tokens_user1, cpu_tokens_user1 ) );
 
    // after 3 days all non-genesis tokens should be paid back (we're asking them back)
    produce_block( fc::hours(3*24) );
    BOOST_REQUIRE_EQUAL( net_tokens_user1
 		        + cpu_tokens_user1,
-		        get_balance( N(user11111111) ) );
+		        get_balance( "user11111111"_n ) );
 
    // remaining staked tokens should be equal to genesis balance,
    // since we're unstaking all but the locked ones tokens
-   BOOST_REQUIRE_EQUAL( genesis_tokens_user1, get_genesis_balance( N(user11111111) ) );
+   BOOST_REQUIRE_EQUAL( genesis_tokens_user1, get_genesis_balance( "user11111111"_n ) );
 
 } FC_LOG_AND_RETHROW()
 
@@ -5916,13 +5916,13 @@ BOOST_FIXTURE_TEST_CASE( unstake_decreasing_genesis_balance, eosio_system_tester
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = { N(user11111111) };
+   const std::vector<account_name> accounts = { "user11111111"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    // tokens to lock for user11111111
    const asset locked_4_net = {core_sym::from_string("1.0000")};
@@ -5933,7 +5933,7 @@ BOOST_FIXTURE_TEST_CASE( unstake_decreasing_genesis_balance, eosio_system_tester
    const asset rewards_1_day_user1{core_sym::from_string("0.0018")};
 
    // Lock genesis tokens to user11111111
-   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
+   awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1 );
 
    produce_block( fc::hours(24) ); //Wait until July 1st
 
@@ -5942,10 +5942,10 @@ BOOST_FIXTURE_TEST_CASE( unstake_decreasing_genesis_balance, eosio_system_tester
    const asset cpu_tokens_user1{core_sym::from_string("10.0000")};
 
    // Stake-transer non-genesis tokens to user11111111
-   stake_with_transfer( N(eosio), N(user11111111), net_tokens_user1, cpu_tokens_user1 );
+   stake_with_transfer( "eosio"_n, "user11111111"_n, net_tokens_user1, cpu_tokens_user1 );
 
    // Check owned tokens match genesis + transfered-staked for NET and CPU
-   auto delegated_bw_user1 = get_delegated_bw( N(user11111111) );
+   auto delegated_bw_user1 = get_delegated_bw( "user11111111"_n );
    BOOST_REQUIRE_EQUAL( locked_4_net + net_tokens_user1, delegated_bw_user1["net_weight"].as<asset>());
    BOOST_REQUIRE_EQUAL( locked_4_cpu + cpu_tokens_user1, delegated_bw_user1["cpu_weight"].as<asset>());
 
@@ -5962,7 +5962,7 @@ BOOST_FIXTURE_TEST_CASE( unstake_decreasing_genesis_balance, eosio_system_tester
    // TOTAL BEING UNSTAKING: 22.0000
    produce_block( fc::hours(24) );
    BOOST_REQUIRE_EQUAL( success(),
-		        unstake( N(user11111111), N(user11111111),
+		        unstake( "user11111111"_n, "user11111111"_n,
 		          net_tokens_user1 + locked_4_net,
 			  cpu_tokens_user1 + locked_4_cpu
 		       ));
@@ -5972,22 +5972,22 @@ BOOST_FIXTURE_TEST_CASE( unstake_decreasing_genesis_balance, eosio_system_tester
    BOOST_REQUIRE_EQUAL( genesis_tokens_user1    // <- Genesis Tokens
 		        + net_tokens_user1     // <- Non Genesis Tokens (NET)
 			+ cpu_tokens_user1,     // <- Non Genesis Tokens (CPU)
-			get_balance( N(user11111111) ) );
+			get_balance( "user11111111"_n ) );
 
    // remaining genesis balance should be 0,
    // since we unstaked all OWNED staked tokens and genesis-locked
-   BOOST_REQUIRE_EQUAL( core_sym::from_string("0.0000"), get_genesis_balance( N(user11111111) ) );
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("0.0000"), get_genesis_balance( "user11111111"_n ) );
 
    // The rewards for the day the user kept the genesis tokens should be available to be claimed
-   auto genesis_info = get_genesis(N(user11111111));
+   auto genesis_info = get_genesis("user11111111"_n);
    BOOST_REQUIRE_EQUAL( rewards_1_day_user1, genesis_info["unclaimed_balance"].as<asset>() );
 
-   BOOST_REQUIRE_EQUAL( success(), claimgenesis( N(user11111111) ));
+   BOOST_REQUIRE_EQUAL( success(), claimgenesis( "user11111111"_n ));
    BOOST_REQUIRE_EQUAL( genesis_tokens_user1    // <- Genesis Tokens
             + net_tokens_user1     // <- Non Genesis Tokens (NET)
             + cpu_tokens_user1     // <- Non Genesis Tokens (CPU)
             + rewards_1_day_user1,  // <- Genesis rewards
-            get_balance( N(user11111111) ) );
+            get_balance( "user11111111"_n ) );
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( genesis_then_transfer_finally_claim, eosio_system_tester ) try {
@@ -5995,14 +5995,14 @@ BOOST_FIXTURE_TEST_CASE( genesis_then_transfer_finally_claim, eosio_system_teste
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = { N(user11111111), N(user22222222) };
+   const std::vector<account_name> accounts = { "user11111111"_n, "user22222222"_n };
    const asset last_day_rewards = core_sym::from_string("0.0019");;
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    // tokens to lock for user11111111
    const asset locked_4_net = {core_sym::from_string("1.0000")};
@@ -6013,28 +6013,28 @@ BOOST_FIXTURE_TEST_CASE( genesis_then_transfer_finally_claim, eosio_system_teste
 
 
    // Transfer which puts liquid tokens into user11111111 account
-   transfer( N(eosio), N(user11111111), liquid_tokens_user1, N(eosio) );
+   transfer( "eosio"_n, "user11111111"_n, liquid_tokens_user1, "eosio"_n );
 
    // Lock genesis tokens to user11111111
-   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
+   awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1 );
 
    // Then, send some liquid tokens from user11111111 to user22222222
-   transfer( N(user11111111), N(user22222222), tokens_user1_to_user2, N(user11111111) );
+   transfer( "user11111111"_n, "user22222222"_n, tokens_user1_to_user2, "user11111111"_n );
 
    // Before claiming, check user11111111 genesis_balance keeps the same as awarded
-   BOOST_REQUIRE_EQUAL( genesis_tokens_user1, get_genesis_balance( N(user11111111) ) );
+   BOOST_REQUIRE_EQUAL( genesis_tokens_user1, get_genesis_balance( "user11111111"_n ) );
    produce_blocks(1);
 
    // After 3 years, user11111111 claims full period rewards
    // So, check liquid balance equals:
    // REWARDS_FULL_PERIOD + REMAINING_LIQUID_TOKENS
    produce_block(fc::days(2*365 + 366));
-   claimgenesis( N(user11111111) );
+   claimgenesis( "user11111111"_n );
    BOOST_REQUIRE_EQUAL( liquid_tokens_user1     // Non-Genesis Tokens
          - tokens_user1_to_user2 // Transfered u1 -> u2
 			+ genesis_tokens_user1 // Rewards full period
          - last_day_rewards,  // Given the award was done some seconds after July 1st 2019 00:00:00 user11111111 losts 1 day worth of rewards
-         get_balance(N(user11111111)));
+         get_balance("user11111111"_n));
 
 } FC_LOG_AND_RETHROW()
 
@@ -6043,13 +6043,13 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self, eosio_system_te
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = { N(user11111111), N(user22222222) };
+   const std::vector<account_name> accounts = { "user11111111"_n, "user22222222"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    // Placeholder for 0 tokens
    const asset zero_asset = {core_sym::from_string("0.0000")};
@@ -6066,27 +6066,27 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self, eosio_system_te
    const asset liquid_tokens_user1 = net_to_stake_user1 + cpu_to_stake_user1;
 
    // check user1's liquid tokens are zero before receiving any tokens
-   BOOST_REQUIRE_EQUAL(zero_asset, get_balance(N(user11111111)) );
+   BOOST_REQUIRE_EQUAL(zero_asset, get_balance("user11111111"_n) );
 
    // Transfer which puts liquid tokens into user11111111 account
-   transfer( N(eosio), N(user11111111), liquid_tokens_user1, N(eosio) );
-   BOOST_REQUIRE_EQUAL(liquid_tokens_user1, get_balance(N(user11111111)) );
+   transfer( "eosio"_n, "user11111111"_n, liquid_tokens_user1, "eosio"_n );
+   BOOST_REQUIRE_EQUAL(liquid_tokens_user1, get_balance("user11111111"_n) );
 
    // user1 stakes all her liquid tokens (delegates extra bw to herself)
-   BOOST_REQUIRE_EQUAL( success(), stake( N(user11111111), N(user11111111), net_to_stake_user1, cpu_to_stake_user1 ));
+   BOOST_REQUIRE_EQUAL( success(), stake( "user11111111"_n, "user11111111"_n, net_to_stake_user1, cpu_to_stake_user1 ));
 
    // in Between liquid tokens stake/unstake user1 locks genesis tokens
-   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
+   awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1 );
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
    // check liquid tokens are zero after staking them all
-   BOOST_REQUIRE_EQUAL(zero_asset, get_balance(N(user11111111)) );
+   BOOST_REQUIRE_EQUAL(zero_asset, get_balance("user11111111"_n) );
 
    // check total staked is now initially delegated-to-without-transfer
    // plus all liquid tokens which were staked
    // plus awardgenesis'ed tokens
-   auto total = get_total_stake( N(user11111111) );
+   auto total = get_total_stake( "user11111111"_n );
    BOOST_REQUIRE_EQUAL( net + locked_4_net + net_to_stake_user1, total["net_weight"].as<asset>());
    BOOST_REQUIRE_EQUAL( cpu + locked_4_cpu + cpu_to_stake_user1, total["cpu_weight"].as<asset>());
 
@@ -6094,38 +6094,38 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self, eosio_system_te
    // must wait 1 day since awardgenesis call
    // otherwise claimgenesis inside undelegatebw fails
    produce_block( fc::days(1) );
-   BOOST_REQUIRE_EQUAL( success(), unstake( N(user11111111), N(user11111111), net_to_stake_user1, cpu_to_stake_user1 ));
-   BOOST_REQUIRE_EQUAL( success(), claimgenesis( N(user11111111) ));
+   BOOST_REQUIRE_EQUAL( success(), unstake( "user11111111"_n, "user11111111"_n, net_to_stake_user1, cpu_to_stake_user1 ));
+   BOOST_REQUIRE_EQUAL( success(), claimgenesis( "user11111111"_n ));
 
    // rewards for 1 day period should be liquid
-   BOOST_REQUIRE_EQUAL( one_day_genesis_rewards, get_balance(N(user11111111)) );
+   BOOST_REQUIRE_EQUAL( one_day_genesis_rewards, get_balance("user11111111"_n) );
 
    // after 3 days refund takes place
    // so, user1's balance is only liquid tokens
    produce_block( fc::days(3) );
    BOOST_REQUIRE_EQUAL(  one_day_genesis_rewards
 		       + net_to_stake_user1
-		       + cpu_to_stake_user1, get_balance(N(user11111111)) );
+		       + cpu_to_stake_user1, get_balance("user11111111"_n) );
 
    // while awardgenesis'ed remain staked because
    // amount being unstaked is <= staked_liquid_tokens
    // this means, user1 genesis balance stays untouched
-   BOOST_REQUIRE_EQUAL( genesis_tokens_user1, get_genesis_balance( N(user11111111) ) );
+   BOOST_REQUIRE_EQUAL( genesis_tokens_user1, get_genesis_balance( "user11111111"_n ) );
 
    // Complete full period for claiming rewards
    produce_block( fc::days(2*365 + 366) );
-   claimgenesis( N(user11111111) );
+   claimgenesis( "user11111111"_n );
 
    // so, user1's balance is now full period rewards
    // plus already unstaked liquid tokens
    BOOST_REQUIRE(  genesis_tokens_user1 // -> full period equals initial genesis balance
 		       + net_to_stake_user1
 		       + cpu_to_stake_user1
-             >= get_balance(N(user11111111)));
+             >= get_balance("user11111111"_n));
    BOOST_REQUIRE(genesis_tokens_user1 // -> full period equals initial genesis balance
 		       + net_to_stake_user1
 		       + cpu_to_stake_user1
-             <= get_balance(N(user11111111)) + core_sym::from_string("0.0001"));
+             <= get_balance("user11111111"_n) + core_sym::from_string("0.0001"));
 
 } FC_LOG_AND_RETHROW()
 
@@ -6134,13 +6134,13 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self_no_unstake, eosi
    const uint64_t nonce = 1;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = { N(user11111111), N(user22222222) };
+   const std::vector<account_name> accounts = { "user11111111"_n, "user22222222"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    // Placeholder for 0 tokens
    const asset zero_asset = {core_sym::from_string("0.0000")};
@@ -6157,27 +6157,27 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self_no_unstake, eosi
    const asset liquid_tokens_user1 = net_to_stake_user1 + cpu_to_stake_user1;
 
    // check user1's liquid tokens are zero before receiving any tokens
-   BOOST_REQUIRE_EQUAL(zero_asset, get_balance(N(user11111111)) );
+   BOOST_REQUIRE_EQUAL(zero_asset, get_balance("user11111111"_n) );
 
    // Transfer which puts liquid tokens into user11111111 account
-   transfer( N(eosio), N(user11111111), liquid_tokens_user1, N(eosio) );
-   BOOST_REQUIRE_EQUAL(liquid_tokens_user1, get_balance(N(user11111111)) );
+   transfer( "eosio"_n, "user11111111"_n, liquid_tokens_user1, "eosio"_n );
+   BOOST_REQUIRE_EQUAL(liquid_tokens_user1, get_balance("user11111111"_n) );
 
    // user1 stakes all her liquid tokens (delegates extra bw to herself)
-   BOOST_REQUIRE_EQUAL( success(), stake( N(user11111111), N(user11111111), net_to_stake_user1, cpu_to_stake_user1 ));
+   BOOST_REQUIRE_EQUAL( success(), stake( "user11111111"_n, "user11111111"_n, net_to_stake_user1, cpu_to_stake_user1 ));
 
    // in Between liquid tokens stake/unstake user1 locks genesis tokens
-   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
+   awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1 );
 
    produce_block( fc::days(1) ); //Wait until July 1st
 
    // check liquid tokens are zero after staking them all
-   BOOST_REQUIRE_EQUAL(zero_asset, get_balance(N(user11111111)) );
+   BOOST_REQUIRE_EQUAL(zero_asset, get_balance("user11111111"_n) );
 
    // check total staked is now initially delegated-to-without-transfer
    // plus all liquid tokens which were staked
    // plus awardgenesis'ed tokens
-   auto total = get_total_stake( N(user11111111) );
+   auto total = get_total_stake( "user11111111"_n );
    BOOST_REQUIRE_EQUAL( net + locked_4_net + net_to_stake_user1, total["net_weight"].as<asset>());
    BOOST_REQUIRE_EQUAL( cpu + locked_4_cpu + cpu_to_stake_user1, total["cpu_weight"].as<asset>());
 
@@ -6185,24 +6185,24 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self_no_unstake, eosi
    // must wait 1 day since awardgenesis call
    // otherwise claimgenesis inside undelegatebw fails
    produce_block( fc::days(1) );
-   BOOST_REQUIRE_EQUAL( success(), claimgenesis( N(user11111111) ) );
+   BOOST_REQUIRE_EQUAL( success(), claimgenesis( "user11111111"_n ) );
 
    // rewards for 1 day period should be liquid
-   BOOST_REQUIRE_EQUAL( one_day_genesis_rewards, get_balance(N(user11111111)) );
+   BOOST_REQUIRE_EQUAL( one_day_genesis_rewards, get_balance("user11111111"_n) );
 
    // user1 genesis balance stays untouched
-   BOOST_REQUIRE_EQUAL( genesis_tokens_user1, get_genesis_balance( N(user11111111) ) );
+   BOOST_REQUIRE_EQUAL( genesis_tokens_user1, get_genesis_balance( "user11111111"_n ) );
 
    // Complete full period for claiming rewards
    produce_block( fc::days(2*365 + 366) );
-   claimgenesis( N(user11111111) );
+   claimgenesis( "user11111111"_n );
 
    // so, user1's balance is now full period rewards
    // plus already unstaked liquid tokens
    BOOST_REQUIRE(  genesis_tokens_user1 // -> full period equals initial genesis balance
-		      >= get_balance(N(user11111111)) );
+		      >= get_balance("user11111111"_n) );
    BOOST_REQUIRE(genesis_tokens_user1 // -> full period equals initial genesis balance
-		      <= core_sym::from_string("0.0001") + get_balance(N(user11111111)) );
+		      <= core_sym::from_string("0.0001") + get_balance("user11111111"_n) );
 
 } FC_LOG_AND_RETHROW()
 
@@ -6213,13 +6213,13 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_someone_else, eosio_s
    const auto three_years = 2*365 + 366;
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
-   const std::vector<account_name> accounts = { N(user11111111), N(user22222222) };
+   const std::vector<account_name> accounts = { "user11111111"_n, "user22222222"_n };
    for (const auto& a: accounts) {
       create_account_with_resources( a, config::system_account_name, core_sym::from_string("10.0000"), false, net, cpu );
    }
 
    // This transer creates a sub_balance for genesis.wax account
-   transfer( N(eosio), N(genesis.wax), core_sym::from_string("1000.0000"), N(eosio) );
+   transfer( "eosio"_n, "genesis.wax"_n, core_sym::from_string("1000.0000"), "eosio"_n );
 
    // Placeholder for 0 tokens
    const asset zero_asset = {core_sym::from_string("0.0000")};
@@ -6238,54 +6238,54 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_someone_else, eosio_s
    const asset liquid_tokens_user1 = net_to_stake_user2 + cpu_to_stake_user2;
 
    // check user1's liquid tokens are zero before receiving any tokens
-   BOOST_REQUIRE_EQUAL(zero_asset, get_balance(N(user11111111)) );
+   BOOST_REQUIRE_EQUAL(zero_asset, get_balance("user11111111"_n) );
 
    // Transfer which puts liquid tokens into user11111111 account
-   transfer( N(eosio), N(user11111111), liquid_tokens_user1, N(eosio) );
-   BOOST_REQUIRE_EQUAL(liquid_tokens_user1, get_balance(N(user11111111)) );
+   transfer( "eosio"_n, "user11111111"_n, liquid_tokens_user1, "eosio"_n );
+   BOOST_REQUIRE_EQUAL(liquid_tokens_user1, get_balance("user11111111"_n) );
 
    // user1 stakes all her liquid tokens to user2 (delegates extra bw to her friend)
-   BOOST_REQUIRE_EQUAL( success(), stake( N(user11111111), N(user22222222), net_to_stake_user2, cpu_to_stake_user2 ));
+   BOOST_REQUIRE_EQUAL( success(), stake( "user11111111"_n, "user22222222"_n, net_to_stake_user2, cpu_to_stake_user2 ));
 
    // in Between liquid tokens stake/unstake user1 locks genesis tokens
-   awardgenesis( N(user11111111), genesis_tokens_user1, nonce + 1 );
+   awardgenesis( "user11111111"_n, genesis_tokens_user1, nonce + 1 );
 
    // check liquid tokens are zero after staking them all
-   BOOST_REQUIRE_EQUAL(zero_asset, get_balance(N(user11111111)) );
+   BOOST_REQUIRE_EQUAL(zero_asset, get_balance("user11111111"_n) );
 
    produce_block(fc::days(1)); //Wait until July 1st
 
    // check total staked is now initially delegated-to-without-transfer
    // plus all liquid tokens which were staked
    // plus awardgenesis'ed tokens
-   auto total = get_total_stake( N(user11111111) );
+   auto total = get_total_stake( "user11111111"_n );
    BOOST_REQUIRE_EQUAL( net + locked_4_net, total["net_weight"].as<asset>());
    BOOST_REQUIRE_EQUAL( cpu + locked_4_cpu, total["cpu_weight"].as<asset>());
 
    // unstake half previously staked tokens after half the award interval (1.5 years)
    produce_block( fc::days(three_years / 2) );
-   BOOST_REQUIRE_EQUAL( success(), unstake( N(user11111111), N(user11111111), half_locked_4_net, half_locked_4_cpu ));
-   BOOST_REQUIRE_EQUAL( success(), claimgenesis( N(user11111111) ) );
+   BOOST_REQUIRE_EQUAL( success(), unstake( "user11111111"_n, "user11111111"_n, half_locked_4_net, half_locked_4_cpu ));
+   BOOST_REQUIRE_EQUAL( success(), claimgenesis( "user11111111"_n ) );
 
    // rewards for 1.5 year period should be liquid
-   BOOST_REQUIRE_EQUAL( half_locked_4_net + half_locked_4_cpu, get_balance(N(user11111111)) );
+   BOOST_REQUIRE_EQUAL( half_locked_4_net + half_locked_4_cpu, get_balance("user11111111"_n) );
 
    // after 3 days refund takes place
    // so, user1's balance is only liquid tokens
    produce_block( fc::days(3) );
-   BOOST_REQUIRE_EQUAL( locked_4_net + locked_4_cpu, get_balance(N(user11111111)) );
+   BOOST_REQUIRE_EQUAL( locked_4_net + locked_4_cpu, get_balance("user11111111"_n) );
 
    // while remaining half of awardgenesis'ed remain staked because
-   BOOST_REQUIRE_EQUAL( half_locked_4_net + half_locked_4_cpu, get_genesis_balance( N(user11111111) ) );
+   BOOST_REQUIRE_EQUAL( half_locked_4_net + half_locked_4_cpu, get_genesis_balance( "user11111111"_n ) );
 
    // Complete full period for claiming rewards
    produce_block( fc::days(three_years) );
-   claimgenesis( N(user11111111) );
+   claimgenesis( "user11111111"_n );
 
    // so, user1's balance is now full period rewards
    // plus already unstaked liquid tokens
-   BOOST_REQUIRE( locked_4_net + locked_4_cpu + half_locked_4_net >= get_balance(N(user11111111)));
-   BOOST_REQUIRE( locked_4_net + locked_4_cpu + half_locked_4_net - core_sym::from_string("0.0001") <= get_balance(N(user11111111)));
+   BOOST_REQUIRE( locked_4_net + locked_4_cpu + half_locked_4_net >= get_balance("user11111111"_n));
+   BOOST_REQUIRE( locked_4_net + locked_4_cpu + half_locked_4_net - core_sym::from_string("0.0001") <= get_balance("user11111111"_n));
 
 } FC_LOG_AND_RETHROW()
 
