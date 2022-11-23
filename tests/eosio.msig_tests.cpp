@@ -207,21 +207,14 @@ BOOST_FIXTURE_TEST_CASE( propose_approve_execute, eosio_msig_tester ) try {
                   ("level",         permission_level{ "alice"_n, config::active_name })
    );
 
-   transaction_trace_ptr trace;
-   control->applied_transaction.connect(
-   [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
-      const auto& t = std::get<0>(p);
-      if( t->scheduled ) { trace = t; }
-   } );
-   push_action( "alice"_n, "exec"_n, mvo()
+   auto r = push_action( "alice"_n, "exec"_n, mvo()
                   ("proposer",      "alice")
                   ("proposal_name", "first")
                   ("executer",      "alice")
    );
 
-   BOOST_REQUIRE( bool(trace) );
-   BOOST_REQUIRE_EQUAL( 1, trace->action_traces.size() );
-   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, trace->receipt->status );
+   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
 } FC_LOG_AND_RETHROW()
 
 
@@ -293,22 +286,14 @@ BOOST_FIXTURE_TEST_CASE( propose_approve_by_two, eosio_msig_tester ) try {
                   ("level",         permission_level{ "bob"_n, config::active_name })
    );
 
-   transaction_trace_ptr trace;
-   control->applied_transaction.connect(
-   [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
-      const auto& t = std::get<0>(p);
-      if( t->scheduled ) { trace = t; }
-   } );
-
-   push_action( "alice"_n, "exec"_n, mvo()
+   auto r = push_action( "alice"_n, "exec"_n, mvo()
                   ("proposer",      "alice")
                   ("proposal_name", "first")
                   ("executer",      "alice")
    );
 
-   BOOST_REQUIRE( bool(trace) );
-   BOOST_REQUIRE_EQUAL( 1, trace->action_traces.size() );
-   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, trace->receipt->status );
+   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
 } FC_LOG_AND_RETHROW()
 
 
@@ -376,22 +361,14 @@ BOOST_FIXTURE_TEST_CASE( big_transaction, eosio_msig_tester ) try {
                   ("level",         permission_level{ "bob"_n, config::active_name })
    );
 
-   transaction_trace_ptr trace;
-   control->applied_transaction.connect(
-   [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
-      const auto& t = std::get<0>(p);
-      if( t->scheduled ) { trace = t; }
-   } );
-
-   push_action( "alice"_n, "exec"_n, mvo()
+   auto r = push_action( "alice"_n, "exec"_n, mvo()
                   ("proposer",      "alice")
                   ("proposal_name", "first")
                   ("executer",      "alice")
    );
 
-   BOOST_REQUIRE( bool(trace) );
-   BOOST_REQUIRE_EQUAL( 1, trace->action_traces.size() );
-   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, trace->receipt->status );
+   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
 } FC_LOG_AND_RETHROW()
 
 
@@ -503,22 +480,15 @@ BOOST_FIXTURE_TEST_CASE( update_system_contract_all_approve, eosio_msig_tester )
                   ("level",         permission_level{ "carol"_n, config::active_name })
    );
    // execute by alice to replace the eosio system contract
-   transaction_trace_ptr trace;
-   control->applied_transaction.connect(
-   [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
-      const auto& t = std::get<0>(p);
-      if( t->scheduled ) { trace = t; }
-   } );
 
-   push_action( "alice"_n, "exec"_n, mvo()
+   auto r = push_action( "alice"_n, "exec"_n, mvo()
                   ("proposer",      "alice")
                   ("proposal_name", "first")
                   ("executer",      "alice")
    );
 
-   BOOST_REQUIRE( bool(trace) );
-   BOOST_REQUIRE_EQUAL( 1, trace->action_traces.size() );
-   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, trace->receipt->status );
+   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
 
    // can't create account because system contract was replaced by the reject_all contract
 
@@ -640,23 +610,16 @@ BOOST_FIXTURE_TEST_CASE( update_system_contract_major_approve, eosio_msig_tester
                   ("level",         permission_level{ "apple"_n, config::active_name })
    );
    // execute by alice to replace the eosio system contract
-   transaction_trace_ptr trace;
-   control->applied_transaction.connect(
-   [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
-      const auto& t = std::get<0>(p);
-      if( t->scheduled ) { trace = t; }
-   } );
 
    // execute by another producer different from proposer
-   push_action( "apple"_n, "exec"_n, mvo()
+   auto r = push_action( "apple"_n, "exec"_n, mvo()
                   ("proposer",      "alice")
                   ("proposal_name", "first")
                   ("executer",      "apple")
    );
 
-   BOOST_REQUIRE( bool(trace) );
-   BOOST_REQUIRE_EQUAL( 1, trace->action_traces.size() );
-   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, trace->receipt->status );
+   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
 
    // can't create account because system contract was replaced by the reject_all contract
 
@@ -742,22 +705,15 @@ BOOST_FIXTURE_TEST_CASE( propose_invalidate_approve, eosio_msig_tester ) try {
    );
 
    //successfully execute
-   transaction_trace_ptr trace;
-   control->applied_transaction.connect(
-   [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
-      const auto& t = std::get<0>(p);
-      if( t->scheduled ) { trace = t; }
-   } );
 
-   push_action( "bob"_n, "exec"_n, mvo()
+   auto r = push_action( "bob"_n, "exec"_n, mvo()
                   ("proposer",      "alice")
                   ("proposal_name", "first")
                   ("executer",      "bob")
    );
 
-   BOOST_REQUIRE( bool(trace) );
-   BOOST_REQUIRE_EQUAL( 1, trace->action_traces.size() );
-   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, trace->receipt->status );
+   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( approve_execute_old, eosio_msig_tester ) try {
@@ -785,22 +741,14 @@ BOOST_FIXTURE_TEST_CASE( approve_execute_old, eosio_msig_tester ) try {
                   ("level",         permission_level{ "alice"_n, config::active_name })
    );
 
-   transaction_trace_ptr trace;
-   control->applied_transaction.connect(
-   [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
-      const auto& t = std::get<0>(p);
-      if( t->scheduled ) { trace = t; }
-   } );
-
-   push_action( "alice"_n, "exec"_n, mvo()
+   auto r = push_action( "alice"_n, "exec"_n, mvo()
                   ("proposer",      "alice")
                   ("proposal_name", "first")
                   ("executer",      "alice")
    );
 
-   BOOST_REQUIRE( bool(trace) );
-   BOOST_REQUIRE_EQUAL( 1, trace->action_traces.size() );
-   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, trace->receipt->status );
+   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
 
 } FC_LOG_AND_RETHROW()
 
@@ -889,22 +837,14 @@ BOOST_FIXTURE_TEST_CASE( approve_by_two_old, eosio_msig_tester ) try {
                   ("level",         permission_level{ "bob"_n, config::active_name })
    );
 
-   transaction_trace_ptr trace;
-   control->applied_transaction.connect(
-   [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
-      const auto& t = std::get<0>(p);
-      if( t->scheduled ) { trace = t; }
-   } );
-
-   push_action( "alice"_n, "exec"_n, mvo()
+   auto r = push_action( "alice"_n, "exec"_n, mvo()
                   ("proposer",      "alice")
                   ("proposal_name", "first")
                   ("executer",      "alice")
    );
 
-   BOOST_REQUIRE( bool(trace) );
-   BOOST_REQUIRE_EQUAL( 1, trace->action_traces.size() );
-   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, trace->receipt->status );
+   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
 
 } FC_LOG_AND_RETHROW()
 
@@ -939,22 +879,14 @@ BOOST_FIXTURE_TEST_CASE( approve_with_hash, eosio_msig_tester ) try {
                   ("proposal_hash", trx_hash)
    );
 
-   transaction_trace_ptr trace;
-   control->applied_transaction.connect(
-   [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
-      const auto& t = std::get<0>(p);
-      if( t->scheduled ) { trace = t; }
-   } );
-
-   push_action( "alice"_n, "exec"_n, mvo()
+   auto r = push_action( "alice"_n, "exec"_n, mvo()
                   ("proposer",      "alice")
                   ("proposal_name", "first")
                   ("executer",      "alice")
    );
 
-   BOOST_REQUIRE( bool(trace) );
-   BOOST_REQUIRE_EQUAL( 1, trace->action_traces.size() );
-   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, trace->receipt->status );
+   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( switch_proposal_and_fail_approve_with_hash, eosio_msig_tester ) try {

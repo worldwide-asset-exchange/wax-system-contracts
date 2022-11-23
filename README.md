@@ -112,6 +112,11 @@ cd build/tests
 ctest -j $(nproc)
 ```
 
+Alternatively, use the prebuilt contracts development docker image to get up and running with contracts develompment quickly:
+1. Start the interactive shell: `make dev-docker-start`
+1. Run all the tests: `make test`
+1. Run a single test: `make compile && ./build/tests/unit_test --log_level=all --run_test=eosio_system_tests/producer_pay_as_gbm`
+
 ## License
 
 [MIT](LICENSE)

@@ -1,0 +1,12 @@
+ARG cdt_version=latest
+
+################################################################################
+FROM waxteam/cdt:${cdt_version}
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        make && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV CDT_BUILD_PATH=/tmp/cdt/build
+ENV LEAP_BUILD_PATH=/tmp/cdt/leap
