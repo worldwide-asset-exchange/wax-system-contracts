@@ -195,16 +195,6 @@ namespace eosiosystem {
       EOSLIB_SERIALIZE( eosio_global_state3, (last_vpay_state_update)(total_vpay_share_change_rate) )
    };
 
-   // Defines new global state parameters to store inflation rate and distribution
-   struct [[eosio::table("global4"), eosio::contract("eosio.system")]] eosio_global_state4 {
-      eosio_global_state4() { }
-      double   continuous_rate;
-      int64_t  inflation_pay_factor;
-      int64_t  votepay_factor;
-
-      EOSLIB_SERIALIZE( eosio_global_state4, (continuous_rate)(inflation_pay_factor)(votepay_factor) )
-   };
-
    inline eosio::block_signing_authority convert_to_block_signing_authority( const eosio::public_key& producer_key ) {
       return eosio::block_signing_authority_v0{ .threshold = 1, .keys = {{producer_key, 1}} };
    }
@@ -500,8 +490,6 @@ namespace eosiosystem {
 
    typedef eosio::singleton< "global3"_n, eosio_global_state3 > global_state3_singleton;
 
-   typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
-
    struct [[eosio::table, eosio::contract("eosio.system")]] user_resources {
       name          owner;
       asset         net_weight;
@@ -600,11 +588,9 @@ namespace eosiosystem {
          global_state_singleton  _global;
          global_state2_singleton _global2;
          global_state3_singleton _global3;
-	 global_state4_singleton _global4;
          eosio_global_state      _gstate;
          eosio_global_state2     _gstate2;
          eosio_global_state3     _gstate3;
-	 eosio_global_state4     _gstate4;
          rammarket               _rammarket;
          proposer_table          _proposers;
          proposal_table          _proposals;
@@ -1138,25 +1124,6 @@ namespace eosiosystem {
        void voteproposal(const name& voter_name, const std::vector<name>& proposals);
 
          /**
-          * Change the annual inflation rate of the core token supply and specify how
-          * the new issued tokens will be distributed based on the following structure.
-          *
-          * @param annual_rate - Annual inflation rate of the core token supply.
-          *     (eg. For 5% Annual inflation => annual_rate=500
-          *          For 1.5% Annual inflation => annual_rate=150
-          * @param inflation_pay_factor - Inverse of the fraction of the inflation used to reward block producers.
-          *     The remaining inflation will be sent to the `eosio.saving` account.
-          *     (eg. For 20% of inflation going to block producer rewards   => inflation_pay_factor = 50000
-          *          For 100% of inflation going to block producer rewards  => inflation_pay_factor = 10000).
-          * @param votepay_factor - Inverse of the fraction of the block producer rewards to be distributed proportional to blocks produced.
-          *     The remaining rewards will be distributed proportional to votes received.
-          *     (eg. For 25% of block producer rewards going towards block pay => votepay_factor = 40000
-          *          For 75% of block producer rewards going towards block pay => votepay_factor = 13333).
-          */
-         [[eosio::action]]
-         void setinflation( int64_t annual_rate, int64_t inflation_pay_factor, int64_t votepay_factor );
-
-         /**
           * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
           *
           * If either allow_perms or disallow_perms is non-empty, then opts into restrictions. If
@@ -1226,7 +1193,6 @@ namespace eosiosystem {
        using setwpsstate_action = eosio::action_wrapper<"setwpsstate"_n, &system_contract::setwpsstate>;
        using rejectfund_action = eosio::action_wrapper<"rejectfund"_n, &system_contract::rejectfund>;
        using voteproposal_action = eosio::action_wrapper<"voteproposal"_n, &system_contract::voteproposal>;
-         using setinflation_action = eosio::action_wrapper<"setinflation"_n, &system_contract::setinflation>;
 
       private:
          // WAX specifics
@@ -1247,7 +1213,6 @@ namespace eosiosystem {
 
          //defined in eosio.system.cpp
          static eosio_global_state get_default_parameters();
-         static eosio_global_state4 get_default_inflation_parameters();
          symbol core_symbol()const;
          void update_ram_supply();
 

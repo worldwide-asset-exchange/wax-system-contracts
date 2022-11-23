@@ -33,7 +33,7 @@ public:
       produce_blocks( 2 );
 
       create_accounts({ "eosio.token"_n, "eosio.ram"_n, "eosio.ramfee"_n, "eosio.stake"_n,
-               "eosio.bpay"_n, "eosio.voters"_n, "eosio.saving"_n, "eosio.names"_n, "eosio.rex"_n });
+               "eosio.bpay"_n, "eosio.voters"_n, "eosio.saving"_n, "eosio.names"_n, "eosio.rex"_n, "genesis.wax"_n });
 
       produce_blocks( 100 );
       set_code( "eosio.token"_n, contracts::token_wasm());
