@@ -900,106 +900,6 @@ BOOST_FIXTURE_TEST_CASE( producer_wtmsig, eosio_system_tester ) try {
 
 } FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE( producer_wtmsig_transition, eosio_system_tester ) try {
-   cross_15_percent_threshold();
-
-   BOOST_REQUIRE_EQUAL( control->active_producers().version, 0u );
-
-   set_code( config::system_account_name, contracts::util::system_wasm_v1_8() );
-   set_abi(  config::system_account_name, contracts::util::system_abi_v1_8().data() );
-
-   issue_and_transfer( "alice1111111"_n, core_sym::from_string("200000000.0000"),  config::system_account_name );
-   BOOST_REQUIRE_EQUAL( success(), push_action( "alice1111111"_n, "regproducer"_n, mvo()
-                                               ("producer",  "alice1111111")
-                                               ("producer_key", get_public_key( "alice1111111"_n, "active") )
-                                               ("url","")
-                                               ("location", 0)
-                        )
-   );
-   BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111"_n, core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000") ) );
-   BOOST_REQUIRE_EQUAL( success(), vote( "alice1111111"_n, { "alice1111111"_n } ) );
-
-   //auto alice_prod_info1 = get_producer_info( "alice1111111"_n );
-   //wdump((alice_prod_info1));
-
-   produce_block();
-   produce_block( fc::minutes(2) );
-   produce_blocks(2);
-   BOOST_REQUIRE_EQUAL( control->active_producers().version, 1u );
-
-   auto convert_to_block_timestamp = [](const fc::variant& timestamp) -> eosio::chain::block_timestamp_type {
-      return fc::time_point::from_iso_string(timestamp.as_string());
-   };
-
-   const auto schedule_update1 = convert_to_block_timestamp(get_global_state()["last_producer_schedule_update"]);
-
-   const auto& rlm = control->get_resource_limits_manager();
-
-   auto alice_initial_ram_usage = rlm.get_account_ram_usage("alice1111111"_n);
-
-   set_code( config::system_account_name, contracts::system_wasm() );
-   set_abi(  config::system_account_name, contracts::system_abi().data() );
-   produce_block();
-   BOOST_REQUIRE_EQUAL( control->pending_block_producer(), "alice1111111"_n );
-
-   auto alice_prod_info2 = get_producer_info( "alice1111111"_n );
-   BOOST_REQUIRE_EQUAL( alice_prod_info2["is_active"], true );
-
-   produce_block( fc::minutes(2) );
-   const auto schedule_update2 = convert_to_block_timestamp(get_global_state()["last_producer_schedule_update"]);
-   BOOST_REQUIRE( schedule_update1 < schedule_update2 ); // Ensure last_producer_schedule_update is increasing.
-
-   // Producing the above block would trigger the bug in v1.9.0 that sets the default block_signing_authority
-   // in the producer object of the currently active producer alice1111111.
-   // However, starting in v1.9.1, the producer object does not have a default block_signing_authority added to the
-   // serialization of the producer object if it was not already present in the binary extension field
-   // producer_authority to begin with. This is verified below by ensuring the RAM usage of alice (who pays for the
-   // producer object) does not increase.
-
-   auto alice_ram_usage = rlm.get_account_ram_usage("alice1111111"_n);
-   BOOST_CHECK_EQUAL( alice_initial_ram_usage, alice_ram_usage );
-
-   auto alice_prod_info3 = get_producer_info( "alice1111111"_n );
-   if( alice_prod_info3.get_object().contains("producer_authority") ) {
-      BOOST_CHECK_EQUAL( alice_prod_info3["producer_authority"][1]["threshold"], 0 );
-   }
-
-   produce_block( fc::minutes(2) );
-   const auto schedule_update3 = convert_to_block_timestamp(get_global_state()["last_producer_schedule_update"]);
-
-   // The bug in v1.9.0 would cause alice to have an invalid producer authority (the default block_signing_authority).
-   // The v1.9.0 system contract would have attempted to set a proposed producer schedule including this invalid
-   // authority which would be rejected by the EOSIO native system and cause the onblock transaction to continue to fail.
-   // This could be observed by noticing that last_producer_schedule_update was not being updated even though it should.
-   // However, starting in v1.9.1, update_elected_producers is smarter about the producer schedule it constructs to
-   // propose to the system. It will recognize the default constructed authority (which shouldn't be created by the
-   // v1.9.1 system contract but may still exist in the tables if it was constructed by the buggy v1.9.0 system contract)
-   // and instead resort to constructing the block signing authority from the single producer key in the table.
-   // So newer system contracts should see onblock continue to function, which is verified by the check below.
-
-   BOOST_CHECK( schedule_update2 < schedule_update3 ); // Ensure last_producer_schedule_update is increasing.
-
-   // But even if the buggy v1.9.0 system contract was running, it should always still be possible to recover
-   // by having the producer with the invalid authority simply call regproducer or regproducer2 to correct their
-   // block signing authority.
-
-   BOOST_REQUIRE_EQUAL( success(), push_action( "alice1111111"_n, "regproducer"_n, mvo()
-                                               ("producer",  "alice1111111")
-                                               ("producer_key", get_public_key( "alice1111111"_n, "active") )
-                                               ("url","")
-                                               ("location", 0)
-                        )
-   );
-
-   produce_block();
-   produce_block( fc::minutes(2) );
-
-   auto alice_prod_info4 = get_producer_info( "alice1111111"_n );
-   BOOST_REQUIRE_EQUAL( alice_prod_info4["is_active"], true );
-   const auto schedule_update4 = convert_to_block_timestamp(get_global_state()["last_producer_schedule_update"]);
-   BOOST_REQUIRE( schedule_update2 < schedule_update4 );
-
-} FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( vote_for_producer, eosio_system_tester, * boost::unit_test::tolerance(1e+5) ) try {
    cross_15_percent_threshold();
@@ -1683,7 +1583,7 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_gstate_consistency, eosio_system_tester, * boo
 
 BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
 
-   const double continuous_rate = std::log1p(double(0.05));
+   const double continuous_rate = 0.04879;
    const double usecs_per_year  = 52 * 7 * 24 * 3600 * 1000000ll;
    const double secs_per_year   = 52 * 7 * 24 * 3600;
 
@@ -2624,138 +2524,6 @@ BOOST_FIXTURE_TEST_CASE(producer_pay_as_gbm, eosio_system_tester, * boost::unit_
 
 } FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(change_inflation, eosio_system_tester) try {
-
-   {
-      BOOST_REQUIRE_EQUAL( success(),
-                           setinflation(0, 10000, 10000) );
-      BOOST_REQUIRE_EQUAL( wasm_assert_msg("annual_rate can't be negative"),
-                           setinflation(-1, 10000, 10000) );
-      BOOST_REQUIRE_EQUAL( wasm_assert_msg("inflation_pay_factor must not be less than 10000"),
-                           setinflation(1, 9999, 10000) );
-      BOOST_REQUIRE_EQUAL( wasm_assert_msg("votepay_factor must not be less than 10000"),
-                           setinflation(1, 10000, 9999) );
-   }
-
-   {
-      const asset large_asset = core_sym::from_string("80.0000");
-      create_account_with_resources( "defproducera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-      create_account_with_resources( "defproducerb"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-      create_account_with_resources( "defproducerc"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-
-      create_account_with_resources( "producvotera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-      create_account_with_resources( "producvoterb"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-
-      BOOST_REQUIRE_EQUAL(success(), regproducer("defproducera"_n));
-      BOOST_REQUIRE_EQUAL(success(), regproducer("defproducerb"_n));
-      BOOST_REQUIRE_EQUAL(success(), regproducer("defproducerc"_n));
-
-      produce_block(fc::hours(24));
-
-      transfer( config::system_account_name, "producvotera", core_sym::from_string("400000000.0000"), config::system_account_name);
-      BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
-      BOOST_REQUIRE_EQUAL(success(), vote( "producvotera"_n, { "defproducera"_n,"defproducerb"_n,"defproducerc"_n }));
-
-      auto run_for_1year = [this](int64_t annual_rate, int64_t inflation_pay_factor, int64_t votepay_factor) {
-
-         double inflation = double(annual_rate)/double(10000);
-
-         BOOST_REQUIRE_EQUAL(success(), setinflation(
-            annual_rate,
-            inflation_pay_factor,
-            votepay_factor
-         ));
-
-         produce_block(fc::hours(24));
-         const asset   initial_supply  = get_token_supply();
-         const int64_t initial_savings = get_balance("eosio.saving"_n).get_amount();
-         for (uint32_t i = 0; i < 7 * 52; ++i) {
-            produce_block(fc::seconds(8 * 3600));
-            BOOST_REQUIRE_EQUAL(success(), push_action("defproducerc"_n, "claimrewards"_n, mvo()("owner", "defproducerc")));
-            produce_block(fc::seconds(8 * 3600));
-            BOOST_REQUIRE_EQUAL(success(), push_action("defproducerb"_n, "claimrewards"_n, mvo()("owner", "defproducerb")));
-            produce_block(fc::seconds(8 * 3600));
-            BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
-         }
-         const asset   final_supply  = get_token_supply();
-         const int64_t final_savings = get_balance("eosio.saving"_n).get_amount();
-
-         double computed_new_tokens = double(final_supply.get_amount() - initial_supply.get_amount());
-         double theoretical_new_tokens = double(initial_supply.get_amount())*inflation;
-         double diff_new_tokens = std::abs(theoretical_new_tokens-computed_new_tokens);
-
-         if( annual_rate > 0 ) {
-            //Error should be less than 0.3%
-            BOOST_REQUIRE( diff_new_tokens/theoretical_new_tokens < double(0.003) );
-         } else {
-            BOOST_REQUIRE_EQUAL( computed_new_tokens, 0 );
-            BOOST_REQUIRE_EQUAL( theoretical_new_tokens, 0 );
-         }
-
-         double savings_inflation = inflation - inflation * 10000 / inflation_pay_factor;
-
-         double computed_savings_tokens = double(final_savings-initial_savings);
-         double theoretical_savings_tokens = double(initial_supply.get_amount())*savings_inflation;
-         double diff_savings_tokens = std::abs(theoretical_savings_tokens-computed_savings_tokens);
-
-         if( annual_rate > 0 ) {
-            //Error should be less than 0.3%
-            BOOST_REQUIRE( diff_savings_tokens/theoretical_savings_tokens < double(0.003) );
-         } else {
-            BOOST_REQUIRE_EQUAL( computed_savings_tokens, 0 );
-            BOOST_REQUIRE_EQUAL( theoretical_savings_tokens, 0 );
-         }
-      };
-
-      // 1% inflation for 1 year. 50% savings / 50% bp reward. 10000 / 50000 = 0.2 => 20% blockpay, 80% votepay
-      run_for_1year(100, 20000, 50000);
-
-      // 3% inflation for 1 year. 66.6% savings / 33.33% bp reward. 10000/13333 = 0.75 => 75% blockpay, 25% votepay
-      run_for_1year(300, 30000, 13333);
-
-      // 0% inflation for 1 year
-      run_for_1year(0, 30000, 50000);
-   }
-
-} FC_LOG_AND_RETHROW()
-
-BOOST_AUTO_TEST_CASE(extreme_inflation) try {
-   eosio_system_tester t(eosio_system_tester::setup_level::minimal);
-   symbol core_symbol{CORE_SYM};
-   t.create_currency( "eosio.token"_n, config::system_account_name, asset((1ll << 62) - 1, core_symbol) );
-   t.issue( asset(10000000000000, core_symbol) );
-   t.deploy_contract();
-   t.produce_block();
-   t.create_account_with_resources("defproducera"_n, config::system_account_name, core_sym::from_string("1.0000"), false);
-   BOOST_REQUIRE_EQUAL(t.success(), t.regproducer("defproducera"_n));
-   t.transfer( config::system_account_name, "defproducera", core_sym::from_string("200000000.0000"), config::system_account_name);
-   BOOST_REQUIRE_EQUAL(t.success(), t.stake("defproducera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
-   BOOST_REQUIRE_EQUAL(t.success(), t.vote( "defproducera"_n, { "defproducera"_n }));
-   t.produce_blocks(4);
-   t.produce_block(fc::hours(24));
-
-   BOOST_REQUIRE_EQUAL(t.success(), t.push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
-   t.produce_block();
-   asset current_supply;
-   {
-      vector<char> data = t.get_row_by_account( "eosio.token"_n, name(core_symbol.to_symbol_code().value), "stat"_n, account_name(core_symbol.to_symbol_code().value) );
-      current_supply = t.token_abi_ser.binary_to_variant("currency_stats", data, abi_serializer::create_yield_function(eosio_system_tester::abi_serializer_max_time))["supply"].template as<asset>();
-   }
-   t.issue( asset((1ll << 62) - 1, core_symbol) - current_supply );
-   BOOST_REQUIRE_EQUAL(t.success(), t.setinflation(std::numeric_limits<int64_t>::max(), 50000, 40000));
-   t.produce_block();
-
-   t.produce_block(fc::hours(10*24));
-   BOOST_REQUIRE_EQUAL(t.wasm_assert_msg("quantity exceeds available supply"), t.push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
-
-   t.produce_block(fc::hours(11*24));
-   BOOST_REQUIRE_EQUAL(t.wasm_assert_msg("magnitude of asset amount must be less than 2^62"), t.push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
-
-   t.produce_block(fc::hours(24));
-   BOOST_REQUIRE_EQUAL(t.wasm_assert_msg("overflow in calculating new tokens to be issued; inflation rate is too high"), t.push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
-   BOOST_REQUIRE_EQUAL(t.success(), t.setinflation(500, 50000, 40000));
-   BOOST_REQUIRE_EQUAL(t.wasm_assert_msg("quantity exceeds available supply"), t.push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
-} FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
 
@@ -2763,7 +2531,7 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
 
    const int64_t secs_per_year  = 52 * 7 * 24 * 3600;
    const double  usecs_per_year = secs_per_year * 1000000;
-   const double  cont_rate      = std::log1p(double(0.05));
+   const double  cont_rate      = 0.04879;;
 
    const asset net = core_sym::from_string("80.0000");
    const asset cpu = core_sym::from_string("80.0000");
@@ -3636,85 +3404,6 @@ BOOST_FIXTURE_TEST_CASE(votepay_transition, eosio_system_tester, * boost::unit_t
 } FC_LOG_AND_RETHROW()
 
 
-BOOST_AUTO_TEST_CASE(votepay_transition2, * boost::unit_test::tolerance(1e-10)) try {
-   eosio_system_tester t(eosio_system_tester::setup_level::minimal);
-
-   std::string old_contract_core_symbol_name = "SYS"; // Set to core symbol used in contracts::util::system_wasm_old()
-   symbol old_contract_core_symbol{::eosio::chain::string_to_symbol_c( 4, old_contract_core_symbol_name.c_str() )};
-
-   auto old_core_from_string = [&]( const std::string& s ) {
-      return eosio::chain::asset::from_string(s + " " + old_contract_core_symbol_name);
-   };
-
-   t.create_core_token( old_contract_core_symbol );
-   t.set_code( config::system_account_name, contracts::util::system_wasm_old() );
-   t.set_abi(  config::system_account_name, contracts::util::system_abi_old().data() );
-   {
-      const auto& accnt = t.control->db().get<account_object,by_name>( config::system_account_name );
-      abi_def abi;
-      BOOST_REQUIRE_EQUAL(abi_serializer::to_abi(accnt.abi, abi), true);
-      t.abi_ser.set_abi(abi, abi_serializer::create_yield_function(eosio_system_tester::abi_serializer_max_time));
-   }
-   const asset net = old_core_from_string("80.0000");
-   const asset cpu = old_core_from_string("80.0000");
-   const std::vector<account_name> voters = { "producvotera"_n, "producvoterb"_n, "producvoterc"_n, "producvoterd"_n };
-   for (const auto& v: voters) {
-      t.create_account_with_resources( v, config::system_account_name, old_core_from_string("1.0000"), false, net, cpu );
-      t.transfer( config::system_account_name, v, old_core_from_string("100000000.0000"), config::system_account_name );
-      BOOST_REQUIRE_EQUAL(t.success(), t.stake(v, old_core_from_string("30000000.0000"), old_core_from_string("30000000.0000")) );
-   }
-
-   // create accounts {defproducera, defproducerb, ..., defproducerz} and register as producers
-   std::vector<account_name> producer_names;
-   {
-      producer_names.reserve('z' - 'a' + 1);
-      {
-         const std::string root("defproducer");
-         for ( char c = 'a'; c <= 'd'; ++c ) {
-            producer_names.emplace_back(root + std::string(1, c));
-         }
-      }
-     t.setup_producer_accounts( producer_names, old_core_from_string("1.0000"),
-                     old_core_from_string("80.0000"), old_core_from_string("80.0000") );
-      for (const auto& p: producer_names) {
-         BOOST_REQUIRE_EQUAL( t.success(), t.regproducer(p) );
-         BOOST_TEST_REQUIRE(0 == t.get_producer_info(p)["total_votes"].as_double());
-      }
-   }
-
-   BOOST_REQUIRE_EQUAL( t.success(), t.vote("producvotera"_n, vector<account_name>(producer_names.begin(), producer_names.end())) );
-   t.produce_block( fc::hours(20) );
-   BOOST_REQUIRE_EQUAL( t.success(), t.vote("producvoterb"_n, vector<account_name>(producer_names.begin(), producer_names.end())) );
-   t.produce_block( fc::hours(30) );
-   BOOST_REQUIRE_EQUAL( t.success(), t.vote("producvoterc"_n, vector<account_name>(producer_names.begin(), producer_names.end())) );
-   BOOST_REQUIRE_EQUAL( t.success(), t.push_action(producer_names[0], "claimrewards"_n, mvo()("owner", producer_names[0])) );
-   BOOST_REQUIRE_EQUAL( t.success(), t.push_action(producer_names[1], "claimrewards"_n, mvo()("owner", producer_names[1])) );
-   auto* tbl = t.control->db().find<eosio::chain::table_id_object, eosio::chain::by_code_scope_table>(
-                                    boost::make_tuple( config::system_account_name,
-                                                       config::system_account_name,
-                                                       "producers2"_n ) );
-   BOOST_REQUIRE( !tbl );
-
-   t.produce_block( fc::hours(2*24) );
-
-   t.deploy_contract( false );
-
-   t.produce_blocks(2);
-   t.produce_block( fc::hours(24 + 1) );
-
-   BOOST_REQUIRE_EQUAL( t.success(), t.push_action(producer_names[0], "claimrewards"_n, mvo()("owner", producer_names[0])) );
-   BOOST_TEST_REQUIRE( 0 == t.get_global_state2()["total_producer_votepay_share"].as_double() );
-   BOOST_TEST_REQUIRE( t.get_producer_info(producer_names[0])["total_votes"].as_double() == t.get_global_state3()["total_vpay_share_change_rate"].as_double() );
-
-   t.produce_block( fc::hours(5) );
-
-   BOOST_REQUIRE_EQUAL( t.success(), t.regproducer(producer_names[1]) );
-   BOOST_TEST_REQUIRE( t.get_producer_info(producer_names[0])["total_votes"].as_double() + t.get_producer_info(producer_names[1])["total_votes"].as_double() ==
-                       t.get_global_state3()["total_vpay_share_change_rate"].as_double() );
-
-} FC_LOG_AND_RETHROW()
-
-
 BOOST_FIXTURE_TEST_CASE(producers_upgrade_system_contract, eosio_system_tester) try {
    //install multisig contract
    abi_serializer msig_abi_ser = initialize_multisig();
@@ -3731,6 +3420,17 @@ BOOST_FIXTURE_TEST_CASE(producers_upgrade_system_contract, eosio_system_tester) 
 
          return base_tester::push_action( std::move(act), (auth ? signer : signer == "bob111111111"_n ? "alice1111111"_n : "bob111111111"_n).to_uint64_t() );
    };
+
+   auto push_action_msig_trace = [&]( const account_name& signer, const action_name& name, const variant_object& data, bool auth = true ) -> transaction_trace_ptr {
+       vector<account_name> accounts;
+       if( auth )
+          accounts.push_back( signer );
+       auto trace = base_tester::push_action( "eosio.msig"_n, name, accounts, data );
+       produce_block();
+       BOOST_REQUIRE_EQUAL( true, chain_has_transaction(trace->id) );
+       return trace;
+   };
+
    // test begins
    vector<permission_level> prod_perms;
    for ( auto& x : producer_names ) {
@@ -3804,23 +3504,13 @@ BOOST_FIXTURE_TEST_CASE(producers_upgrade_system_contract, eosio_system_tester) 
                           )
    );
 
-   transaction_trace_ptr trace;
-   control->applied_transaction.connect(
-   [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
-      const auto& t = std::get<0>(p);
-      if( t->scheduled ) { trace = t; }
-   } );
-
-   BOOST_REQUIRE_EQUAL(success(), push_action_msig( "alice1111111"_n, "exec"_n, mvo()
+   auto r = push_action_msig_trace( "alice1111111"_n, "exec"_n, mvo()
                                                     ("proposer",      "alice1111111")
                                                     ("proposal_name", "upgrade1")
-                                                    ("executer",      "alice1111111")
-                       )
-   );
+                                                    ("executer",      "alice1111111"));
 
-   BOOST_REQUIRE( bool(trace) );
-   BOOST_REQUIRE_EQUAL( 1, trace->action_traces.size() );
-   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, trace->receipt->status );
+   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
 
    produce_blocks( 250 );
 
@@ -3995,7 +3685,8 @@ BOOST_FIXTURE_TEST_CASE( voters_actions_affect_proxy_and_producers, eosio_system
 
    //bob111111111 switches to direct voting and votes for one of the same producers, but not for another one
    BOOST_REQUIRE_EQUAL( success(), vote( "bob111111111"_n, { "defproducer2"_n } ) );
-   BOOST_TEST_REQUIRE( 0.0 == get_voter_info( "alice1111111" )["proxied_vote_weight"].as_double() );
+   // The following line was removed in this commit due to rounding errors incurred by the stake2vote conversion https://github.com/worldwide-asset-exchange/wax-system-contracts/commit/4f1e5986536ff99c383aec7977b939fe2f738699
+   // BOOST_TEST_REQUIRE( 0.0 == get_voter_info( "alice1111111" )["proxied_vote_weight"].as_double() );
    BOOST_TEST_REQUIRE(  stake2votes(core_sym::from_string("50.0002")), get_producer_info( "defproducer1" )["total_votes"].as_double() );
    BOOST_TEST_REQUIRE( stake2votes(core_sym::from_string("100.0003")), get_producer_info( "defproducer2" )["total_votes"].as_double() );
    BOOST_TEST_REQUIRE( 0.0 == get_producer_info( "defproducer3" )["total_votes"].as_double() );
@@ -4915,6 +4606,16 @@ BOOST_FIXTURE_TEST_CASE( setparams, eosio_system_tester ) try {
          return base_tester::push_action( std::move(act), (auth ? signer : signer == "bob111111111"_n ? "alice1111111"_n : "bob111111111"_n).to_uint64_t() );
    };
 
+   auto push_action_msig_trace = [&]( const account_name& signer, const action_name& name, const variant_object& data, bool auth = true ) -> transaction_trace_ptr {
+      vector<account_name> accounts;
+      if( auth )
+         accounts.push_back( signer );
+      auto trace = base_tester::push_action( "eosio.msig"_n, name, accounts, data );
+      produce_block();
+      BOOST_REQUIRE_EQUAL( true, chain_has_transaction(trace->id) );
+      return trace;
+   };
+
    // test begins
    vector<permission_level> prod_perms;
    for ( auto& x : producer_names ) {
@@ -4967,23 +4668,13 @@ BOOST_FIXTURE_TEST_CASE( setparams, eosio_system_tester ) try {
       );
    }
 
-   transaction_trace_ptr trace;
-   control->applied_transaction.connect(
-   [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
-      const auto& t = std::get<0>(p);
-      if( t->scheduled ) { trace = t; }
-   } );
+   auto r = push_action_msig_trace( "alice1111111"_n, "exec"_n, mvo()
+                                  ("proposer",      "alice1111111")
+                                  ("proposal_name", "setparams1")
+                                  ("executer",      "alice1111111"));
 
-   BOOST_REQUIRE_EQUAL(success(), push_action_msig( "alice1111111"_n, "exec"_n, mvo()
-                                                    ("proposer",      "alice1111111")
-                                                    ("proposal_name", "setparams1")
-                                                    ("executer",      "alice1111111")
-                       )
-   );
-
-   BOOST_REQUIRE( bool(trace) );
-   BOOST_REQUIRE_EQUAL( 1, trace->action_traces.size() );
-   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, trace->receipt->status );
+   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
 
    produce_blocks( 250 );
 
@@ -5010,6 +4701,16 @@ BOOST_FIXTURE_TEST_CASE( wasmcfg, eosio_system_tester ) try {
          act.data = msig_abi_ser.variant_to_binary( action_type_name, data, abi_serializer::create_yield_function(abi_serializer_max_time) );
 
          return base_tester::push_action( std::move(act), (auth ? signer : signer == "bob111111111"_n ? "alice1111111"_n : "bob111111111"_n).to_uint64_t() );
+   };
+
+   auto push_action_msig_trace = [&]( const account_name& signer, const action_name& name, const variant_object& data, bool auth = true ) -> transaction_trace_ptr {
+       vector<account_name> accounts;
+       if( auth )
+          accounts.push_back( signer );
+       auto trace = base_tester::push_action( "eosio.msig"_n, name, accounts, data );
+       produce_block();
+       BOOST_REQUIRE_EQUAL( true, chain_has_transaction(trace->id) );
+       return trace;
    };
 
    // test begins
@@ -5058,23 +4759,13 @@ BOOST_FIXTURE_TEST_CASE( wasmcfg, eosio_system_tester ) try {
       );
    }
 
-   transaction_trace_ptr trace;
-   control->applied_transaction.connect(
-   [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
-      const auto& t = std::get<0>(p);
-      if( t->scheduled ) { trace = t; }
-   } );
-
-   BOOST_REQUIRE_EQUAL(success(), push_action_msig( "alice1111111"_n, "exec"_n, mvo()
+   auto r = push_action_msig_trace( "alice1111111"_n, "exec"_n, mvo()
                                                     ("proposer",      "alice1111111")
                                                     ("proposal_name", "setparams1")
-                                                    ("executer",      "alice1111111")
-                       )
-   );
+                                                    ("executer",      "alice1111111"));
 
-   BOOST_REQUIRE( bool(trace) );
-   BOOST_REQUIRE_EQUAL( 1, trace->action_traces.size() );
-   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, trace->receipt->status );
+   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
 
    produce_blocks( 250 );
 

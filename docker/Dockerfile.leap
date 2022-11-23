@@ -1,0 +1,34 @@
+################################################################################
+FROM ubuntu:18.04 as build
+ARG deps_dir=.
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install \
+            build-essential             \
+            cmake                       \
+            curl                        \
+            g++-8                       \
+            git                         \
+            libcurl4-openssl-dev        \
+            libgmp-dev                  \
+            libssl-dev                  \
+            libusb-1.0-0-dev            \
+            llvm-7-dev                  \
+            pkg-config                  \
+            python3                     \
+            zlib1g-dev &&               \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp/leap
+COPY ${deps_dir}/leap .
+RUN curl -L https://boostorg.jfrog.io/artifactory/main/release/1.79.0/source/boost_1_79_0.tar.bz2 | tar jx && \
+    cd boost_1_79_0 &&                                                                                     \
+    ./bootstrap.sh --prefix=$HOME/boost1.79 &&                                                             \
+    ./b2 --with-iostreams --with-date_time --with-filesystem --with-system                                 \
+        --with-program_options --with-chrono --with-test -j$(nproc) install &&                             \
+    cd .. &&                                                                                               \
+    mkdir build &&                                                                                         \
+    cd build &&                                                                                            \
+    cmake -DCMAKE_C_COMPILER=gcc-8 -DCMAKE_CXX_COMPILER=g++-8                                              \
+        -DCMAKE_PREFIX_PATH="$HOME/boost1.79;/usr/lib/llvm-7/"  -DCMAKE_BUILD_TYPE=Release .. &&           \
+    make -j $(nproc) package
