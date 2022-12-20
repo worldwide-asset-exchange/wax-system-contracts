@@ -1,7 +1,11 @@
-DEV_VERSION = latest
+DEV_VERSION=latest
+DEV_DOCKER_IMAGE=waxteam/dev:$(DEV_VERSION)
 DEV_DOCKER_CONTAINER=contracts-development
 DEV_DOCKER_COMMON=-v `pwd`:/opt/contracts \
-			--name $(DEV_DOCKER_CONTAINER) -w /opt/contracts waxteam/dev:$(DEV_VERSION)
+			--name $(DEV_DOCKER_CONTAINER) -w /opt/contracts $(DEV_DOCKER_IMAGE)
+
+get-latest:
+	docker pull $(DEV_DOCKER_IMAGE)
 
 build:
 	mkdir -p build
@@ -13,7 +17,7 @@ compile: build
 
 .PHONY: clean
 clean:
-	rm -rf build
+	-rm -rf build
 
 .PHONY: test
 test: compile
@@ -24,5 +28,10 @@ dev-docker-stop:
 	-docker rm -f $(DEV_DOCKER_CONTAINER)
 
 .PHONY:dev-docker-start
-dev-docker-start: dev-docker-stop
+dev-docker-start: dev-docker-stop get-latest
 	docker run -it $(DEV_DOCKER_COMMON) bash
+
+# Useful for travis CI
+.PHONY:dev-docker-all
+dev-docker-all: dev-docker-stop get-latest
+	docker run $(DEV_DOCKER_COMMON) bash -c "make clean test"
