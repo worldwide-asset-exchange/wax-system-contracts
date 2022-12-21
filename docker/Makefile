@@ -1,7 +1,5 @@
-# LEAP_VERSION ?= v3.1.0
-# LEAP_REPO = https://github.com/AntelopeIO/leap.git
-LEAP_VERSION ?= v3.1.0-wax1
-LEAP_REPO = https://github.com/porkchop/leap.git
+LEAP_VERSION ?= wax-leap-3.2
+LEAP_REPO = https://github.com/worldwide-asset-exchange/wax-blockchain.git
 
 CDT_VERSION ?= v3.0.1
 CDT_REPO = https://github.com/AntelopeIO/cdt.git
@@ -23,7 +21,7 @@ clean-docker:
 get_leap: make_deps_dir
 	if [ ! -d $(DEPS_DIR)/leap ]; then \
         cd $(DEPS_DIR) && \
-        git clone -b $(LEAP_VERSION) $(LEAP_REPO) --recursive && \
+        git clone -b $(LEAP_VERSION) $(LEAP_REPO) leap --recursive && \
         cd leap; \
     else \
         cd $(DEPS_DIR)/leap && \
