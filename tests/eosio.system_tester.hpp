@@ -3,6 +3,7 @@
 #include <eosio/testing/tester.hpp>
 #include <eosio/chain/abi_serializer.hpp>
 #include <eosio/chain/resource_limits.hpp>
+#include <eosio/chain/resource_limits_private.hpp>
 #include "contracts.hpp"
 #include "test_symbol.hpp"
 
@@ -33,7 +34,7 @@ public:
       produce_blocks( 2 );
 
       create_accounts({ "eosio.token"_n, "eosio.ram"_n, "eosio.ramfee"_n, "eosio.stake"_n,
-               "eosio.bpay"_n, "eosio.voters"_n, "eosio.saving"_n, "eosio.names"_n, "eosio.rex"_n, "genesis.wax"_n });
+               "eosio.bpay"_n, "eosio.voters"_n, "eosio.saving"_n, "eosio.names"_n, "eosio.rex"_n, "genesis.wax"_n, "eosio.txfee"_n });
 
       produce_blocks( 100 );
       set_code( "eosio.token"_n, contracts::token_wasm());
@@ -200,6 +201,26 @@ public:
       set_transaction_headers(trx);
       trx.sign( get_private_key( creator, "active" ), control->get_chain_id()  );
       return push_transaction( trx );
+   }
+
+   transaction_trace_ptr push_tx_consume_cpu( account_name a, uint32_t billed_cpu_time_us = 20000 ) {
+      signed_transaction trx;
+      set_transaction_headers(trx);
+
+      auto rfo_alice = get_account_resource_fees(a);
+
+      authority owner_auth =  authority( get_public_key( a, "owner" ) );
+      trx.actions.emplace_back( get_action( config::system_account_name, "configaccfee"_n, vector<permission_level>{{a,config::active_name}},
+                                            mvo()
+                                            ("account",     a)
+                                            ("max_tx_fee", rfo_alice.max_fee_per_tx)
+                                            ("max_fee", rfo_alice.max_fee)
+                                          )
+                                );
+
+      set_transaction_headers(trx);
+      trx.sign( get_private_key( a, "active" ), control->get_chain_id()  );
+      return push_transaction( trx, fc::time_point::maximum(), billed_cpu_time_us );
    }
 
    transaction_trace_ptr setup_producer_accounts( const std::vector<account_name>& accounts,
@@ -370,6 +391,25 @@ public:
       control->get_resource_limits_manager().get_account_limits( a, ram_bytes, net, cpu );
       return cpu;
    };
+
+   action_result cfgfeeparams( const account_name& from, uint64_t cpu_fee_scaler,
+                       uint64_t free_block_cpu_threshold, uint64_t net_fee_scaler, uint64_t free_block_net_threshold) {
+      return push_action( name(from), "cfgfeeparams"_n, mvo()
+                          ("cpu_fee_scaler",     cpu_fee_scaler)
+                          ("free_block_cpu_threshold", free_block_cpu_threshold)
+                          ("net_fee_scaler", net_fee_scaler)
+                          ("free_block_net_threshold", free_block_net_threshold)
+      );
+   }
+
+   action_result configaccfee( const account_name& from, const name& account,
+                        int64_t max_tx_fee, int64_t max_fee) {
+      return push_action( name(from), "configaccfee"_n, mvo()
+                          ("account",     account)
+                          ("max_tx_fee", max_tx_fee)
+                          ("max_fee", max_fee)
+      );
+   }
 
    action_result deposit( const account_name& owner, const asset& amount ) {
       return push_action( name(owner), "deposit"_n, mvo()
@@ -775,6 +815,11 @@ public:
       return get_balance( account_name(act), balance_symbol );
    }
 
+   double get_wps_total_stake() {
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "wpsstate"_n, "wpsstate"_n );
+      return abi_ser.binary_to_variant( "wps_global_state", data, abi_serializer::create_yield_function(abi_serializer_max_time) )["total_stake"].as<double>();;
+   }
+
    fc::variant get_total_stake( const account_name& act ) {
       vector<char> data = get_row_by_account( config::system_account_name, act, "userres"_n, act );
       return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "user_resources", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
@@ -786,6 +831,18 @@ public:
    fc::variant get_delegated_bw( const account_name& act ) {
       vector<char> data = get_row_by_account( config::system_account_name, act, "delband"_n, act );
       return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "delegated_bandwidth", data, abi_serializer_max_time );
+   }
+
+   resource_limits::resource_fees_object get_account_resource_fees( const account_name& act ) {
+      return control->db().get<resource_limits::resource_fees_object, resource_limits::by_owner>(act);
+   }
+
+   resource_limits::resource_fees_object get_account_resource_fees( std::string_view act ) {
+      return control->db().get<resource_limits::resource_fees_object, resource_limits::by_owner>(account_name(act));
+   }
+
+   resource_limits::resource_fees_config_object get_resource_fee_config() {
+      return control->db().get<resource_limits::resource_fees_config_object>();
    }
 
    fc::variant get_voter_info( const account_name& act ) {

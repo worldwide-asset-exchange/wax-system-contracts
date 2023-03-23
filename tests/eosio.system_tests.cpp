@@ -734,6 +734,364 @@ BOOST_FIXTURE_TEST_CASE( stake_to_another_user_not_from_refund, eosio_system_tes
 
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE( stake_and_update_account_resouce_fees, eosio_system_tester ) try {
+   cross_15_percent_threshold();
+
+   issue_and_transfer( "alice1111111", core_sym::from_string("1000.0000"),  config::system_account_name );
+   BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111", core_sym::from_string("200.0000"), core_sym::from_string("100.0000") ) );
+
+   auto rfo_alice = get_account_resource_fees("alice1111111");
+   BOOST_REQUIRE_EQUAL(2000000, rfo_alice.net_weight);
+   BOOST_REQUIRE_EQUAL(1000000, rfo_alice.cpu_weight);
+
+   BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111", core_sym::from_string("20.0000"), core_sym::from_string("19.0000") ) );
+   rfo_alice = get_account_resource_fees("alice1111111");
+   BOOST_REQUIRE_EQUAL(2200000, rfo_alice.net_weight);
+   BOOST_REQUIRE_EQUAL(1190000, rfo_alice.cpu_weight);
+
+   issue_and_transfer( "bob111111111", core_sym::from_string("1000.0000"),  config::system_account_name );
+   BOOST_REQUIRE_EQUAL( success(), stake("bob111111111", "alice1111111", core_sym::from_string("50.0000"), core_sym::from_string("40.0000") ) );
+   rfo_alice = get_account_resource_fees("alice1111111");
+   BOOST_REQUIRE_EQUAL(2200000, rfo_alice.net_weight);
+   BOOST_REQUIRE_EQUAL(1190000, rfo_alice.cpu_weight);
+
+   // should be zero since bob has not stake for himself
+   auto rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(0, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(0, rfo_bob.cpu_weight);
+
+   // should update resource fee for bob since alice stake and transfer to bob
+   BOOST_REQUIRE_EQUAL( success(), stake_with_transfer( "alice1111111"_n, "bob111111111"_n, core_sym::from_string("22.0000"), core_sym::from_string("0.2222") ) );
+   rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(220000, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(2222, rfo_bob.cpu_weight);
+
+   // should update amount bob stake for himself
+   BOOST_REQUIRE_EQUAL( success(), stake( "bob111111111"_n, core_sym::from_string("10.0000"), core_sym::from_string("5.0000") ) );
+   rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(320000, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(52222, rfo_bob.cpu_weight);
+
+    // should not update since alice stake for bob but not transfer
+   BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111"_n, "bob111111111"_n, core_sym::from_string("10.0000"), core_sym::from_string("5.0000") ) );
+   rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(320000, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(52222, rfo_bob.cpu_weight);
+
+   rfo_alice = get_account_resource_fees("alice1111111");
+   BOOST_REQUIRE_EQUAL(2200000, rfo_alice.net_weight);
+   BOOST_REQUIRE_EQUAL(1190000, rfo_alice.cpu_weight);
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( unstake_and_update_account_resouce_fees, eosio_system_tester ) try {
+   cross_15_percent_threshold();
+
+   issue_and_transfer( "alice1111111", core_sym::from_string("1000.0000"),  config::system_account_name );
+   BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111", core_sym::from_string("300.0000"), core_sym::from_string("300.0000") ) );
+
+   auto rfo_alice = get_account_resource_fees("alice1111111");
+   BOOST_REQUIRE_EQUAL(3000000, rfo_alice.net_weight);
+   BOOST_REQUIRE_EQUAL(3000000, rfo_alice.cpu_weight);
+
+   issue_and_transfer( "bob111111111", core_sym::from_string("1000.0000"),  config::system_account_name );
+   BOOST_REQUIRE_EQUAL( success(), stake( "bob111111111", core_sym::from_string("300.0000"), core_sym::from_string("300.0000") ) );
+
+   auto rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(3000000, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(3000000, rfo_bob.cpu_weight);
+
+   issue_and_transfer( "alice1111111", core_sym::from_string("1000.0000"),  config::system_account_name );
+   BOOST_REQUIRE_EQUAL( success(), stake("alice1111111", "bob111111111", core_sym::from_string("100.0000"), core_sym::from_string("100.0000") ) );
+
+   BOOST_REQUIRE_EQUAL( success(), unstake( "alice1111111", "alice1111111", core_sym::from_string("100.0000"), core_sym::from_string("50.0000") ) );
+   rfo_alice = get_account_resource_fees("alice1111111");
+   BOOST_REQUIRE_EQUAL(2000000, rfo_alice.net_weight);
+   BOOST_REQUIRE_EQUAL(2500000, rfo_alice.cpu_weight);
+
+   BOOST_REQUIRE_EQUAL( success(), unstake( "bob111111111", "bob111111111", core_sym::from_string("0.0000"), core_sym::from_string("300.0000") ) );
+   rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(3000000, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(0, rfo_bob.cpu_weight);
+
+   // nothing change
+   BOOST_REQUIRE_EQUAL( success(), unstake( "alice1111111", "bob111111111", core_sym::from_string("10.0000"), core_sym::from_string("10.0000") ) );
+   rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(3000000, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(0, rfo_bob.cpu_weight);
+
+   rfo_alice = get_account_resource_fees("alice1111111");
+   BOOST_REQUIRE_EQUAL(2000000, rfo_alice.net_weight);
+   BOOST_REQUIRE_EQUAL(2500000, rfo_alice.cpu_weight);
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( stake_and_update_account_resouce_fees_subtract_consume, eosio_system_tester ) try {
+   cross_15_percent_threshold();
+
+   // lower scaler to lower charging fee
+   BOOST_REQUIRE_EQUAL( success(), cfgfeeparams(config::system_account_name, uint64_t(100000), uint64_t(0), uint64_t(100000), uint64_t(0)));
+   auto rfco = get_resource_fee_config();
+   BOOST_REQUIRE_EQUAL(100000, rfco.cpu_fee_scaler);
+   BOOST_REQUIRE_EQUAL(0, rfco.free_block_cpu_threshold);
+   BOOST_REQUIRE_EQUAL(100000, rfco.net_fee_scaler);
+   BOOST_REQUIRE_EQUAL(0, rfco.free_block_net_threshold);
+
+   // alice stake a lot
+   issue_and_transfer( "alice1111111", core_sym::from_string("100000000.0000"),  config::system_account_name );
+   BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111", core_sym::from_string("10000000.0000"), core_sym::from_string("10000000.0000") ) );
+
+   auto rfo_alice = get_account_resource_fees("alice1111111");
+   BOOST_REQUIRE_EQUAL(100000000000, rfo_alice.net_weight);
+   BOOST_REQUIRE_EQUAL(100000000000, rfo_alice.cpu_weight);
+
+   issue_and_transfer( "bob111111111", core_sym::from_string("100.0000"),  config::system_account_name );
+   // bob stake small portion of total
+   BOOST_REQUIRE_EQUAL( success(), stake("bob111111111", core_sym::from_string("0.1000"), core_sym::from_string("0.1000") ) );
+   BOOST_REQUIRE_EQUAL( success(), configaccfee(account_name("bob111111111"), account_name("bob111111111"), int64_t(-1), int64_t(-1)));
+
+   produce_block();
+
+   // simulate transaction of bob to charge consumed fee of bob
+   push_tx_consume_cpu(account_name("bob111111111"));
+   produce_block();
+   push_tx_consume_cpu(account_name("bob111111111"));
+
+   auto rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(1000, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(1000, rfo_bob.cpu_weight);
+   BOOST_REQUIRE_EQUAL(rfo_bob.cpu_consumed_weight > 0, true);
+   BOOST_REQUIRE_EQUAL(rfo_bob.net_consumed_weight, 0);
+
+   int64_t cpu_consumed_weight = rfo_bob.cpu_consumed_weight;
+
+   auto tx_fee_balance_before = get_balance( "eosio.txfee" );
+
+   produce_block();
+
+   // bob stake more, should subtract consumed from user stake
+   BOOST_REQUIRE_EQUAL( success(), stake("bob111111111", core_sym::from_string("2.0000"), core_sym::from_string("2.0000") ) );
+   rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(21000, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(21000 - cpu_consumed_weight, rfo_bob.cpu_weight);
+   BOOST_REQUIRE_EQUAL(rfo_bob.cpu_consumed_weight, 0);
+   BOOST_REQUIRE_EQUAL(rfo_bob.net_consumed_weight, 0);
+
+   auto staked = get_delegated_bw("bob111111111"_n);
+   BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), asset(21000, symbol{CORE_SYM}));
+   BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), asset(21000 - cpu_consumed_weight, symbol{CORE_SYM}));
+
+   auto total = get_total_stake( "bob111111111"_n );
+   // 10.000 delegate when create account, 0.1000 first stake, 2.0000 alice stake for bob
+   BOOST_REQUIRE_EQUAL( asset(121000 - cpu_consumed_weight, symbol{CORE_SYM}), total["cpu_weight"].as<asset>());
+   BOOST_REQUIRE_EQUAL( asset(121000, symbol{CORE_SYM}), total["net_weight"].as<asset>());
+
+   auto tx_fee_balance_after = get_balance( "eosio.txfee" );
+
+   // transfer consumed to fee account
+   BOOST_REQUIRE_EQUAL( ( tx_fee_balance_before + asset(cpu_consumed_weight, symbol{CORE_SYM}) ), tx_fee_balance_after);
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( unstake_and_update_account_resouce_fees_subtract_consume, eosio_system_tester ) try {
+   skip_validate = true;
+   cross_15_percent_threshold();
+
+   // lower scaler to lower charging fee
+   BOOST_REQUIRE_EQUAL( success(), cfgfeeparams(config::system_account_name, uint64_t(100000), uint64_t(0), uint64_t(100000), uint64_t(0)));
+   auto rfco = get_resource_fee_config();
+   BOOST_REQUIRE_EQUAL(100000, rfco.cpu_fee_scaler);
+   BOOST_REQUIRE_EQUAL(0, rfco.free_block_cpu_threshold);
+   BOOST_REQUIRE_EQUAL(100000, rfco.net_fee_scaler);
+   BOOST_REQUIRE_EQUAL(0, rfco.free_block_net_threshold);
+
+   // alice stake a lot
+   issue_and_transfer( "alice1111111", core_sym::from_string("100000000.0000"),  config::system_account_name );
+   BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111", core_sym::from_string("10000000.0000"), core_sym::from_string("10000000.0000") ) );
+
+   auto rfo_alice = get_account_resource_fees("alice1111111");
+   BOOST_REQUIRE_EQUAL(100000000000, rfo_alice.net_weight);
+   BOOST_REQUIRE_EQUAL(100000000000, rfo_alice.cpu_weight);
+
+   issue_and_transfer( "bob111111111", core_sym::from_string("100.0000"),  config::system_account_name );
+   // bob stake small portion of total
+   BOOST_REQUIRE_EQUAL( success(), stake("bob111111111", core_sym::from_string("0.1000"), core_sym::from_string("0.1000") ) );
+   BOOST_REQUIRE_EQUAL( success(), configaccfee(account_name("bob111111111"), account_name("bob111111111"), int64_t(-1), int64_t(-1)));
+
+   produce_block();
+
+   // simulate transaction of bob to charge consumed fee of bob
+   push_tx_consume_cpu(account_name("bob111111111"));
+   produce_block();
+   push_tx_consume_cpu(account_name("bob111111111"));
+   produce_block();
+
+   auto rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(1000, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(1000, rfo_bob.cpu_weight);
+   BOOST_REQUIRE_EQUAL(rfo_bob.cpu_consumed_weight > 0, true);
+   BOOST_REQUIRE_EQUAL(rfo_bob.net_consumed_weight, 0);
+
+   int64_t cpu_consumed_weight = rfo_bob.cpu_consumed_weight;
+
+   auto tx_fee_balance_before = get_balance( "eosio.txfee" );
+
+   // reset the resource accumulation after 24 hour
+   produce_block(fc::hours(24));
+
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("insufficient staked cpu bandwidth"), unstake("bob111111111", "bob111111111", core_sym::from_string("0.1000"), core_sym::from_string("0.1000") ) );
+
+   // bob stake more, should subtract consumed from user stake
+   BOOST_REQUIRE_EQUAL( success(), unstake("bob111111111", "bob111111111", core_sym::from_string("0.0100"), core_sym::from_string("0.0100") ) );
+   rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(1000 - 100, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(1000 - cpu_consumed_weight - 100, rfo_bob.cpu_weight);
+   BOOST_REQUIRE_EQUAL(rfo_bob.cpu_consumed_weight, 0);
+   BOOST_REQUIRE_EQUAL(rfo_bob.net_consumed_weight, 0);
+
+   auto staked = get_delegated_bw("bob111111111"_n);
+   BOOST_REQUIRE_EQUAL(staked["net_weight"].as<asset>(), asset(1000 - 100, symbol{CORE_SYM}));
+   BOOST_REQUIRE_EQUAL(staked["cpu_weight"].as<asset>(), asset(1000 - cpu_consumed_weight - 100, symbol{CORE_SYM}));
+
+   auto total = get_total_stake( "bob111111111"_n );
+   // 10.000 delegate when create account, 0.1000 first stake, 2.0000 alice stake for bob
+   BOOST_REQUIRE_EQUAL( asset(101000 - cpu_consumed_weight - 100, symbol{CORE_SYM}), total["cpu_weight"].as<asset>());
+   BOOST_REQUIRE_EQUAL( asset(101000 - 100, symbol{CORE_SYM}), total["net_weight"].as<asset>());
+
+   auto tx_fee_balance_after = get_balance( "eosio.txfee" );
+
+   // transfer consumed to fee account
+   BOOST_REQUIRE_EQUAL( ( tx_fee_balance_before + asset(cpu_consumed_weight, symbol{CORE_SYM}) ), tx_fee_balance_after);
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( update_vote_subtract_consume, eosio_system_tester, * boost::unit_test::tolerance(1e+5) ) try {
+   skip_validate = true;
+   cross_15_percent_threshold();
+
+   // lower scaler to lower charging fee
+   BOOST_REQUIRE_EQUAL( success(), cfgfeeparams(config::system_account_name, uint64_t(100000), uint64_t(0), uint64_t(100000), uint64_t(0)));
+   auto rfco = get_resource_fee_config();
+   BOOST_REQUIRE_EQUAL(100000, rfco.cpu_fee_scaler);
+   BOOST_REQUIRE_EQUAL(0, rfco.free_block_cpu_threshold);
+   BOOST_REQUIRE_EQUAL(100000, rfco.net_fee_scaler);
+   BOOST_REQUIRE_EQUAL(0, rfco.free_block_net_threshold);
+
+   double current_wps_total_stake = get_wps_total_stake();
+
+   // alice stake a lot
+   issue_and_transfer( "alice1111111", core_sym::from_string("100000000.0000"),  config::system_account_name );
+   BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111", core_sym::from_string("10000000.0000"), core_sym::from_string("10000000.0000") ) );
+
+   BOOST_REQUIRE_EQUAL(get_wps_total_stake(), current_wps_total_stake + 100000000000*2);
+   current_wps_total_stake = get_wps_total_stake();
+
+   auto rfo_alice = get_account_resource_fees("alice1111111");
+   BOOST_REQUIRE_EQUAL(100000000000, rfo_alice.net_weight);
+   BOOST_REQUIRE_EQUAL(100000000000, rfo_alice.cpu_weight);
+
+   issue_and_transfer( "bob111111111", core_sym::from_string("100.0000"),  config::system_account_name );
+   // bob stake small portion of total
+   BOOST_REQUIRE_EQUAL( success(), stake("bob111111111", core_sym::from_string("0.1000"), core_sym::from_string("0.1000") ) );
+   BOOST_REQUIRE_EQUAL( success(), configaccfee(account_name("bob111111111"), account_name("bob111111111"), int64_t(-1), int64_t(-1)));
+
+   BOOST_REQUIRE_EQUAL(get_wps_total_stake(), current_wps_total_stake + 1000*2);
+   current_wps_total_stake = get_wps_total_stake();
+
+   produce_block();
+
+   // simulate transaction of bob to charge consumed fee of bob
+   push_tx_consume_cpu(account_name("bob111111111"));
+   produce_block();
+   push_tx_consume_cpu(account_name("bob111111111"));
+   produce_block();
+
+   auto rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(1000, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(1000, rfo_bob.cpu_weight);
+   BOOST_REQUIRE_EQUAL(rfo_bob.cpu_consumed_weight > 0, true);
+   BOOST_REQUIRE_EQUAL(rfo_bob.net_consumed_weight, 0);
+
+   int64_t cpu_consumed_weight1 = rfo_bob.cpu_consumed_weight;
+
+   auto tx_fee_balance_before = get_balance( "eosio.txfee" );
+
+   // reset the resource accumulation after 24 hour
+   produce_block(fc::hours(24));
+
+   // bob stake more, should subtract consumed from user vote
+   BOOST_REQUIRE_EQUAL( success(), stake("bob111111111", core_sym::from_string("1.0000"), core_sym::from_string("1.0000") ) );
+   // first take 1000, second stake 10000 for each cpu and net
+   REQUIRE_MATCHING_OBJECT( voter( "bob111111111", asset(11000*2 - cpu_consumed_weight1, symbol{CORE_SYM}) ), get_voter_info( "bob111111111" ) );
+
+   BOOST_REQUIRE_EQUAL(get_wps_total_stake(), current_wps_total_stake + 10000*2 - cpu_consumed_weight1 );
+   current_wps_total_stake = get_wps_total_stake();
+
+   rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(11000, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(11000 - cpu_consumed_weight1, rfo_bob.cpu_weight);
+   BOOST_REQUIRE_EQUAL(rfo_bob.cpu_consumed_weight, 0);
+   BOOST_REQUIRE_EQUAL(rfo_bob.net_consumed_weight, 0);
+
+   produce_block();
+
+   // simulate transaction of bob to charge consumed fee of bob
+   push_tx_consume_cpu(account_name("bob111111111"), 25000);
+   produce_block();
+   push_tx_consume_cpu(account_name("bob111111111"));
+   produce_block();
+
+   rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(11000, rfo_bob.net_weight);
+   BOOST_REQUIRE_EQUAL(11000 - cpu_consumed_weight1, rfo_bob.cpu_weight);
+   BOOST_REQUIRE_EQUAL(rfo_bob.cpu_consumed_weight > 0, true);
+   BOOST_REQUIRE_EQUAL(rfo_bob.net_consumed_weight, 0);
+
+   int64_t cpu_consumed_weight2 = rfo_bob.cpu_consumed_weight;
+
+   // reset the resource accumulation after 24 hour
+   produce_block(fc::hours(24));
+   BOOST_REQUIRE_EQUAL( success(), unstake("bob111111111", "bob111111111", core_sym::from_string("0.0100"), core_sym::from_string("0.0100") ) );
+   // subtract cpu_consumed_weight2 and total 200 unstake of cpu and net
+   REQUIRE_MATCHING_OBJECT( voter( "bob111111111", asset(11000*2 - cpu_consumed_weight1 - 200 - cpu_consumed_weight2, symbol{CORE_SYM} ) ), get_voter_info( "bob111111111" ) );
+
+   BOOST_REQUIRE_EQUAL(get_wps_total_stake(), current_wps_total_stake - 100*2 - cpu_consumed_weight2 );
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( config_fee_params, eosio_system_tester ) try {
+   BOOST_REQUIRE_EQUAL( error("missing authority of eosio"),
+                      cfgfeeparams(account_name("alice1111111"), uint64_t(50000000000), uint64_t(0), uint64_t(50000000000), uint64_t(0))
+   );
+
+   BOOST_REQUIRE_EQUAL( success(), cfgfeeparams(config::system_account_name, uint64_t(50000000012), uint64_t(99), uint64_t(50000000034), uint64_t(88)));
+
+   auto rfco = get_resource_fee_config();
+   BOOST_REQUIRE_EQUAL(50000000012, rfco.cpu_fee_scaler);
+   BOOST_REQUIRE_EQUAL(99, rfco.free_block_cpu_threshold);
+   BOOST_REQUIRE_EQUAL(50000000034, rfco.net_fee_scaler);
+   BOOST_REQUIRE_EQUAL(88, rfco.free_block_net_threshold);
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( config_account_fee, eosio_system_tester ) try {
+   BOOST_REQUIRE_EQUAL( error("missing authority of alice1111111"),
+                      configaccfee(account_name("bob111111111"), account_name("alice1111111"), uint64_t(50000000000), uint64_t(100000000000))
+   );
+
+   BOOST_REQUIRE_EQUAL( success(), configaccfee(account_name("alice1111111"), account_name("alice1111111"), int64_t(50000000000), int64_t(100000000000)));
+
+   auto rfo_alice = get_account_resource_fees("alice1111111");
+   BOOST_REQUIRE_EQUAL(50000000000, rfo_alice.max_fee_per_tx);
+   BOOST_REQUIRE_EQUAL(100000000000, rfo_alice.max_fee);
+
+   BOOST_REQUIRE_EQUAL( success(), configaccfee(account_name("bob111111111"), account_name("bob111111111"), int64_t(0), int64_t(0)));
+
+   auto rfo_bob = get_account_resource_fees("bob111111111");
+   BOOST_REQUIRE_EQUAL(0, rfo_bob.max_fee_per_tx);
+   BOOST_REQUIRE_EQUAL(0, rfo_bob.max_fee);
+
+   BOOST_REQUIRE_EQUAL( success(), configaccfee(account_name("carol1111111"), account_name("carol1111111"), int64_t(-1), int64_t(-1)));
+
+   auto rfo_carol = get_account_resource_fees("carol1111111");
+   BOOST_REQUIRE_EQUAL(-1, rfo_carol.max_fee_per_tx);
+   BOOST_REQUIRE_EQUAL(-1, rfo_carol.max_fee);
+} FC_LOG_AND_RETHROW()
+
 // Tests for voting
 BOOST_FIXTURE_TEST_CASE( producer_register_unregister, eosio_system_tester ) try {
    issue_and_transfer( "alice1111111", core_sym::from_string("1000.0000"),  config::system_account_name );

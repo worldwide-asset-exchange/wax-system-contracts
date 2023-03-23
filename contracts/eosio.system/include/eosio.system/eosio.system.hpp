@@ -611,6 +611,7 @@ namespace eosiosystem {
          static constexpr eosio::name saving_account{"eosio.saving"_n};
          static constexpr eosio::name voters_account{"eosio.voters"_n};
          static constexpr eosio::name genesis_account{"genesis.wax"_n};
+         static constexpr eosio::name txfee_account{"eosio.txfee"_n};
          static constexpr eosio::name null_account{"eosio.null"_n};
          static constexpr symbol ramcore_symbol = symbol(symbol_code("RAMCORE"), 4);
          static constexpr symbol ram_symbol     = symbol(symbol_code("RAM"), 0);
@@ -1123,6 +1124,31 @@ namespace eosiosystem {
        [[eosio::action]]
        void voteproposal(const name& voter_name, const std::vector<name>& proposals);
 
+       /**
+       * Config parameter to calculate fee
+       *
+       * @param free_block_cpu_threshold - the value of the exponential moving block value, ema_block_cpu_ratio, at which fees start being charged
+       * @param cpu_fee_scaler - a constant that will be massaged experimentally to give reasonable fee values once the free threshold is passed in the exponential block moving average
+       * @param free_block_net_threshold - the value of the exponential moving block value, ema_block_net_ratio, at which fees start being charged
+       * @param net_fee_scaler - a constant that will be massaged experimentally to give reasonable fee values once the free threshold is passed in the exponential block moving average
+       *
+       */
+      [[eosio::action]]
+      void cfgfeeparams( uint64_t& cpu_fee_scaler, uint64_t& free_block_cpu_threshold,
+                          uint64_t& net_fee_scaler, uint64_t& free_block_net_threshold);
+
+       /**
+       * Config transaction fee for owner account
+       *
+       * @param owner - the account who want to config transaction fee
+       * @param max_tx_fee - maximum amount to pay for fee for each transaction
+       * @param enable - only charge for fee if it true
+       *
+       */
+      [[eosio::action]]
+      void configaccfee( const name& account,
+                        int64_t max_tx_fee, int64_t max_fee);
+
          /**
           * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
           *
@@ -1193,6 +1219,8 @@ namespace eosiosystem {
        using setwpsstate_action = eosio::action_wrapper<"setwpsstate"_n, &system_contract::setwpsstate>;
        using rejectfund_action = eosio::action_wrapper<"rejectfund"_n, &system_contract::rejectfund>;
        using voteproposal_action = eosio::action_wrapper<"voteproposal"_n, &system_contract::voteproposal>;
+       using configaccfee_action = eosio::action_wrapper<"configaccfee"_n, &system_contract::configaccfee>;
+       using cfgfeeparams_action = eosio::action_wrapper<"cfgfeeparams"_n, &system_contract::cfgfeeparams>;
 
       private:
          // WAX specifics

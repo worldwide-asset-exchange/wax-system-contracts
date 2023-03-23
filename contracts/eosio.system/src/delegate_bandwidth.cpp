@@ -203,6 +203,35 @@ namespace eosiosystem {
          }
       } // itr can be invalid, should go out of scope
 
+      int64_t consumed_net, consumed_cpu;
+      eosio::get_account_consumed_fees( receiver, consumed_net, consumed_cpu );
+      auto consumed_amount = consumed_net + consumed_cpu;
+
+      // update stake delegated from "receiver" to themself
+      // subtract amount of stake user has been used to pay fee
+      {
+         del_bandwidth_table     del_tbl( get_self(), receiver.value );
+         auto itr = del_tbl.find( receiver.value );
+         if( itr == del_tbl.end() ) {
+            check(consumed_net == 0, "insufficient staked net bandwidth");
+            check(consumed_cpu == 0, "insufficient staked cpu bandwidth");
+         } else {
+            if (consumed_amount > 0) {
+               del_tbl.modify( itr, same_payer, [&]( auto& dbo ){
+                     dbo.net_weight    -= asset(consumed_net, core_symbol());
+                     dbo.cpu_weight    -= asset(consumed_cpu, core_symbol());
+                  });
+               check( 0 <= itr->net_weight.amount, "insufficient self staked net bandwidth" );
+               check( 0 <= itr->cpu_weight.amount, "insufficient self staked cpu bandwidth" );
+               if ( itr->is_empty() ) {
+                  del_tbl.erase( itr );
+               }
+               update_voting_power( from, asset( -consumed_amount, core_symbol()) );
+            }
+            eosio::set_account_resource_fees(receiver, itr->net_weight.amount, itr->cpu_weight.amount);
+         }
+      }
+
       // update totals of "receiver"
       {
          user_resources_table   totals_tbl( get_self(), receiver.value );
@@ -210,13 +239,13 @@ namespace eosiosystem {
          if( tot_itr ==  totals_tbl.end() ) {
             tot_itr = totals_tbl.emplace( from, [&]( auto& tot ) {
                   tot.owner = receiver;
-                  tot.net_weight    = stake_net_delta;
-                  tot.cpu_weight    = stake_cpu_delta;
+                  tot.net_weight    = stake_net_delta - asset(consumed_net, core_symbol());
+                  tot.cpu_weight    = stake_cpu_delta - asset(consumed_cpu, core_symbol());
                });
          } else {
             totals_tbl.modify( tot_itr, from == receiver ? from : same_payer, [&]( auto& tot ) {
-                  tot.net_weight    += stake_net_delta;
-                  tot.cpu_weight    += stake_cpu_delta;
+                  tot.net_weight    += stake_net_delta - asset(consumed_net, core_symbol());;
+                  tot.cpu_weight    += stake_cpu_delta - asset(consumed_cpu, core_symbol());;
                });
          }
          check( 0 <= tot_itr->net_weight.amount, "insufficient staked total net bandwidth" );
@@ -338,7 +367,12 @@ namespace eosiosystem {
          }
       }
 
-      _wps_state.total_stake += (stake_net_delta.amount + stake_cpu_delta.amount);
+      if ( 0 < consumed_amount ) {
+         token::transfer_action transfer_act{ token_account, { {stake_account, active_permission} } };
+         transfer_act.send( stake_account, txfee_account, asset(consumed_amount, core_symbol()), "transaction fee" );
+      }
+
+      _wps_state.total_stake += (stake_net_delta.amount + stake_cpu_delta.amount - consumed_amount);
 
       update_voting_power( from, stake_net_delta + stake_cpu_delta );
    }
@@ -635,6 +669,37 @@ namespace eosiosystem {
       change_genesis(receiver);
    } // undelegatebw
 
+   void system_contract::cfgfeeparams( uint64_t& cpu_fee_scaler,
+                       uint64_t& free_block_cpu_threshold, uint64_t& net_fee_scaler, uint64_t& free_block_net_threshold)
+   {
+      require_auth(_self);
+
+      eosio::set_fees_parameters(cpu_fee_scaler, free_block_cpu_threshold, net_fee_scaler, free_block_net_threshold);
+   }
+
+   void system_contract::configaccfee( const name& account,
+                        int64_t max_tx_fee, int64_t max_fee)
+   {
+      require_auth(account);
+
+      // migrate for existing account
+      // get resource weight belong to that user
+      // set resource fee
+      // only set if consumed is zero
+      int64_t consumed_net, consumed_cpu;
+      eosio::get_account_consumed_fees( account, consumed_net, consumed_cpu );
+      if (consumed_net == 0 && consumed_cpu == 0) {
+         del_bandwidth_table     del_tbl( get_self(), account.value );
+         auto itr = del_tbl.find( account.value );
+         if( itr != del_tbl.end() ) {
+            if (itr->net_weight.amount > 0 || itr->cpu_weight.amount > 0 ) {
+               eosio::set_account_resource_fees(account, itr->net_weight.amount, itr->cpu_weight.amount);
+            }
+         }
+      }
+
+      eosio::config_account_fees(account, max_tx_fee, max_fee);
+   }
 
    void system_contract::refund( const name& owner ) {
       require_auth( owner );

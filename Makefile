@@ -1,5 +1,5 @@
-DEV_VERSION=latest
-DEV_DOCKER_IMAGE=waxteam/dev:$(DEV_VERSION)
+DEV_VERSION=charge-fee-test
+DEV_DOCKER_IMAGE=waxteam/cdt-dev:$(DEV_VERSION)
 DEV_DOCKER_CONTAINER=contracts-development
 DEV_DOCKER_COMMON=-v `pwd`:/opt/contracts \
 			--name $(DEV_DOCKER_CONTAINER) -w /opt/contracts $(DEV_DOCKER_IMAGE)
@@ -28,7 +28,7 @@ dev-docker-stop:
 	-docker rm -f $(DEV_DOCKER_CONTAINER)
 
 .PHONY:dev-docker-start
-dev-docker-start: dev-docker-stop get-latest
+dev-docker-start: dev-docker-stop
 	docker run -it $(DEV_DOCKER_COMMON) bash
 
 # Useful for travis CI
