@@ -1,5 +1,5 @@
 DEV_VERSION=latest
-DEV_DOCKER_IMAGE=waxteam/dev:$(DEV_VERSION)
+DEV_DOCKER_IMAGE=waxteam/waxdev:$(DEV_VERSION)
 DEV_DOCKER_CONTAINER=contracts-development
 DEV_DOCKER_COMMON=-v `pwd`:/opt/contracts \
 			--name $(DEV_DOCKER_CONTAINER) -w /opt/contracts $(DEV_DOCKER_IMAGE)
