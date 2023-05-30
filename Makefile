@@ -1,4 +1,4 @@
-DEV_VERSION=latest
+DEV_VERSION=v3.1.3wax02-v3.0.1
 DEV_DOCKER_IMAGE=waxteam/waxdev:$(DEV_VERSION)
 DEV_DOCKER_CONTAINER=contracts-development
 DEV_DOCKER_COMMON=-v `pwd`:/opt/contracts \
