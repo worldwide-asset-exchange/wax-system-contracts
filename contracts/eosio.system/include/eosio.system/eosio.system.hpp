@@ -612,6 +612,7 @@ namespace eosiosystem {
          static constexpr eosio::name voters_account{"eosio.voters"_n};
          static constexpr eosio::name genesis_account{"genesis.wax"_n};
          static constexpr eosio::name null_account{"eosio.null"_n};
+         static constexpr eosio::name guilds_account{"guilds.oig"_n};
          static constexpr symbol ramcore_symbol = symbol(symbol_code("RAMCORE"), 4);
          static constexpr symbol ram_symbol     = symbol(symbol_code("RAM"), 0);
 
@@ -1123,23 +1124,52 @@ namespace eosiosystem {
        [[eosio::action]]
        void voteproposal(const name& voter_name, const std::vector<name>& proposals);
 
-         /**
-          * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
-          *
-          * If either allow_perms or disallow_perms is non-empty, then opts into restrictions. If
-          * allow_perms is non-empty, then the authorized_by argument of the restricted actions must be in
-          * the vector, or the actions will abort. If disallow_perms is non-empty, then the authorized_by
-          * argument of the restricted actions must not be in the vector, or the actions will abort.
-          *
-          * If both allow_perms and disallow_perms are empty, then opts out of the restrictions. limitauthchg
-          * aborts if both allow_perms and disallow_perms are non-empty.
-          *
-          * @param account - account to change
-          * @param allow_perms - permissions which may use the restricted actions
-          * @param disallow_perms - permissions which may not use the restricted actions
-          */
-         [[eosio::action]]
-         void limitauthchg( const name& account, const std::vector<name>& allow_perms, const std::vector<name>& disallow_perms );
+      /**
+       * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
+       *
+       * If either allow_perms or disallow_perms is non-empty, then opts into restrictions. If
+       * allow_perms is non-empty, then the authorized_by argument of the restricted actions must be in
+       * the vector, or the actions will abort. If disallow_perms is non-empty, then the authorized_by
+       * argument of the restricted actions must not be in the vector, or the actions will abort.
+       *
+       * If both allow_perms and disallow_perms are empty, then opts out of the restrictions. limitauthchg
+       * aborts if both allow_perms and disallow_perms are non-empty.
+       *
+       * @param account - account to change
+       * @param allow_perms - permissions which may use the restricted actions
+       * @param disallow_perms - permissions which may not use the restricted actions
+       */
+      [[eosio::action]]
+      void limitauthchg( const name& account, const std::vector<name>& allow_perms, const std::vector<name>& disallow_perms );
+
+      /**
+       * fundguilds action to send top up amount of WAX to guilds.oig
+       *
+       * Should be called by guilds.oig contract or self
+       * Only able to call one time per day
+       * Amount of fund will be read from guild.oig contract table
+       * Fail if amount of fund grater than max_daily_guilds_fund
+       * 
+       */
+      [[eosio::action]]
+      void fundguilds();
+
+      /**
+       * configguilds action configure funding parameters to guilds.oig contract
+       *
+       * max_saving_balance after funding to guilds.oig, any amount greater than this threshold will be burned
+       * 
+       */
+      [[eosio::action]]
+      void configguilds(int64_t max_saving_balance);
+
+      /**
+       * burn amount of eosio.saving if balance greater than max_saving_balance
+       *
+       * 
+       */
+      [[eosio::action]]
+      void burnexsaving();
 
          using init_action = eosio::action_wrapper<"init"_n, &system_contract::init>;
          using setacctram_action = eosio::action_wrapper<"setacctram"_n, &system_contract::setacctram>;
@@ -1193,6 +1223,7 @@ namespace eosiosystem {
        using setwpsstate_action = eosio::action_wrapper<"setwpsstate"_n, &system_contract::setwpsstate>;
        using rejectfund_action = eosio::action_wrapper<"rejectfund"_n, &system_contract::rejectfund>;
        using voteproposal_action = eosio::action_wrapper<"voteproposal"_n, &system_contract::voteproposal>;
+       using burnexsaving_action = eosio::action_wrapper<"burnexsaving"_n, &system_contract::burnexsaving>;
 
       private:
          // WAX specifics

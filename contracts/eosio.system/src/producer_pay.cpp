@@ -1,5 +1,6 @@
 #include <eosio.system/eosio.system.hpp>
 #include <eosio.token/eosio.token.hpp>
+#include <eosio.system/guilds.hpp>
 
 namespace eosiosystem {
 
@@ -36,17 +37,20 @@ namespace eosiosystem {
       if( _gstate.last_pervote_bucket_fill == time_point() )  /// start the presses
          _gstate.last_pervote_bucket_fill = current_time_point();
 
-
+      
+      const auto guild_bp_pay_time = timestamp.to_time_point() > guild_bp_pay_start_time;
       /**
        * At startup the initial producer may not be one that is registered / elected
        * and therefore there may be no producer object for them.
        */
-      auto prod = _producers.find( producer.value );
-      if ( prod != _producers.end() ) {
-         _gstate.total_unpaid_blocks++;
-         _producers.modify( prod, same_payer, [&](auto& p ) {
-               p.unpaid_blocks++;
-         });
+      if (!guild_bp_pay_time) {
+         auto prod = _producers.find( producer.value );
+         if ( prod != _producers.end() ) {
+            _gstate.total_unpaid_blocks++;
+            _producers.modify( prod, same_payer, [&](auto& p ) {
+                  p.unpaid_blocks++;
+            });
+         }
       }
 
       /// only update block producers once every minute, block_timestamp is in half seconds
@@ -78,6 +82,7 @@ namespace eosiosystem {
       const auto ct = current_time_point();
       const auto usecs_since_last_fill = (ct - _gstate.last_pervote_bucket_fill).count();
 
+      const auto guild_bp_pay_time = ct > guild_bp_pay_start_time;
       if( usecs_since_last_fill > 0 && _gstate.last_pervote_bucket_fill > time_point() ) {
          const auto unstake_time = std::min(current_time_point(), gbm_final_time);
          const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
@@ -89,6 +94,17 @@ namespace eosiosystem {
          auto to_gbm           = to_voters * (delta_time_usec / double(useconds_in_gbm_period));
          new_tokens           += to_gbm;    // always 0 as of July 1, 2022
 
+         if (guild_bp_pay_time) {
+            if (_gstate.last_pervote_bucket_fill > guild_bp_pay_start_time) {
+               to_savings += to_per_block_pay;
+               to_per_block_pay = 0;
+            } else {
+               auto to_guild_bp_pay = (to_per_block_pay*double((ct - guild_bp_pay_start_time).count()))/double(usecs_since_last_fill);
+               to_savings += to_guild_bp_pay;
+               to_per_block_pay = to_per_block_pay - to_guild_bp_pay;
+            }
+         }
+
          {
             token::issue_action issue_act{ token_account, { {get_self(), active_permission} } };
             issue_act.send( get_self(), asset(new_tokens, core_symbol()), "issue tokens for producer pay and savings" );
@@ -97,7 +113,9 @@ namespace eosiosystem {
             token::transfer_action transfer_act{ token_account, { {get_self(), active_permission} } };
             transfer_act.send( get_self(), saving_account, asset(to_savings, core_symbol()), "unallocated inflation" );
             transfer_act.send( get_self(), voters_account, asset(to_voters, core_symbol()), "fund voters bucket" );
-            transfer_act.send( get_self(), bpay_account, asset(to_per_block_pay, core_symbol()), "fund bpay bucket" );
+            if (to_per_block_pay > 0) {
+               transfer_act.send( get_self(), bpay_account, asset(to_per_block_pay, core_symbol()), "fund bpay bucket" );
+            }
             if (to_gbm > 0) {
                transfer_act.send( get_self(), genesis_account, asset(to_gbm, core_symbol()), "fund gbm rewards bucket" );
             }

@@ -1,0 +1,495 @@
+{
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT ",
+    "version": "eosio::abi/1.2",
+    "types": [],
+    "structs": [
+        {
+            "name": "addelig",
+            "base": "",
+            "fields": [
+                {
+                    "name": "producer",
+                    "type": "name"
+                },
+                {
+                    "name": "balance",
+                    "type": "asset"
+                },
+                {
+                    "name": "memo",
+                    "type": "string"
+                }
+            ]
+        },
+        {
+            "name": "addguild",
+            "base": "",
+            "fields": [
+                {
+                    "name": "producer",
+                    "type": "name"
+                },
+                {
+                    "name": "score",
+                    "type": "uint32"
+                },
+                {
+                    "name": "target",
+                    "type": "time_point"
+                },
+                {
+                    "name": "eligibility",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "calcelig",
+            "base": "",
+            "fields": [
+                {
+                    "name": "target",
+                    "type": "time_point"
+                }
+            ]
+        },
+        {
+            "name": "claim",
+            "base": "",
+            "fields": [
+                {
+                    "name": "claimer",
+                    "type": "name"
+                },
+                {
+                    "name": "amount",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "claimtostake",
+            "base": "",
+            "fields": [
+                {
+                    "name": "claimer",
+                    "type": "name"
+                },
+                {
+                    "name": "receiver",
+                    "type": "name"
+                },
+                {
+                    "name": "cpu",
+                    "type": "asset"
+                },
+                {
+                    "name": "net",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "clearelig",
+            "base": "",
+            "fields": [
+                {
+                    "name": "lst_supply",
+                    "type": "asset"
+                },
+                {
+                    "name": "lst_proc",
+                    "type": "time_point"
+                }
+            ]
+        },
+        {
+            "name": "datapoint",
+            "base": "",
+            "fields": [
+                {
+                    "name": "id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "value",
+                    "type": "uint64"
+                },
+                {
+                    "name": "median",
+                    "type": "uint64"
+                },
+                {
+                    "name": "timestamp",
+                    "type": "time_point"
+                }
+            ]
+        },
+        {
+            "name": "evaluation",
+            "base": "",
+            "fields": [
+                {
+                    "name": "timestamp",
+                    "type": "time_point"
+                },
+                {
+                    "name": "minimum",
+                    "type": "uint32"
+                },
+                {
+                    "name": "decimals",
+                    "type": "uint8"
+                },
+                {
+                    "name": "type",
+                    "type": "uint8"
+                },
+                {
+                    "name": "scores",
+                    "type": "scoredata[]"
+                }
+            ]
+        },
+        {
+            "name": "guild",
+            "base": "",
+            "fields": [
+                {
+                    "name": "producer",
+                    "type": "name"
+                },
+                {
+                    "name": "score",
+                    "type": "uint32"
+                },
+                {
+                    "name": "prv_score",
+                    "type": "uint32"
+                },
+                {
+                    "name": "balance",
+                    "type": "asset"
+                },
+                {
+                    "name": "eligibility",
+                    "type": "asset"
+                },
+                {
+                    "name": "autopay",
+                    "type": "bool"
+                },
+                {
+                    "name": "retired",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "parachute",
+            "base": "",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                },
+                {
+                    "name": "base_price",
+                    "type": "uint64"
+                },
+                {
+                    "name": "adjustment",
+                    "type": "float64"
+                },
+                {
+                    "name": "resolution",
+                    "type": "float64"
+                },
+                {
+                    "name": "lst_payday",
+                    "type": "time_point"
+                },
+                {
+                    "name": "pending",
+                    "type": "asset"
+                },
+                {
+                    "name": "oig",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "procelig",
+            "base": "",
+            "fields": []
+        },
+        {
+            "name": "pusheval",
+            "base": "",
+            "fields": [
+                {
+                    "name": "minimum",
+                    "type": "uint32"
+                },
+                {
+                    "name": "decimals",
+                    "type": "uint8"
+                },
+                {
+                    "name": "scaling_threshhold",
+                    "type": "float64"
+                },
+                {
+                    "name": "type",
+                    "type": "uint8"
+                },
+                {
+                    "name": "scores",
+                    "type": "scoredata[]"
+                }
+            ]
+        },
+        {
+            "name": "retireguild",
+            "base": "",
+            "fields": [
+                {
+                    "name": "producer",
+                    "type": "name"
+                }
+            ]
+        },
+        {
+            "name": "scoredata",
+            "base": "",
+            "fields": [
+                {
+                    "name": "guild",
+                    "type": "name"
+                },
+                {
+                    "name": "score",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "setparachute",
+            "base": "",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                },
+                {
+                    "name": "base_price",
+                    "type": "uint64"
+                },
+                {
+                    "name": "lst_payday",
+                    "type": "time_point"
+                },
+                {
+                    "name": "adjustment",
+                    "type": "float64"
+                },
+                {
+                    "name": "resolution",
+                    "type": "float64"
+                }
+            ]
+        },
+        {
+            "name": "setstate",
+            "base": "",
+            "fields": [
+                {
+                    "name": "minimum",
+                    "type": "uint32"
+                },
+                {
+                    "name": "decimals",
+                    "type": "uint8"
+                },
+                {
+                    "name": "scaling_threshhold",
+                    "type": "float64"
+                },
+                {
+                    "name": "pending",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "state",
+            "base": "",
+            "fields": [
+                {
+                    "name": "top21",
+                    "type": "name[]"
+                },
+                {
+                    "name": "standby",
+                    "type": "name[]"
+                },
+                {
+                    "name": "reserves",
+                    "type": "asset"
+                },
+                {
+                    "name": "pending",
+                    "type": "asset"
+                },
+                {
+                    "name": "minimum",
+                    "type": "uint32"
+                },
+                {
+                    "name": "decimals",
+                    "type": "uint8"
+                },
+                {
+                    "name": "scaling_threshhold",
+                    "type": "float64"
+                },
+                {
+                    "name": "lst_supply",
+                    "type": "asset"
+                },
+                {
+                    "name": "lst_proc",
+                    "type": "time_point"
+                }
+            ]
+        },
+        {
+            "name": "tgglautopay",
+            "base": "",
+            "fields": [
+                {
+                    "name": "producer",
+                    "type": "name"
+                }
+            ]
+        },
+        {
+            "name": "vote",
+            "base": "",
+            "fields": []
+        }
+    ],
+    "actions": [
+        {
+            "name": "addelig",
+            "type": "addelig",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "addguild",
+            "type": "addguild",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "calcelig",
+            "type": "calcelig",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "claim",
+            "type": "claim",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "claimtostake",
+            "type": "claimtostake",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "clearelig",
+            "type": "clearelig",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "procelig",
+            "type": "procelig",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "pusheval",
+            "type": "pusheval",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "retireguild",
+            "type": "retireguild",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setparachute",
+            "type": "setparachute",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setstate",
+            "type": "setstate",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "tgglautopay",
+            "type": "tgglautopay",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "vote",
+            "type": "vote",
+            "ricardian_contract": ""
+        }
+    ],
+    "tables": [
+        {
+            "name": "datapoints",
+            "type": "datapoint",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "evaluations",
+            "type": "evaluation",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "guilds",
+            "type": "guild",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "parachute",
+            "type": "parachute",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "state",
+            "type": "state",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        }
+    ],
+    "kv_tables": {},
+    "ricardian_clauses": [],
+    "variants": [],
+    "action_results": []
+}
