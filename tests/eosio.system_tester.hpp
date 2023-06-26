@@ -756,14 +756,7 @@ public:
    }
 
    uint64_t add_gbm(uint64_t to_tokens) {
-      uint32_t seconds_per_day       = 24 * 3600;
-      int64_t  useconds_per_day      = int64_t(seconds_per_day) * 1000'000ll;
-      uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022
-      time_point gbm_initial_time(seconds(1561939200));     // July 1st 2019 00:00:00
-      time_point gbm_final_time = gbm_initial_time + microseconds(useconds_in_gbm_period);
-      const auto unstake_time = std::min(control->head_block_time(), gbm_final_time);
-      const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
-      return to_tokens + (to_tokens / 5) * 2 * (delta_time_usec / double(useconds_in_gbm_period));
+      return 0;
    }
 
    asset get_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {

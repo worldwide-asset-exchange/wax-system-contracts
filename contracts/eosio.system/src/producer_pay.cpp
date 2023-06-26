@@ -87,12 +87,10 @@ namespace eosiosystem {
          const auto unstake_time = std::min(current_time_point(), gbm_final_time);
          const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
          auto new_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
-         // needs to be 2/5 Savings, 2/5 Voters, 1/5 producers, GBM receives a linearly deflating share over three years, which has already expired as of July 1 2022
+         // needs to be 2/5 Savings, 2/5 Voters, 1/5 producers
          auto to_per_block_pay = new_tokens / 5;
          auto to_voters        = 2 * to_per_block_pay;
          auto to_savings       = new_tokens - (to_voters + to_per_block_pay);
-         auto to_gbm           = to_voters * (delta_time_usec / double(useconds_in_gbm_period));
-         new_tokens           += to_gbm;    // always 0 as of July 1, 2022
 
          if (guild_bp_pay_time) {
             if (_gstate.last_pervote_bucket_fill > guild_bp_pay_start_time) {
@@ -115,9 +113,6 @@ namespace eosiosystem {
             transfer_act.send( get_self(), voters_account, asset(to_voters, core_symbol()), "fund voters bucket" );
             if (to_per_block_pay > 0) {
                transfer_act.send( get_self(), bpay_account, asset(to_per_block_pay, core_symbol()), "fund bpay bucket" );
-            }
-            if (to_gbm > 0) {
-               transfer_act.send( get_self(), genesis_account, asset(to_gbm, core_symbol()), "fund gbm rewards bucket" );
             }
          }
 
