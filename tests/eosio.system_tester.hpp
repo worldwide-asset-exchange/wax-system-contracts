@@ -755,10 +755,6 @@ public:
       return data.empty() ? asset(0, balance_symbol) : abi_ser.binary_to_variant("genesis_tokens", data, abi_serializer_max_time)["balance"].as<asset>();
    }
 
-   uint64_t add_gbm(uint64_t to_tokens) {
-      return 0;
-   }
-
    asset get_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
       vector<char> data = get_row_by_account( "eosio.token"_n, act, "accounts"_n, account_name(balance_symbol.to_symbol_code().value) );
       return data.empty() ? asset(0, balance_symbol) : token_abi_ser.binary_to_variant("account", data, abi_serializer::create_yield_function(abi_serializer_max_time))["balance"].as<asset>();
