@@ -751,19 +751,6 @@ namespace eosiosystem {
                             const asset& unstake_net_quantity, const asset& unstake_cpu_quantity );
 
          /**
-          * Locks tokens on initial period for future rewards.
-          */
-         [[eosio::action]]
-         void awardgenesis( name receiver,
-                            const asset tokens, uint64_t nonce );
-
-         /**
-          * Reverts an awardgenesis action
-          */
-         [[eosio::action]]
-         void delgenesis( uint64_t nonce );
-
-         /**
           * Removing the amount of tokens from account's refunds
           */
          [[eosio::action]]
@@ -1147,8 +1134,6 @@ namespace eosiosystem {
          using setacctcpu_action = eosio::action_wrapper<"setacctcpu"_n, &system_contract::setacctcpu>;
          using activate_action = eosio::action_wrapper<"activate"_n, &system_contract::activate>;
          using delegatebw_action = eosio::action_wrapper<"delegatebw"_n, &system_contract::delegatebw>;
-         using awardgenesis_action = eosio::action_wrapper<"awardgenesis"_n, &system_contract::awardgenesis>;
-         using delgenesis_action = eosio::action_wrapper<"delgenesis"_n, &system_contract::delgenesis>;
          using removerefund_action = eosio::action_wrapper<"removerefund"_n, &system_contract::removerefund>;
          using claimgenesis_action = eosio::action_wrapper<"claimgenesis"_n, &system_contract::claimgenesis>;
          using undelegatebw_action = eosio::action_wrapper<"undelegatebw"_n, &system_contract::undelegatebw>;
@@ -1198,7 +1183,6 @@ namespace eosiosystem {
          // WAX specifics
 
          void claim_producer_rewards( const name owner, bool as_gbm );
-         void send_genesis_token( name from, name receiver, const asset tokens, bool add_backward_rewards = false);
          int64_t get_unclaimed_gbm_balance( name claimer );
          int64_t collect_voter_reward(const name owner);
          void fill_buckets();

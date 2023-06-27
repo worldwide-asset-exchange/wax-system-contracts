@@ -343,52 +343,6 @@ namespace eosiosystem {
       update_voting_power( from, stake_net_delta + stake_cpu_delta );
    }
 
-   void system_contract::awardgenesis( name receiver, const asset tokens, uint64_t nonce )
-   {
-     require_auth(genesis_account);
-
-     genesis_nonce_table genesis_nonce_tbl(_self, _self.value);
-     auto it = genesis_nonce_tbl.find(nonce);
-     check(it == genesis_nonce_tbl.end(), "Duplicated call: nonce already exists.");
-     genesis_nonce_tbl.emplace(genesis_account, [&]( auto& genesis_nonce ){
-        genesis_nonce.nonce = nonce;
-        genesis_nonce.awarded = tokens;
-        genesis_nonce.receiver = receiver;
-     });
-
-     send_genesis_token( genesis_account, receiver, tokens, true);
-   }
-
-   void system_contract::delgenesis( uint64_t nonce )
-   {
-      require_auth(genesis_account);
-
-      genesis_nonce_table genesis_nonce_tbl(_self, _self.value);
-      auto it = genesis_nonce_tbl.find(nonce);
-      check(it != genesis_nonce_tbl.end(), "Nonce does not exists.");
-      asset tokens = it->awarded;
-      name receiver = it->receiver;
-      genesis_nonce_tbl.erase(it);
-     
-      const asset zero_asset( 0, core_symbol() );
-
-      del_bandwidth_table del_bw_tbl( _self, receiver.value );
-      auto del_bw_itr = del_bw_tbl.find( receiver.value );
-      
-      if( del_bw_itr != del_bw_tbl.end() ) {
-         auto from_net = std::min(del_bw_itr->net_weight, tokens);
-         auto from_cpu = std::min(del_bw_itr->cpu_weight, tokens - from_net);
-         
-         if(from_net != zero_asset || from_cpu != zero_asset) {
-            system_contract::undelegatebw_action undelegatebw_act{ get_self(), { { receiver, active_permission } } };
-            undelegatebw_act.send(receiver, receiver, from_net, from_cpu);
-         }
-      }
-
-      system_contract::removerefund_action removerefund_act{ get_self(), { get_self(), active_permission } };
-      removerefund_act.send(receiver, tokens);
-   }
-
    void system_contract::removerefund( const name account, const asset tokens )
    {
       require_auth(_self);
@@ -441,48 +395,6 @@ namespace eosiosystem {
       if(wps_voter_itr != _wpsvoters.end()){
          update_wps_votes( voter, wps_voter_itr->proposals);
       }
-   }
-
-   void system_contract::send_genesis_token( name from, name receiver, const asset tokens, bool add_backward_rewards ){
-      const time_point ct = std::max(current_time_point(), gbm_initial_time);
-
-      check( is_account( receiver ), "receiver account does not exist");
-      check( tokens.is_valid(), "invalid tokens" );
-      check( tokens.amount > 0, "award quantity must be positive" );
-      check( tokens.symbol == core_symbol(), "only system tokens allowed" );
-
-      asset backward_rewards = asset(0, core_symbol());
-      if (add_backward_rewards && current_time_point() > gbm_initial_time) {
-         const int64_t elapsed_useconds = (current_time_point() - gbm_initial_time).count();
-         backward_rewards = asset(static_cast<int64_t>(tokens.amount * (elapsed_useconds / double(useconds_in_gbm_period))), core_symbol());
-      }
-
-      genesis_balance_table genesis_tbl( _self, receiver.value );
-      auto itr = genesis_tbl.find( core_symbol().code().raw() );
-
-      if( itr == genesis_tbl.end() ) {
-         itr = genesis_tbl.emplace( genesis_account, [&]( auto& genesis_token ){
-               genesis_token.last_updated      = ct;
-               genesis_token.last_claim_time   = ct;
-               genesis_token.balance           = tokens;
-               genesis_token.unclaimed_balance = backward_rewards;
-         });
-      }
-      else {
-         const auto unclaimed_balance = get_unclaimed_gbm_balance(receiver);
-         genesis_tbl.modify( itr, genesis_account, [&]( auto& genesis_token ){
-               genesis_token.balance += tokens;
-               genesis_token.unclaimed_balance = asset(unclaimed_balance, core_symbol()) + backward_rewards;
-               genesis_token.last_updated = ct;
-         });
-      }
-
-      auto net_amount = tokens.amount / 2;
-      asset to_net(net_amount, core_symbol());
-      asset to_cpu(tokens.amount - net_amount, core_symbol());
-
-      system_contract::delegatebw_action delegatebw_act{ get_self(), { {from, active_permission}, {receiver, active_permission} } };
-      delegatebw_act.send(from, receiver, to_net, to_cpu, true);
    }
 
    int64_t system_contract::get_unclaimed_gbm_balance( name claimer )
