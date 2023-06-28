@@ -56,8 +56,6 @@ public:
    void deploy_contract( bool call_init = true ) {
       set_code( config::system_account_name, contracts::system_wasm() );
       set_abi( config::system_account_name, contracts::system_abi().data() );
-      // set_code( config::system_account_name, contracts::util::system_wasm_v3_1() );
-      // set_abi( config::system_account_name, contracts::util::system_abi_v3_1().data() );
       if( call_init ) {
          base_tester::push_action(config::system_account_name, "init"_n,
                                                config::system_account_name,  mutable_variant_object()
