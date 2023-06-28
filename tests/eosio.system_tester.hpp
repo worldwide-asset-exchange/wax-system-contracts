@@ -56,6 +56,8 @@ public:
    void deploy_contract( bool call_init = true ) {
       set_code( config::system_account_name, contracts::system_wasm() );
       set_abi( config::system_account_name, contracts::system_abi().data() );
+      // set_code( config::system_account_name, contracts::util::system_wasm_v3_1() );
+      // set_abi( config::system_account_name, contracts::util::system_abi_v3_1().data() );
       if( call_init ) {
          base_tester::push_action(config::system_account_name, "init"_n,
                                                config::system_account_name,  mutable_variant_object()
@@ -63,6 +65,18 @@ public:
                                                ("core", CORE_SYM_STR)
          );
       }
+
+      {
+         const auto& accnt = control->db().get<account_object,by_name>( config::system_account_name );
+         abi_def abi;
+         BOOST_REQUIRE_EQUAL(abi_serializer::to_abi(accnt.abi, abi), true);
+         abi_ser.set_abi(abi, abi_serializer::create_yield_function(abi_serializer_max_time));
+      }
+   }
+
+   void deploy_system_v31_contract( ) {
+      set_code( config::system_account_name, contracts::util::system_wasm_v3_1() );
+      set_abi( config::system_account_name, contracts::util::system_abi_v3_1().data() );
 
       {
          const auto& accnt = control->db().get<account_object,by_name>( config::system_account_name );
@@ -250,13 +264,6 @@ public:
 	         "genesis.wax"_n,
 	         "awardgenesis"_n,
 		 mvo()( "receiver",receiver)("tokens",tokens)("nonce",nonce) );
-   }
-
-   action_result delgenesis( uint64_t nonce ) {
-      return push_action(
-	         "genesis.wax"_n,
-	         "delgenesis"_n,
-		 mvo()("nonce",nonce) );
    }
 
    action_result claimgenesis( const account_name& claimer ) {
