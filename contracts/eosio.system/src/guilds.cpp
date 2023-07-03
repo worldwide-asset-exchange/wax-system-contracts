@@ -22,9 +22,14 @@ namespace eosiosystem {
 
     guild_funding_state_singleton guild_funding_state(_self, _self.value);
     auto guild_funding_status = guild_funding_state.get_or_create(_self);
-    check( ct - guild_funding_status.lst_fund > microseconds(useconds_per_day), "already funded within past day" );
+    check( ct - guild_funding_status.lst_fund >= microseconds(useconds_per_day), "already funded within past day" );
 
-    guild_funding_status.lst_fund = ct;
+    if ( guild_funding_status.lst_fund == time_point()) {
+      guild_funding_status.lst_fund = ct;  
+    } else {
+      uint32_t days_since_last_claim = (ct - guild_funding_status.lst_fund).count()/useconds_per_day;
+      guild_funding_status.lst_fund = guild_funding_status.lst_fund + time_point(microseconds(useconds_per_day*days_since_last_claim));
+    }
     guild_funding_state.set(guild_funding_status, get_self());
 
     if (guild_contract_status.pending.amount > 0) {

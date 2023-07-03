@@ -71,7 +71,7 @@ core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
     set_code( "guilds.oig"_n, contracts::util::guilds_wasm() );
     set_abi( "guilds.oig"_n, contracts::util::guilds_abi().data() );
 
-    set_guilds_pending_fund(322'000'00000000);
+    set_guilds_pending_fund(801'000'00000000);
     produce_block();
     produce_block( fc::days(365 * 4 + 16) );
 
@@ -128,7 +128,8 @@ core_sym::from_string("100.0000"), core_sym::from_string("100.0000"));
     BOOST_REQUIRE_EQUAL(guilds_balance.get_amount(), 10'00000000);
 
     auto funding_state = get_funding_state();
-    BOOST_REQUIRE_EQUAL(funding_state["lst_fund"].as<time_point>() > lastest_block_before_funding->timestamp.to_time_point(), true);
+    auto last_funding_time = funding_state["lst_fund"].as<time_point>();
+    BOOST_REQUIRE_EQUAL(last_funding_time > lastest_block_before_funding->timestamp.to_time_point(), true);
 
     auto usecs_between_fills = claim_time - initial_claim_time;
     int64_t new_tokens = (initial_supply.get_amount() * double(usecs_between_fills) * continuous_rate) / usecs_per_year;
@@ -158,6 +159,9 @@ core_sym::from_string("100.0000"), core_sym::from_string("100.0000"));
     const asset saving_balance_after_burn = get_balance("eosio.saving"_n);
     // all saving token exceed limit are burned
     BOOST_REQUIRE_EQUAL(saving_balance_after_burn.get_amount(), 123'00000000);
+
+    funding_state = get_funding_state();
+    BOOST_REQUIRE_EQUAL(funding_state["lst_fund"].as<time_point>().sec_since_epoch() == last_funding_time.sec_since_epoch() + 24*60*60, true);
 
     global_state      = get_global_state();
     claim_time        = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );

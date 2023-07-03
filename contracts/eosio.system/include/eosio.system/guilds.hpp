@@ -5,7 +5,7 @@
 
 namespace eosiosystem {
   static const time_point guild_bp_pay_start_time(eosio::seconds(1689379200));     // July 15st 2023 00:00:00
-  static constexpr int64_t  max_daily_guilds_fund = 321'000'00000000; // to_savings + to_per_block_pay per day
+  static constexpr int64_t  max_daily_guilds_fund = 800'000'00000000; // to_savings + to_per_block_pay per day
   TABLE guild_contract_state { 
         vector<name> top21;         // top21 guilds sorted by score
         vector<name> standby;
@@ -26,7 +26,7 @@ namespace eosiosystem {
    */
    struct [[eosio::table("guildstate"), eosio::contract("eosio.system")]] guild_funding_state {
       time_point  lst_fund = time_point();
-      int64_t     max_saving_balance = 1'000'000'00000000;
+      int64_t     max_saving_balance = 1'000'000'000'00000000;
 
       EOSLIB_SERIALIZE( guild_funding_state, (lst_fund)(max_saving_balance) )
    };
