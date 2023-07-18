@@ -674,10 +674,10 @@ namespace eosiosystem {
    {
       require_auth(_self);
 
-      eosio::set_fees_parameters(cpu_fee_scaler, free_block_cpu_threshold, net_fee_scaler, free_block_net_threshold);
+      eosio::set_fee_parameters(cpu_fee_scaler, free_block_cpu_threshold, net_fee_scaler, free_block_net_threshold);
    }
 
-   void system_contract::configaccfee( const name& account,
+   void system_contract::cfgacountfee( const name& account,
                         int64_t max_tx_fee, int64_t max_fee)
    {
       require_auth(account);
@@ -687,18 +687,18 @@ namespace eosiosystem {
       // set resource fee
       // only set if consumed is zero
       int64_t consumed_net, consumed_cpu;
-      eosio::get_fee_consumption( account, consumed_net, consumed_cpu );
+      get_fee_consumption( account, consumed_net, consumed_cpu );
       if (consumed_net == 0 && consumed_cpu == 0) {
          del_bandwidth_table     del_tbl( get_self(), account.value );
          auto itr = del_tbl.find( account.value );
          if( itr != del_tbl.end() ) {
             if (itr->net_weight.amount > 0 || itr->cpu_weight.amount > 0 ) {
-               eosio::set_fee_limits(account, itr->net_weight.amount, itr->cpu_weight.amount);
+               set_fee_limits(account, itr->net_weight.amount, itr->cpu_weight.amount);
             }
          }
       }
 
-      eosio::config_fee_limits(account, max_tx_fee, max_fee);
+      config_fee_limits(account, max_tx_fee, max_fee);
    }
 
    void system_contract::refund( const name& owner ) {
