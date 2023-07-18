@@ -204,7 +204,7 @@ namespace eosiosystem {
       } // itr can be invalid, should go out of scope
 
       int64_t consumed_net, consumed_cpu;
-      eosio::get_account_consumed_fees( receiver, consumed_net, consumed_cpu );
+      get_fee_consumption( receiver, consumed_net, consumed_cpu );
       auto consumed_amount = consumed_net + consumed_cpu;
 
       // update stake delegated from "receiver" to themself
@@ -228,7 +228,7 @@ namespace eosiosystem {
                }
                update_voting_power( from, asset( -consumed_amount, core_symbol()) );
             }
-            eosio::set_account_resource_fees(receiver, itr->net_weight.amount, itr->cpu_weight.amount);
+            eosio::set_fee_limits(receiver, itr->net_weight.amount, itr->cpu_weight.amount);
          }
       }
 
@@ -687,18 +687,18 @@ namespace eosiosystem {
       // set resource fee
       // only set if consumed is zero
       int64_t consumed_net, consumed_cpu;
-      eosio::get_account_consumed_fees( account, consumed_net, consumed_cpu );
+      eosio::get_fee_consumption( account, consumed_net, consumed_cpu );
       if (consumed_net == 0 && consumed_cpu == 0) {
          del_bandwidth_table     del_tbl( get_self(), account.value );
          auto itr = del_tbl.find( account.value );
          if( itr != del_tbl.end() ) {
             if (itr->net_weight.amount > 0 || itr->cpu_weight.amount > 0 ) {
-               eosio::set_account_resource_fees(account, itr->net_weight.amount, itr->cpu_weight.amount);
+               eosio::set_fee_limits(account, itr->net_weight.amount, itr->cpu_weight.amount);
             }
          }
       }
 
-      eosio::config_account_fees(account, max_tx_fee, max_fee);
+      eosio::config_fee_limits(account, max_tx_fee, max_fee);
    }
 
    void system_contract::refund( const name& owner ) {

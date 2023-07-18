@@ -1,5 +1,5 @@
-DEV_VERSION=charge-fee-test
-DEV_DOCKER_IMAGE=waxteam/cdt-dev:$(DEV_VERSION)
+DEV_VERSION=charge_fee
+DEV_DOCKER_IMAGE=waxteam/waxdev:$(DEV_VERSION)
 DEV_DOCKER_CONTAINER=contracts-development
 DEV_DOCKER_COMMON=-v `pwd`:/opt/contracts \
 			--name $(DEV_DOCKER_CONTAINER) -w /opt/contracts $(DEV_DOCKER_IMAGE)
@@ -9,7 +9,7 @@ get-latest:
 
 build:
 	mkdir -p build
-	cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -Dleap_DIR="${LEAP_BUILD_PATH}/lib/cmake/leap" -Dcdt_DIR="${CDT_BUILD_PATH}/lib/cmake/cdt" -DBOOST_ROOT="${HOME}/boost1.79" ..
+	cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -Dleap_DIR="${LEAP_BUILD_PATH}/lib/cmake/leap" -Dcdt_DIR="${CDT_BUILD_PATH}/lib/cmake/cdt" -DBOOST_ROOT="${HOME}/boost1.70" ..
 
 .PHONY: compile
 compile: build

@@ -213,8 +213,8 @@ public:
       trx.actions.emplace_back( get_action( config::system_account_name, "configaccfee"_n, vector<permission_level>{{a,config::active_name}},
                                             mvo()
                                             ("account",     a)
-                                            ("max_tx_fee", rfo_alice.max_fee_per_tx)
-                                            ("max_fee", rfo_alice.max_fee)
+                                            ("max_tx_fee", rfo_alice.tx_fee_limit)
+                                            ("max_fee", rfo_alice.account_fee_limit)
                                           )
                                 );
 
@@ -833,16 +833,16 @@ public:
       return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "delegated_bandwidth", data, abi_serializer_max_time );
    }
 
-   resource_limits::resource_fees_object get_account_resource_fees( const account_name& act ) {
-      return control->db().get<resource_limits::resource_fees_object, resource_limits::by_owner>(act);
+   resource_limits::fee_limits_object get_account_resource_fees( const account_name& act ) {
+      return control->db().get<resource_limits::fee_limits_object, resource_limits::by_owner>(act);
    }
 
-   resource_limits::resource_fees_object get_account_resource_fees( std::string_view act ) {
-      return control->db().get<resource_limits::resource_fees_object, resource_limits::by_owner>(account_name(act));
+   resource_limits::fee_limits_object get_account_resource_fees( std::string_view act ) {
+      return control->db().get<resource_limits::fee_limits_object, resource_limits::by_owner>(account_name(act));
    }
 
-   resource_limits::resource_fees_config_object get_resource_fee_config() {
-      return control->db().get<resource_limits::resource_fees_config_object>();
+   resource_limits::fee_params_object get_resource_fee_config() {
+      return control->db().get<resource_limits::fee_params_object>();
    }
 
    fc::variant get_voter_info( const account_name& act ) {
