@@ -11,6 +11,10 @@ build:
 	mkdir -p build
 	cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -Dleap_DIR="${LEAP_BUILD_PATH}/lib/cmake/leap" -Dcdt_DIR="${CDT_BUILD_PATH}/lib/cmake/cdt" -DBOOST_ROOT="${HOME}/boost1.70" ..
 
+build-contracts:
+	mkdir -p build
+	cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -Dleap_DIR="${LEAP_BUILD_PATH}/lib/cmake/leap" -Dcdt_DIR="${CDT_BUILD_PATH}/lib/cmake/cdt" -DBOOST_ROOT="${HOME}/boost1.70" .. && make -j $(nproc)
+
 .PHONY: compile
 compile: build
 	cd build && make -j $(nproc)
@@ -35,3 +39,8 @@ dev-docker-start: dev-docker-stop
 .PHONY:dev-docker-all
 dev-docker-all: dev-docker-stop get-latest
 	docker run $(DEV_DOCKER_COMMON) bash -c "make clean test"
+
+# build contract without unit test
+.PHONY:dev-docker-contracts
+dev-docker-contracts: dev-docker-stop get-latest
+	docker run $(DEV_DOCKER_COMMON) bash -c "make build-contracts"
