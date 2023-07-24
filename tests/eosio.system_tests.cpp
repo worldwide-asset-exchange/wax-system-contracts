@@ -846,7 +846,7 @@ BOOST_FIXTURE_TEST_CASE( stake_and_update_account_resouce_fees_subtract_consume,
    issue_and_transfer( "bob111111111", core_sym::from_string("100.0000"),  config::system_account_name );
    // bob stake small portion of total
    BOOST_REQUIRE_EQUAL( success(), stake("bob111111111", core_sym::from_string("0.1000"), core_sym::from_string("0.1000") ) );
-   BOOST_REQUIRE_EQUAL( success(), configaccfee(account_name("bob111111111"), account_name("bob111111111"), int64_t(-1), int64_t(-1)));
+   BOOST_REQUIRE_EQUAL( success(), cfgacountfee(account_name("bob111111111"), account_name("bob111111111"), int64_t(-1), int64_t(-1)));
 
    produce_block();
 
@@ -913,7 +913,7 @@ BOOST_FIXTURE_TEST_CASE( unstake_and_update_account_resouce_fees_subtract_consum
    issue_and_transfer( "bob111111111", core_sym::from_string("100.0000"),  config::system_account_name );
    // bob stake small portion of total
    BOOST_REQUIRE_EQUAL( success(), stake("bob111111111", core_sym::from_string("0.1000"), core_sym::from_string("0.1000") ) );
-   BOOST_REQUIRE_EQUAL( success(), configaccfee(account_name("bob111111111"), account_name("bob111111111"), int64_t(-1), int64_t(-1)));
+   BOOST_REQUIRE_EQUAL( success(), cfgacountfee(account_name("bob111111111"), account_name("bob111111111"), int64_t(-1), int64_t(-1)));
 
    produce_block();
 
@@ -989,7 +989,7 @@ BOOST_FIXTURE_TEST_CASE( update_vote_subtract_consume, eosio_system_tester, * bo
    issue_and_transfer( "bob111111111", core_sym::from_string("100.0000"),  config::system_account_name );
    // bob stake small portion of total
    BOOST_REQUIRE_EQUAL( success(), stake("bob111111111", core_sym::from_string("0.1000"), core_sym::from_string("0.1000") ) );
-   BOOST_REQUIRE_EQUAL( success(), configaccfee(account_name("bob111111111"), account_name("bob111111111"), int64_t(-1), int64_t(-1)));
+   BOOST_REQUIRE_EQUAL( success(), cfgacountfee(account_name("bob111111111"), account_name("bob111111111"), int64_t(-1), int64_t(-1)));
 
    BOOST_REQUIRE_EQUAL(get_wps_total_stake(), current_wps_total_stake + 1000*2);
    current_wps_total_stake = get_wps_total_stake();
@@ -1040,8 +1040,8 @@ BOOST_FIXTURE_TEST_CASE( update_vote_subtract_consume, eosio_system_tester, * bo
    rfo_bob = get_account_resource_fees("bob111111111");
    BOOST_REQUIRE_EQUAL(11000, rfo_bob.net_weight_limit);
    BOOST_REQUIRE_EQUAL(11000 - cpu_consumed_weight1, rfo_bob.cpu_weight_limit);
-   BOOST_REQUIRE_EQUAL(rfo_bob.cpu_weight_limit > 0, true);
-   BOOST_REQUIRE_EQUAL(rfo_bob.net_weight_limit, 0);
+   BOOST_REQUIRE_EQUAL(rfo_bob.cpu_weight_consumption > 0, true);
+   BOOST_REQUIRE_EQUAL(rfo_bob.net_weight_consumption, 0);
 
    int64_t cpu_consumed_weight2 = rfo_bob.cpu_weight_consumption;
 
@@ -1070,22 +1070,22 @@ BOOST_FIXTURE_TEST_CASE( config_fee_params, eosio_system_tester ) try {
 
 BOOST_FIXTURE_TEST_CASE( config_account_fee, eosio_system_tester ) try {
    BOOST_REQUIRE_EQUAL( error("missing authority of alice1111111"),
-                      configaccfee(account_name("bob111111111"), account_name("alice1111111"), uint64_t(50000000000), uint64_t(100000000000))
+                      cfgacountfee(account_name("bob111111111"), account_name("alice1111111"), uint64_t(50000000000), uint64_t(100000000000))
    );
 
-   BOOST_REQUIRE_EQUAL( success(), configaccfee(account_name("alice1111111"), account_name("alice1111111"), int64_t(50000000000), int64_t(100000000000)));
+   BOOST_REQUIRE_EQUAL( success(), cfgacountfee(account_name("alice1111111"), account_name("alice1111111"), int64_t(50000000000), int64_t(100000000000)));
 
    auto rfo_alice = get_account_resource_fees("alice1111111");
    BOOST_REQUIRE_EQUAL(50000000000, rfo_alice.tx_fee_limit);
    BOOST_REQUIRE_EQUAL(100000000000, rfo_alice.account_fee_limit);
 
-   BOOST_REQUIRE_EQUAL( success(), configaccfee(account_name("bob111111111"), account_name("bob111111111"), int64_t(0), int64_t(0)));
+   BOOST_REQUIRE_EQUAL( success(), cfgacountfee(account_name("bob111111111"), account_name("bob111111111"), int64_t(0), int64_t(0)));
 
    auto rfo_bob = get_account_resource_fees("bob111111111");
    BOOST_REQUIRE_EQUAL(0, rfo_bob.tx_fee_limit);
    BOOST_REQUIRE_EQUAL(0, rfo_bob.account_fee_limit);
 
-   BOOST_REQUIRE_EQUAL( success(), configaccfee(account_name("carol1111111"), account_name("carol1111111"), int64_t(-1), int64_t(-1)));
+   BOOST_REQUIRE_EQUAL( success(), cfgacountfee(account_name("carol1111111"), account_name("carol1111111"), int64_t(-1), int64_t(-1)));
 
    auto rfo_carol = get_account_resource_fees("carol1111111");
    BOOST_REQUIRE_EQUAL(-1, rfo_carol.tx_fee_limit);

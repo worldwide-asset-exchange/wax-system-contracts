@@ -9,11 +9,11 @@ get-latest:
 
 build:
 	mkdir -p build
-	cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -Dleap_DIR="${LEAP_BUILD_PATH}/lib/cmake/leap" -Dcdt_DIR="${CDT_BUILD_PATH}/lib/cmake/cdt" -DBOOST_ROOT="${HOME}/boost1.70" ..
+	cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -Dleap_DIR="${LEAP_BUILD_PATH}/lib/cmake/leap" -Dcdt_DIR="${CDT_BUILD_PATH}/lib/cmake/cdt" -DBOOST_ROOT="${HOME}/boost1.79" ..
 
 build-contracts:
 	mkdir -p build
-	cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -Dleap_DIR="${LEAP_BUILD_PATH}/lib/cmake/leap" -Dcdt_DIR="${CDT_BUILD_PATH}/lib/cmake/cdt" -DBOOST_ROOT="${HOME}/boost1.70" .. && make -j $(nproc)
+	cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -Dleap_DIR="${LEAP_BUILD_PATH}/lib/cmake/leap" -Dcdt_DIR="${CDT_BUILD_PATH}/lib/cmake/cdt" -DBOOST_ROOT="${HOME}/boost1.79" .. && make -j $(nproc)
 
 .PHONY: compile
 compile: build

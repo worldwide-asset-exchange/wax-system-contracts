@@ -210,7 +210,7 @@ public:
       auto rfo_alice = get_account_resource_fees(a);
 
       authority owner_auth =  authority( get_public_key( a, "owner" ) );
-      trx.actions.emplace_back( get_action( config::system_account_name, "configaccfee"_n, vector<permission_level>{{a,config::active_name}},
+      trx.actions.emplace_back( get_action( config::system_account_name, "cfgacountfee"_n, vector<permission_level>{{a,config::active_name}},
                                             mvo()
                                             ("account",     a)
                                             ("max_tx_fee", rfo_alice.tx_fee_limit)
@@ -402,9 +402,9 @@ public:
       );
    }
 
-   action_result configaccfee( const account_name& from, const name& account,
+   action_result cfgacountfee( const account_name& from, const name& account,
                         int64_t max_tx_fee, int64_t max_fee) {
-      return push_action( name(from), "configaccfee"_n, mvo()
+      return push_action( name(from), "cfgacountfee"_n, mvo()
                           ("account",     account)
                           ("max_tx_fee", max_tx_fee)
                           ("max_fee", max_fee)
