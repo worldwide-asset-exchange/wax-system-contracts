@@ -1,4 +1,4 @@
-DEV_VERSION=charge_fee
+DEV_VERSION=tokenomics-2.0-4.0
 DEV_DOCKER_IMAGE=waxteam/waxdev:$(DEV_VERSION)
 DEV_DOCKER_CONTAINER=contracts-development
 DEV_DOCKER_COMMON=-v `pwd`:/opt/contracts \
