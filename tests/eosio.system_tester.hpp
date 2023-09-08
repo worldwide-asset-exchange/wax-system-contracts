@@ -72,6 +72,18 @@ public:
       }
    }
 
+   void deploy_system_v31_contract( ) {
+      set_code( config::system_account_name, contracts::util::system_wasm_v3_1() );
+      set_abi( config::system_account_name, contracts::util::system_abi_v3_1().data() );
+
+      {
+         const auto& accnt = control->db().get<account_object,by_name>( config::system_account_name );
+         abi_def abi;
+         BOOST_REQUIRE_EQUAL(abi_serializer::to_abi(accnt.abi, abi), true);
+         abi_ser.set_abi(abi, abi_serializer::create_yield_function(abi_serializer_max_time));
+      }
+   }
+
    void remaining_setup() {
       produce_blocks();
 
@@ -250,13 +262,6 @@ public:
 	         "genesis.wax"_n,
 	         "awardgenesis"_n,
 		 mvo()( "receiver",receiver)("tokens",tokens)("nonce",nonce) );
-   }
-
-   action_result delgenesis( uint64_t nonce ) {
-      return push_action(
-	         "genesis.wax"_n,
-	         "delgenesis"_n,
-		 mvo()("nonce",nonce) );
    }
 
    action_result claimgenesis( const account_name& claimer ) {
@@ -753,17 +758,6 @@ public:
    asset get_genesis_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
       vector<char> data = get_row_by_account( config::system_account_name, act, "genesis"_n, account_name(balance_symbol.to_symbol_code().value) );
       return data.empty() ? asset(0, balance_symbol) : abi_ser.binary_to_variant("genesis_tokens", data, abi_serializer_max_time)["balance"].as<asset>();
-   }
-
-   uint64_t add_gbm(uint64_t to_tokens) {
-      uint32_t seconds_per_day       = 24 * 3600;
-      int64_t  useconds_per_day      = int64_t(seconds_per_day) * 1000'000ll;
-      uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022
-      time_point gbm_initial_time(seconds(1561939200));     // July 1st 2019 00:00:00
-      time_point gbm_final_time = gbm_initial_time + microseconds(useconds_in_gbm_period);
-      const auto unstake_time = std::min(control->head_block_time(), gbm_final_time);
-      const int64_t delta_time_usec = (gbm_final_time - unstake_time).count();
-      return to_tokens + (to_tokens / 5) * 2 * (delta_time_usec / double(useconds_in_gbm_period));
    }
 
    asset get_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
