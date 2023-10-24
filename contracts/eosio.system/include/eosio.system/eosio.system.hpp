@@ -37,6 +37,8 @@ namespace eosiosystem {
    using std::vector;
    using std::set;
 
+   inline constexpr int64_t powerup_frac = 1'000'000'000'000'000ll;  // 1.0 = 10^15
+
    template<typename E, typename F>
    static inline auto has_field( F flags, E field )
    -> std::enable_if_t< std::is_integral_v<F> && std::is_unsigned_v<F> &&
@@ -564,6 +566,123 @@ namespace eosiosystem {
    typedef eosio::multi_index< "genesis"_n, genesis_tokens >      genesis_balance_table;
    typedef eosio::multi_index< "genonce"_n, genesis_nonce >       genesis_nonce_table;
 
+   struct powerup_config_resource {
+      std::optional<int64_t>        current_weight_ratio;   // Immediately set weight_ratio to this amount. 1x = 10^15. 0.01x = 10^13.
+                                                            //    Do not specify to preserve the existing setting or use the default;
+                                                            //    this avoids sudden price jumps. For new chains which don't need
+                                                            //    to gradually phase out staking and REX, 0.01x (10^13) is a good
+                                                            //    value for both current_weight_ratio and target_weight_ratio.
+      std::optional<int64_t>        target_weight_ratio;    // Linearly shrink weight_ratio to this amount. 1x = 10^15. 0.01x = 10^13.
+                                                            //    Do not specify to preserve the existing setting or use the default.
+      std::optional<int64_t>        assumed_stake_weight;   // Assumed stake weight for ratio calculations. Use the sum of total
+                                                            //    staked and total rented by REX at the time the power market
+                                                            //    is first activated. Do not specify to preserve the existing
+                                                            //    setting (no default exists); this avoids sudden price jumps.
+                                                            //    For new chains which don't need to phase out staking and REX,
+                                                            //    10^12 is probably a good value.
+      std::optional<time_point_sec> target_timestamp;       // Stop automatic weight_ratio shrinkage at this time. Once this
+                                                            //    time hits, weight_ratio will be target_weight_ratio. Ignored
+                                                            //    if current_weight_ratio == target_weight_ratio. Do not specify
+                                                            //    this to preserve the existing setting (no default exists).
+      std::optional<double>         exponent;               // Exponent of resource price curve. Must be >= 1. Do not specify
+                                                            //    to preserve the existing setting or use the default.
+      std::optional<uint32_t>       decay_secs;             // Number of seconds for the gap between adjusted resource
+                                                            //    utilization and instantaneous resource utilization to shrink
+                                                            //    by 63%. Do not specify to preserve the existing setting or
+                                                            //    use the default.
+      std::optional<asset>          min_price;              // Fee needed to reserve the entire resource market weight at the
+                                                            //    minimum price. For example, this could be set to 0.005% of
+                                                            //    total token supply. Do not specify to preserve the existing
+                                                            //    setting or use the default.
+      std::optional<asset>          max_price;              // Fee needed to reserve the entire resource market weight at the
+                                                            //    maximum price. For example, this could be set to 10% of total
+                                                            //    token supply. Do not specify to preserve the existing
+                                                            //    setting (no default exists).
+
+      EOSLIB_SERIALIZE( powerup_config_resource, (current_weight_ratio)(target_weight_ratio)(assumed_stake_weight)
+                                                (target_timestamp)(exponent)(decay_secs)(min_price)(max_price)    )
+   };
+
+   struct powerup_config {
+      powerup_config_resource  net;             // NET market configuration
+      powerup_config_resource  cpu;             // CPU market configuration
+      std::optional<uint32_t> powerup_days;     // `powerup` `days` argument must match this. Do not specify to preserve the
+                                                //    existing setting or use the default.
+      std::optional<asset>    min_powerup_fee;  // Fees below this amount are rejected. Do not specify to preserve the
+                                                //    existing setting (no default exists).
+
+      EOSLIB_SERIALIZE( powerup_config, (net)(cpu)(powerup_days)(min_powerup_fee) )
+   };
+
+   struct powerup_state_resource {
+      static constexpr double   default_exponent   = 2.0;                  // Exponent of 2.0 means that the price to reserve a
+                                                                           //    tiny amount of resources increases linearly
+                                                                           //    with utilization.
+      static constexpr uint32_t default_decay_secs = 1 * seconds_per_day;  // 1 day; if 100% of bandwidth resources are in a
+                                                                           //    single loan, then, assuming no further powerup usage,
+                                                                           //    1 day after it expires the adjusted utilization
+                                                                           //    will be at approximately 37% and after 3 days
+                                                                           //    the adjusted utilization will be less than 5%.
+
+      uint8_t        version                 = 0;
+      int64_t        weight                  = 0;                  // resource market weight. calculated; varies over time.
+                                                                   //    1 represents the same amount of resources as 1
+                                                                   //    satoshi of SYS staked.
+      int64_t        weight_ratio            = 0;                  // resource market weight ratio:
+                                                                   //    assumed_stake_weight / (assumed_stake_weight + weight).
+                                                                   //    calculated; varies over time. 1x = 10^15. 0.01x = 10^13.
+      int64_t        assumed_stake_weight    = 0;                  // Assumed stake weight for ratio calculations.
+      int64_t        initial_weight_ratio    = powerup_frac;        // Initial weight_ratio used for linear shrinkage.
+      int64_t        target_weight_ratio     = powerup_frac / 100;  // Linearly shrink the weight_ratio to this amount.
+      time_point_sec initial_timestamp       = {};                 // When weight_ratio shrinkage started
+      time_point_sec target_timestamp        = {};                 // Stop automatic weight_ratio shrinkage at this time. Once this
+                                                                   //    time hits, weight_ratio will be target_weight_ratio.
+      double         exponent                = default_exponent;   // Exponent of resource price curve.
+      uint32_t       decay_secs              = default_decay_secs; // Number of seconds for the gap between adjusted resource
+                                                                   //    utilization and instantaneous utilization to shrink by 63%.
+      asset          min_price               = {};                 // Fee needed to reserve the entire resource market weight at
+                                                                   //    the minimum price (defaults to 0).
+      asset          max_price               = {};                 // Fee needed to reserve the entire resource market weight at
+                                                                   //    the maximum price.
+      int64_t        utilization             = 0;                  // Instantaneous resource utilization. This is the current
+                                                                   //    amount sold. utilization <= weight.
+      int64_t        adjusted_utilization    = 0;                  // Adjusted resource utilization. This is >= utilization and
+                                                                   //    <= weight. It grows instantly but decays exponentially.
+      time_point_sec utilization_timestamp   = {};                 // When adjusted_utilization was last updated
+   };
+
+   struct [[eosio::table("powup.state"),eosio::contract("eosio.system")]] powerup_state {
+      static constexpr uint32_t default_powerup_days = 30; // 30 day resource powerup
+
+      uint8_t                    version           = 0;
+      powerup_state_resource     net               = {};                     // NET market state
+      powerup_state_resource     cpu               = {};                     // CPU market state
+      uint32_t                   powerup_days      = default_powerup_days;   // `powerup` `days` argument must match this.
+      asset                      min_powerup_fee   = {};                     // fees below this amount are rejected
+
+      uint64_t primary_key()const { return 0; }
+   };
+
+   typedef eosio::singleton<"powup.state"_n, powerup_state> powerup_state_singleton;
+
+   struct [[eosio::table("powup.order"),eosio::contract("eosio.system")]] powerup_order {
+      uint8_t              version = 0;
+      uint64_t             id;
+      name                 owner;
+      int64_t              net_weight;
+      int64_t              cpu_weight;
+      time_point_sec       expires;
+
+      uint64_t primary_key()const { return id; }
+      uint64_t by_owner()const    { return owner.value; }
+      uint64_t by_expires()const  { return expires.utc_seconds; }
+   };
+
+   typedef eosio::multi_index< "powup.order"_n, powerup_order,
+                               indexed_by<"byowner"_n, const_mem_fun<powerup_order, uint64_t, &powerup_order::by_owner>>,
+                               indexed_by<"byexpires"_n, const_mem_fun<powerup_order, uint64_t, &powerup_order::by_expires>>
+                               > powerup_order_table;
+
    /**
     * The `eosio.system` smart contract is provided by `block.one` as a sample system contract, and it defines the structures and actions needed for blockchain's core functionality.
     *
@@ -612,6 +731,8 @@ namespace eosiosystem {
          static constexpr eosio::name voters_account{"eosio.voters"_n};
          static constexpr eosio::name genesis_account{"genesis.wax"_n};
          static constexpr eosio::name null_account{"eosio.null"_n};
+         static constexpr eosio::name reserve_account{"eosio.reserv"_n};
+         static constexpr eosio::name fees_account{"eosio.fees"_n};
          static constexpr symbol ramcore_symbol = symbol(symbol_code("RAMCORE"), 4);
          static constexpr symbol ram_symbol     = symbol(symbol_code("RAM"), 0);
 
@@ -1019,114 +1140,144 @@ namespace eosiosystem {
                             const string& img_url, const string& bio, const string& country, const string& telegram,
                             const string& website, const string& linkedin);
 
-       [[eosio::action]]
-       void editproposer(name account, const string& first_name, const string& last_name,
-                             const string& img_url, const string& bio, const string& country, const string& telegram,
-                             const string& website, const string& linkedin);
+         [[eosio::action]]
+         void editproposer(name account, const string& first_name, const string& last_name,
+                              const string& img_url, const string& bio, const string& country, const string& telegram,
+                              const string& website, const string& linkedin);
 
-       [[eosio::action]]
-       void rmvproposer(name account);
+         [[eosio::action]]
+         void rmvproposer(name account);
 
-       [[eosio::action]]
-       void claimfunds(name account);
+         [[eosio::action]]
+         void claimfunds(name account);
 
-       [[eosio::action]]
-       void regproposal(
-                   name proposer,
-                   name committee,
-                   uint16_t subcategory,
-                   const string& title,
-                   const string& summary,
-                   const string& project_img_url,
-                   const string& description,
-                   const string& roadmap,
-                   uint64_t duration,
-                   const vector<string>& members,
-                   const asset& funding_goal,
-                   uint32_t total_iterations
-       );
+         [[eosio::action]]
+         void regproposal(
+                     name proposer,
+                     name committee,
+                     uint16_t subcategory,
+                     const string& title,
+                     const string& summary,
+                     const string& project_img_url,
+                     const string& description,
+                     const string& roadmap,
+                     uint64_t duration,
+                     const vector<string>& members,
+                     const asset& funding_goal,
+                     uint32_t total_iterations
+         );
 
-       [[eosio::action]]
-       void editproposal(
-                   name proposer,
-                   name committee,
-                   uint16_t subcategory,
-                   const string& title,
-                   const string& summary,
-                   const string& project_img_url,
-                   const string& description,
-                   const string& roadmap,
-                   uint64_t duration,
-                   const vector<string>& members,
-                   const asset& funding_goal,
-                   uint32_t total_iterations
-       );
+         [[eosio::action]]
+         void editproposal(
+                     name proposer,
+                     name committee,
+                     uint16_t subcategory,
+                     const string& title,
+                     const string& summary,
+                     const string& project_img_url,
+                     const string& description,
+                     const string& roadmap,
+                     uint64_t duration,
+                     const vector<string>& members,
+                     const asset& funding_goal,
+                     uint32_t total_iterations
+         );
 
-       [[eosio::action]]
-       void regreviewer(name committee, name reviewer, const string& first_name, const string& last_name);
+         [[eosio::action]]
+         void regreviewer(name committee, name reviewer, const string& first_name, const string& last_name);
 
-       [[eosio::action]]
-       void editreviewer(name committee, name reviewer, const string& first_name, const string& last_name);
+         [[eosio::action]]
+         void editreviewer(name committee, name reviewer, const string& first_name, const string& last_name);
 
-       [[eosio::action]]
-       void rmvreviewer(name committee, name reviewer);
+         [[eosio::action]]
+         void rmvreviewer(name committee, name reviewer);
 
-       [[eosio::action]]
-       void acceptprop(name reviewer, name proposer);
+         [[eosio::action]]
+         void acceptprop(name reviewer, name proposer);
 
-       [[eosio::action]]
-       void rejectprop(name reviewer, name proposer, const string& reason);
+         [[eosio::action]]
+         void rejectprop(name reviewer, name proposer, const string& reason);
 
-       [[eosio::action]]
-       void approve(name reviewer, name proposer);
+         [[eosio::action]]
+         void approve(name reviewer, name proposer);
 
-       [[eosio::action]]
-       void rmvreject(name reviewer, name proposer);
+         [[eosio::action]]
+         void rmvreject(name reviewer, name proposer);
 
-       [[eosio::action]]
-       void rmvcompleted(name reviewer, name proposer);
+         [[eosio::action]]
+         void rmvcompleted(name reviewer, name proposer);
 
-       [[eosio::action]]
-       void cleanvotes(name reviewer, name proposer, uint64_t begin, uint64_t end);
+         [[eosio::action]]
+         void cleanvotes(name reviewer, name proposer, uint64_t begin, uint64_t end);
 
-       [[eosio::action]]
-       void setwpsenv(uint32_t total_voting_percent, uint32_t duration_of_voting, uint32_t max_duration_of_funding, uint32_t total_iteration_of_funding);
+         [[eosio::action]]
+         void setwpsenv(uint32_t total_voting_percent, uint32_t duration_of_voting, uint32_t max_duration_of_funding, uint32_t total_iteration_of_funding);
 
-       [[eosio::action]]
-       void setwpsstate(double total_stake);
+         [[eosio::action]]
+         void setwpsstate(double total_stake);
 
-       [[eosio::action]]
-       void regcommittee(name committeeman, const string& category, bool is_oversight);
+         [[eosio::action]]
+         void regcommittee(name committeeman, const string& category, bool is_oversight);
 
-       [[eosio::action]]
-       void edcommittee(name committeeman, const string& category, bool is_oversight);
+         [[eosio::action]]
+         void edcommittee(name committeeman, const string& category, bool is_oversight);
 
-       [[eosio::action]]
-       void rmvcommittee(name committeeman);
+         [[eosio::action]]
+         void rmvcommittee(name committeeman);
 
-       [[eosio::action]]
-       void rejectfund(name committeeman, name proposer, const string& reason);
+         [[eosio::action]]
+         void rejectfund(name committeeman, name proposer, const string& reason);
 
-       [[eosio::action]]
-       void voteproposal(const name& voter_name, const std::vector<name>& proposals);
-
+         [[eosio::action]]
+         void voteproposal(const name& voter_name, const std::vector<name>& proposals);
+            
          /**
-          * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
-          *
-          * If either allow_perms or disallow_perms is non-empty, then opts into restrictions. If
-          * allow_perms is non-empty, then the authorized_by argument of the restricted actions must be in
-          * the vector, or the actions will abort. If disallow_perms is non-empty, then the authorized_by
-          * argument of the restricted actions must not be in the vector, or the actions will abort.
-          *
-          * If both allow_perms and disallow_perms are empty, then opts out of the restrictions. limitauthchg
-          * aborts if both allow_perms and disallow_perms are non-empty.
-          *
-          * @param account - account to change
-          * @param allow_perms - permissions which may use the restricted actions
-          * @param disallow_perms - permissions which may not use the restricted actions
+          * Configure the `power` market. The market becomes available the first time this
+          * action is invoked.
           */
          [[eosio::action]]
-         void limitauthchg( const name& account, const std::vector<name>& allow_perms, const std::vector<name>& disallow_perms );
+         void cfgpowerup( powerup_config& args );
+
+         /**
+          * Process power queue and update state. Action does not execute anything related to a specific user.
+          *
+          * @param user - any account can execute this action
+          * @param max - number of queue items to process
+          */
+         [[eosio::action]]
+         void powerupexec( const name& user, uint16_t max );
+
+         /**
+          * Powerup NET and CPU resources by percentage
+          *
+          * @param payer - the resource buyer
+          * @param receiver - the resource receiver
+          * @param days - number of days of resource availability. Must match market configuration.
+          * @param net_frac - fraction of net (100% = 10^15) managed by this market
+          * @param cpu_frac - fraction of cpu (100% = 10^15) managed by this market
+          * @param max_payment - the maximum amount `payer` is willing to pay. Tokens are withdrawn from
+          *    `payer`'s token balance.
+          */
+         [[eosio::action]]
+         void powerup( const name& payer, const name& receiver, uint32_t days, int64_t net_frac, int64_t cpu_frac, const asset& max_payment );
+
+       /**
+        * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
+        *
+        * If either allow_perms or disallow_perms is non-empty, then opts into restrictions. If
+        * allow_perms is non-empty, then the authorized_by argument of the restricted actions must be in
+        * the vector, or the actions will abort. If disallow_perms is non-empty, then the authorized_by
+        * argument of the restricted actions must not be in the vector, or the actions will abort.
+        *
+        * If both allow_perms and disallow_perms are empty, then opts out of the restrictions. limitauthchg
+        * aborts if both allow_perms and disallow_perms are non-empty.
+        *
+        * @param account - account to change
+        * @param allow_perms - permissions which may use the restricted actions
+        * @param disallow_perms - permissions which may not use the restricted actions
+        */
+       [[eosio::action]]
+       void limitauthchg( const name& account, const std::vector<name>& allow_perms, const std::vector<name>& disallow_perms );
 
          using init_action = eosio::action_wrapper<"init"_n, &system_contract::init>;
          using setacctram_action = eosio::action_wrapper<"setacctram"_n, &system_contract::setacctram>;
@@ -1178,6 +1329,9 @@ namespace eosiosystem {
        using setwpsstate_action = eosio::action_wrapper<"setwpsstate"_n, &system_contract::setwpsstate>;
        using rejectfund_action = eosio::action_wrapper<"rejectfund"_n, &system_contract::rejectfund>;
        using voteproposal_action = eosio::action_wrapper<"voteproposal"_n, &system_contract::voteproposal>;
+       using cfgpowerup_action = eosio::action_wrapper<"cfgpowerup"_n, &system_contract::cfgpowerup>;
+       using powerupexec_action = eosio::action_wrapper<"powerupexec"_n, &system_contract::powerupexec>;
+       using powerup_action = eosio::action_wrapper<"powerup"_n, &system_contract::powerup>;
 
       private:
          // WAX specifics
@@ -1254,6 +1408,13 @@ namespace eosiosystem {
 
          // defined in block_info.cpp
          void add_to_blockinfo_table(const eosio::checksum256& previous_block_id, const eosio::block_timestamp timestamp) const;
+
+         // defined in power.cpp
+         void adjust_resources(name payer, name account, symbol core_symbol, int64_t net_delta, int64_t cpu_delta, bool must_not_be_managed = false);
+         void process_powerup_queue(
+            time_point_sec now, symbol core_symbol, powerup_state& state,
+            powerup_order_table& orders, uint32_t max_items, int64_t& net_delta_available,
+            int64_t& cpu_delta_available);
    };
 
    double stake2vote( int64_t staked );

@@ -10,7 +10,9 @@ add_contract(
   ${CMAKE_CURRENT_SOURCE_DIR}/src/voting.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/limit_auth_changes.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/block_info.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/wps.cpp)
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/wps.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/powerup.cpp)
+
 
 if(SYSTEM_CONFIGURABLE_WASM_LIMITS)
   target_compile_definitions(eosio.system PUBLIC SYSTEM_CONFIGURABLE_WASM_LIMITS)
@@ -25,6 +27,16 @@ target_include_directories(eosio.system PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inclu
 
 set_target_properties(eosio.system PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
+add_contract(powup.results powup.results ${CMAKE_CURRENT_SOURCE_DIR}/src/powerup.results.cpp)
+
+target_include_directories(powup.results
+   PUBLIC
+   ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+set_target_properties(powup.results
+   PROPERTIES
+   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/.powerup")
+   
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ricardian/eosio.system.contracts.md.in
                ${CMAKE_CURRENT_BINARY_DIR}/ricardian/eosio.system.contracts.md @ONLY)
 
