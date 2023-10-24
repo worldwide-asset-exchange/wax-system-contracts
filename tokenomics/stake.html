@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User CPU Allotment Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .inputs-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+        }
+
+        .input-group {
+            flex: 0 0 calc(33.333% - 10px);
+            margin-bottom: 10px;
+        }
+
+        canvas {
+            width: 100% !important;
+            max-height: 80vh;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.5.0-beta4/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+</head>
+<body onload="init()">
+
+<button id="exportToPNG">Export to PNG</button>
+<button id="exportToJPEG">Export to JPEG</button>
+<button id="exportBtn">Export to PDF</button>
+<div id="exportContainer">
+  <canvas id="cpuAllotmentChart" width="800" height="400"></canvas>
+
+  <div class="inputs-wrapper">
+      <div class="input-group">
+          Max Block CPU: <input class="input-field" type="number" id="inputMaxBlockCPU" value="200000"><br>
+          EMA Block CPU: <input class="input-field" type="number" id="inputEMABlockCPU" value="20544"><br>
+          Target Block CPU Percent (100=1%): <input class="input-field" type="number" id="inputTargetBlockCPUPct" value="2500"><br>
+          Total CPU Staked All Users: <input class="input-field" type="number" id="inputTotalStakedAllUsers" value="380494437">
+      </div>
+      <div class="input-group">
+          User Txs per Hour: <input class="input-field" type="number" id="inputTxPerUserPerHour" value="2"><br>
+          Starting User WAX Staked: <input class="input-field" type="number" id="inputStartingWAXBalance" value="553"><br>
+          Tx CPU Consumption: <input class="input-field" type="number" id="inputTxCPUConsumption" value="336"><br>
+          Hours to Sample: <input class="input-field" type="number" id="inputHours" value="120"><br>
+      </div>
+  </div>
+</div>
+<!-- <canvas id="cpuAllotmentChart"></canvas> -->
+
+<script>
+  let chart;
+  const jsPDF = window.jspdf.jsPDF;
+
+  function updateChart() {
+    // Fetch values from UI
+    const hours = parseFloat(document.getElementById("inputHours").value);
+    const max_block_cpu = parseFloat(document.getElementById("inputMaxBlockCPU").value);
+    let ema_block_cpu = parseFloat(document.getElementById("inputEMABlockCPU").value);
+    const target_block_cpu_usage_pct = parseFloat(document.getElementById("inputTargetBlockCPUPct").value);
+    const tx_cpu_consumption = parseFloat(document.getElementById("inputTxCPUConsumption").value);
+    let txs_per_user_per_hour = parseFloat(document.getElementById("inputTxPerUserPerHour").value);
+    const totalStakedAllUsers = parseFloat(document.getElementById("inputTotalStakedAllUsers").value);
+    let wax_balance = parseFloat(document.getElementById("inputStartingWAXBalance").value);
+
+    const account_cpu_usage_average_window = 172800;  // your resources are actually extrapolated over a 24 hour window which decays at the same rate. This is the number of blocks in 24 hours
+
+
+    let user_added_cpu = 2 * txs_per_user_per_hour * tx_cpu_consumption / 3600;
+    user_added_cpu = Math.min(ema_block_cpu + user_added_cpu, max_block_cpu) - ema_block_cpu;
+    txs_per_user_per_hour = Math.round(user_added_cpu * 3600 / (2 * tx_cpu_consumption));
+    ema_block_cpu += user_added_cpu;
+    const targetCPU = max_block_cpu * target_block_cpu_usage_pct / 10000;
+
+    /////////// APPROXIMATION for the elastic multiplier ////////////
+    const elasticMultiplierToOneCPU = targetCPU * 1.1;
+    let elastic_multiplier = ema_block_cpu <= targetCPU ?
+      1000 : ema_block_cpu > elasticMultiplierToOneCPU ?
+      1 : (1 - (ema_block_cpu - targetCPU) / (elasticMultiplierToOneCPU - targetCPU)) * 999 + 1;
+
+    // console.log(ema_block_cpu, user_added_cpu, targetCPU, elastic_multiplier, txs_per_user_per_hour);
+
+    function max_user_cpu() {
+      const m = elastic_multiplier * account_cpu_usage_average_window * max_block_cpu * wax_balance / totalStakedAllUsers;
+      return m;
+    }
+
+    let cpu_balance = max_user_cpu();
+
+    function replenish_rate() {
+      return (max_user_cpu() - cpu_balance) / 24; // your cpu balance replenishes proportionately to your current cpu usage
+    }
+
+    const hourly_balance = [];
+    const cpu_values = [];
+
+    for (let hour = 0; hour < hours; hour++) {
+        // CPU replenishment
+        cpu_balance += replenish_rate();
+        if (cpu_balance > max_user_cpu()) cpu_balance = max_user_cpu();
+
+        for (let tx = 0; tx < txs_per_user_per_hour; tx++) {
+            if (cpu_balance > tx_cpu_consumption) {
+                // Use the staked CPU
+                cpu_balance -= tx_cpu_consumption;
+            }
+        }
+        if (wax_balance < 0) {
+            wax_balance = 0;
+        }
+        cpu_values.push(cpu_balance);
+        hourly_balance.push(wax_balance);
+    }
+
+    // Update or recreate chart
+    if (chart) {
+        chart.destroy();
+    }
+    const ctx = document.getElementById('cpuAllotmentChart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: Array.from({length: hours}, (_, i) => i),
+            datasets: [{
+                label: 'WAX Staked (WAX)',
+                data: hourly_balance,
+                borderColor: 'green',
+                fill: false
+            },
+            {
+                label: 'Available CPU (us)',
+                data: cpu_values,
+                borderColor: 'red',
+                fill: false,
+                yAxisID: 'y-cpu'
+            }]
+        },
+        options: {
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Time (Hours)'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'WAX Staked (WAX)'
+                    }
+                },
+                'y-cpu': {
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Available CPU (us)'
+                    }
+                }
+            }
+        }
+    });
+
+    setInputValuesToURL();
+  }
+
+  function setInputValuesFromURL() {
+      // Get URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+
+      // Loop through each input and see if there's a matching URL parameter to set its value
+      const inputFields = document.querySelectorAll('.input-field');
+      inputFields.forEach(field => {
+          const paramValue = urlParams.get(field.id);
+          if (paramValue !== null) {
+              field.value = paramValue;
+          }
+      });
+  }
+
+  async function exportToPDF() {
+      const chartContainer = document.getElementById('exportContainer');
+
+      const canvas = await html2canvas(chartContainer);
+      const imgData = canvas.toDataURL('image/png');
+
+      const pdf = new jsPDF({
+        orientation: "landscape",
+      });
+      pdf.addImage(imgData, 'PNG', 10, 10);
+
+      // Add the parameters to the PDF
+      const inputFields = document.querySelectorAll('.input-field');
+      let yOffset = canvas.height * 0.75;  // Adjust based on the size of the chart and your preference
+
+      inputFields.forEach(field => {
+          const label = field.previousSibling.textContent.trim();
+          const value = field.value;
+          pdf.text(`${label}: ${value}`, 10, yOffset);
+          yOffset += 7;  // Adjust spacing as needed
+      });
+
+      pdf.save("chart-export.pdf");
+  }
+
+  async function exportImage(format) {
+      const chartContainer = document.getElementById('exportContainer');
+
+      const canvas = await html2canvas(chartContainer);
+
+      if (format === 'png') {
+          const imgData = canvas.toDataURL('image/png');
+          downloadImage(imgData, 'chart-export.png');
+      } else if (format === 'jpeg') {
+          const imgData = canvas.toDataURL('image/jpeg');
+          downloadImage(imgData, 'chart-export.jpeg');
+      }
+  }
+
+  function downloadImage(data, filename) {
+      let link = document.createElement('a');
+      link.href = data;
+      link.download = filename;
+      link.click();
+  }
+
+  document.getElementById("exportToPNG").addEventListener("click", function() {
+      exportImage('png');
+  });
+
+  document.getElementById("exportToJPEG").addEventListener("click", function() {
+      exportImage('jpeg');
+  });
+
+  document.getElementById("exportBtn").addEventListener("click", exportToPDF);
+
+  // Attach event listener to all input elements
+  const inputFields = document.querySelectorAll('.input-field');
+  inputFields.forEach(field => {
+      field.addEventListener('input', updateChart);
+  });
+
+  function setInputValuesToURL() {
+      // Get URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+
+      // Loop through each input and see if there's a matching URL parameter to set its value
+      const inputFields = document.querySelectorAll('.input-field');
+      let params = '?';
+      inputFields.forEach(field => {
+          if (field.value !== null) {
+            params += `&${field.id}=${field.value}`;
+          }
+      });
+      window.history.replaceState(null, null, window.location.pathname+params);
+  }
+
+  function init() {
+    setInputValuesFromURL();
+    // Initial chart rendering
+    updateChart();
+  }
+</script>
+</body>
+</html>
