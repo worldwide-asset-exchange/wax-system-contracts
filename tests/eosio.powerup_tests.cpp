@@ -809,26 +809,26 @@ BOOST_AUTO_TEST_CASE(rent_tests) try {
                      asset::from_string("192000.0001 TST"), net_weight * .2, cpu_weight * .2);
 
       // Start decay
-      t.produce_block(fc::days(15) - fc::milliseconds(1000));
+      t.produce_block(fc::days(15));
       BOOST_REQUIRE_EQUAL("", t.powerupexec(config::system_account_name, 10));
       BOOST_REQUIRE(near(t.get_state().net.adjusted_utilization, .3 * net_weight, 0));
       BOOST_REQUIRE(near(t.get_state().cpu.adjusted_utilization, .4 * cpu_weight, 0));
 
-      // // 1 day of decay from (30%, 40%) to (20%, 20%)
-      // t.produce_block(fc::days(1) - fc::milliseconds(500));
-      // BOOST_REQUIRE_EQUAL("", t.powerupexec(config::system_account_name, 10));
-      // BOOST_REQUIRE(
-      //       near(t.get_state().net.adjusted_utilization, int64_t(.1 * net_weight * exp(-1) + .2 * net_weight), 0));
-      // BOOST_REQUIRE(
-      //       near(t.get_state().cpu.adjusted_utilization, int64_t(.2 * cpu_weight * exp(-1) + .2 * cpu_weight), 0));
+      // 1 day of decay from (30%, 40%) to (20%, 20%)
+      t.produce_block(fc::days(1) - fc::milliseconds(500));
+      BOOST_REQUIRE_EQUAL("", t.powerupexec(config::system_account_name, 10));
+      BOOST_REQUIRE(
+            near(t.get_state().net.adjusted_utilization, int64_t(.1 * net_weight * exp(-1) + .2 * net_weight), 0));
+      BOOST_REQUIRE(
+            near(t.get_state().cpu.adjusted_utilization, int64_t(.2 * cpu_weight * exp(-1) + .2 * cpu_weight), 0));
 
-      // // 2 days of decay from (30%, 40%) to (20%, 20%)
-      // t.produce_block(fc::days(1) - fc::milliseconds(500));
-      // BOOST_REQUIRE_EQUAL("", t.powerupexec(config::system_account_name, 10));
-      // BOOST_REQUIRE(
-      //       near(t.get_state().net.adjusted_utilization, int64_t(.1 * net_weight * exp(-2) + .2 * net_weight), 0));
-      // BOOST_REQUIRE(
-      //       near(t.get_state().cpu.adjusted_utilization, int64_t(.2 * cpu_weight * exp(-2) + .2 * cpu_weight), 0));
+      // 2 days of decay from (30%, 40%) to (20%, 20%)
+      t.produce_block(fc::days(1) - fc::milliseconds(500));
+      BOOST_REQUIRE_EQUAL("", t.powerupexec(config::system_account_name, 10));
+      BOOST_REQUIRE(
+            near(t.get_state().net.adjusted_utilization, int64_t(.1 * net_weight * exp(-2) + .2 * net_weight), 0));
+      BOOST_REQUIRE(
+            near(t.get_state().cpu.adjusted_utilization, int64_t(.2 * cpu_weight * exp(-2) + .2 * cpu_weight), 0));
    }
 
 } // rent_tests
