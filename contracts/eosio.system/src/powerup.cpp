@@ -393,7 +393,7 @@ void system_contract::powerup(const name& payer, const name& receiver, uint32_t 
 
    token::transfer_action transfer_act{ token_account, { payer, active_permission } };
    transfer_act.send( payer, saving_account, fee,
-                            std::string("transfer fee from ") + payer.to_string() + " to eosio.saving" );
+                            std::string("powerup fee from ") + payer.to_string() );
 
    state_sing.set(state, get_self());
 
