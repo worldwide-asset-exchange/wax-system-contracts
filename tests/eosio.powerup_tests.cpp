@@ -181,13 +181,13 @@ struct powerup_tester : eosio_system_tester {
       auto before_payer    = get_account_info(payer);
       auto before_receiver = get_account_info(receiver);
       auto before_reserve  = get_account_info("eosio.reserv"_n);
-      auto before_fee_receiver    = get_account_info("eosio.saving"_n);
+      auto before_fee_receiver    = get_account_info("eosio.fees"_n);
       auto before_state    = get_state();
       BOOST_REQUIRE_EQUAL("", powerup(payer, receiver, days, net_frac, cpu_frac, expected_fee));
       auto after_payer    = get_account_info(payer);
       auto after_receiver = get_account_info(receiver);
       auto after_reserve  = get_account_info("eosio.reserv"_n);
-      auto after_fee_receiver    = get_account_info("eosio.saving"_n);
+      auto after_fee_receiver    = get_account_info("eosio.fees"_n);
       auto after_state    = get_state();
 
       if (false) {
