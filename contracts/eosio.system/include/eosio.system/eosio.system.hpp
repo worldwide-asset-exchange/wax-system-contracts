@@ -732,6 +732,7 @@ namespace eosiosystem {
          static constexpr eosio::name genesis_account{"genesis.wax"_n};
          static constexpr eosio::name null_account{"eosio.null"_n};
          static constexpr eosio::name reserve_account{"eosio.reserv"_n};
+         static constexpr eosio::name fees_account{"eosio.fees"_n};
          static constexpr symbol ramcore_symbol = symbol(symbol_code("RAMCORE"), 4);
          static constexpr symbol ram_symbol     = symbol(symbol_code("RAM"), 0);
 
