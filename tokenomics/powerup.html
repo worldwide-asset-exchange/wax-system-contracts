@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU Fee Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+
+        .input-section {
+            margin-bottom: 20px;
+        }
+
+        .input-section label,
+        .input-section input {
+            margin: 5px;
+        }
+
+        .inputs-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+        }
+
+        .input-group {
+            flex: 0 0 calc(33.333% - 10px);
+            margin-bottom: 10px;
+        }
+
+        canvas {
+            width: 70% !important;
+            max-height: 60vh;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.5.0-beta4/html2canvas.min.js"></script>
+</head>
+<body onload="init()">
+  <button id="exportToPNG">Export to PNG</button>
+
+  <div id="exportContainer">
+    <canvas id="cpuFeeChart" width="800" height="400"></canvas>
+    <div class="input-section">
+      <div class="input-group">
+        <label for="minPrice">Min Price:</label>
+        <input class="input-field" type="number" id="minPrice" name="minPrice" value="10000">
+
+        <label for="maxPrice">Max Price:</label>
+        <input class="input-field" type="number" id="maxPrice" name="maxPrice" value="400000">
+      </div>
+
+      <div class="input-group">
+        <label for="powerupWeight">Powerup Weight:</label>
+        <input class="input-field" type="number" id="powerupWeight" name="powerupWeight" value="10">
+
+        <label for="stakeWeight">Stake Weight:</label>
+        <input class="input-field" type="number" id="stakeWeight" name="stakeWeight" value="1000">
+      </div>
+
+      <div class="input-group">
+        <label for="stakePoolValue">Stake Pool Value:</label>
+        <input class="input-field" type="number" id="stakePoolValue" name="stakePoolValue" value="386500018">
+
+        <label for="waxUSDSpotPrice">WAX Spot Price USD:</label>
+        <input class="input-field" type="number" id="waxUSDSpotPrice" name="waxUSDSpotPrice" value="0.065">
+
+        <label for="resourcePctReservation">Percent To Reserve Per Iteration:</label>
+        <input class="input-field" type="number" id="resourcePctReservation" name="resourcePctReservation" value="0.1">
+      </div>
+        <hr>
+        <label id="cpuReservedPerIteration"></label>
+        <br>
+        <br>
+        <label id="stakeCostEquivalentBandwidth"></label>
+        <br>
+        <br>
+        <label id="costThirtyPct"></label>
+        <br>
+        <br>
+        <label id="costSeventyPct"></label>
+        <br>
+        <br>
+        <label id="totalFees"></label>
+
+    </div>
+  </div>
+
+  <script>
+  const AVAILABLE_CPU_MS = 200 * 2 * 60 * 60 * 24;
+  const WAX_DECIMALS = 100000000.0;
+
+  function updateChart() {
+    try {
+      const minPrice = parseFloat(document.getElementById('minPrice').value) * WAX_DECIMALS;
+      const maxPrice = parseFloat(document.getElementById('maxPrice').value) * WAX_DECIMALS;
+      const resourcePctReservation = parseFloat(document.getElementById('resourcePctReservation').value);
+      const powerupWeight = parseFloat(document.getElementById('powerupWeight').value);
+      const stakeWeight = parseFloat(document.getElementById('stakeWeight').value);
+      const stakePoolValue = parseFloat(document.getElementById('stakePoolValue').value) * WAX_DECIMALS;
+
+      if(isNaN(minPrice) || isNaN(maxPrice) || isNaN(resourcePctReservation) || isNaN(powerupWeight) || isNaN(stakeWeight) || isNaN(stakePoolValue) || !(resourcePctReservation > 0 && resourcePctReservation <= 100)) {
+          alert("Please enter valid numbers in all fields.");
+          return;
+      }
+
+      const state = {
+          minPrice,
+          maxPrice,
+          weight: powerupWeight,
+          exponent: 2.0,
+          utilization: 0,
+          adjustedUtilization: 0
+      };
+
+      // Generate data points
+      const utilizationIncreases = [];
+      const fees = [];
+      const NUM_SAMPLES = 100 / resourcePctReservation;
+      const utilizationDelta = 1 / NUM_SAMPLES;
+
+      let costThirtyPct = 0;
+      let costSeventyPct = 0;
+      let lastFrac = 0;
+      for(let frac = 0; frac <= 1; frac = Math.round(NUM_SAMPLES*(frac + utilizationDelta)) / NUM_SAMPLES) {
+          let amount = state.weight * (frac - lastFrac);
+          lastFrac = frac;
+          const fee = calcPowerupFee(state, amount) / WAX_DECIMALS;
+          if(costThirtyPct === 0 && frac >= 0.3) {
+            costThirtyPct = fee;
+          }
+          if(costSeventyPct === 0 && frac >= 0.7) {
+            costSeventyPct = fee;
+          }
+          utilizationIncreases.push(Math.round(frac * 100*10000)/10000);
+          fees.push(fee);
+          state.utilization += amount;
+          state.adjustedUtilization = state.utilization;
+      }
+
+      updateFeeChart(utilizationIncreases, fees);
+
+      const msReserved = round((powerupWeight / (powerupWeight + stakeWeight) ) * AVAILABLE_CPU_MS * utilizationDelta, 1000);
+      setText('cpuReservedPerIteration', `Reserving ${msReserved}ms CPU per iteration`);
+      const entirePowerupCost = round(fees.reduce((s, f) => s + f, 0));
+      setText('totalFees', `Total fees to reserve entire powerup resources: ${waxAndSpot(entirePowerupCost)}`);
+      setText('costThirtyPct', `Cost to powerup ${msReserved}ms CPU at 30% powerup utilization ${waxAndSpot(costThirtyPct)}. ${toSendAToken(costThirtyPct / msReserved)}`);
+      setText('costSeventyPct', `Cost to powerup ${msReserved}ms CPU at 70% powerup utilization ${waxAndSpot(costSeventyPct)}. ${toSendAToken(costSeventyPct / msReserved)}`);
+      const stakingCost = calcStakingCost(powerupWeight, stakeWeight, msReserved, stakePoolValue) / WAX_DECIMALS;
+      setText('stakeCostEquivalentBandwidth', `Cost to reserve ${msReserved}ms CPU via stake: ${waxAndSpot(stakingCost)}. ${toSendAToken(stakingCost / msReserved)}`);
+
+      setInputValuesToURL();
+    } catch(e) {
+      alert(e.message);
+    }
+  }
+
+  function toSendAToken(waxPerMS) {
+    const cpuToSendAToken = 153.0/1000.0; //ms
+    return `To send a token: ${round(cpuToSendAToken * waxPerMS, WAX_DECIMALS)} WAX`;
+  }
+
+  function setText(id, text){
+    document.getElementById(id).innerHTML = text;
+  }
+
+  function waxAndSpot(wax) {
+    return `${wax} WAX ($${waxToUSD(wax)})`;
+  }
+
+  function waxToUSD(wax) {
+    const waxUSDSpotPrice = parseFloat(document.getElementById('waxUSDSpotPrice').value);
+    return round(wax * waxUSDSpotPrice, 100);
+  }
+
+  function round(value, decimalsPow10) {
+    decimalsPow10 = decimalsPow10 || 1;
+    return Math.round(value * decimalsPow10) / decimalsPow10;
+  }
+
+  function calcStakingCost(powerupWeight, stakeWeight, cpuMSReserved, stakePoolValue) {
+      const utilizationDelta = cpuMSReserved / AVAILABLE_CPU_MS;
+      const stakePoolCapacity = stakeWeight / (powerupWeight + stakeWeight);
+      if(stakePoolCapacity < utilizationDelta) {
+        throw new Error(`Stake Pool does not have enough resource share ${stakePoolCapacity} to produce the utilization increase ${utilizationDelta}`);
+      }
+
+      return (utilizationDelta / stakePoolCapacity) * stakePoolValue;
+  }
+
+  function calcPowerupFee(state, utilizationIncrease) {
+      if (utilizationIncrease <= 0) return 0;
+
+      function priceIntegralDelta(startUtilization, endUtilization) {
+          const coefficient = (state.maxPrice - state.minPrice) / state.exponent;
+          const startU = startUtilization / state.weight;
+          const endU = endUtilization / state.weight;
+          return state.minPrice * endU - state.minPrice * startU +
+              coefficient * Math.pow(endU, state.exponent) - coefficient * Math.pow(startU, state.exponent);
+      }
+
+      function priceFunction(utilization) {
+          let price = state.minPrice;
+          const newExponent = state.exponent - 1.0;
+          if (newExponent <= 0.0) {
+              return state.maxPrice;
+          } else {
+              price += (state.maxPrice - state.minPrice) * Math.pow(utilization / state.weight, newExponent);
+          }
+          return price;
+      }
+
+      let fee = 0.0;
+      const startUtilization = state.utilization;
+      const endUtilization = startUtilization + utilizationIncrease;
+
+      if (startUtilization < state.adjustedUtilization) {
+          fee += priceFunction(state.adjustedUtilization) *
+              Math.min(utilizationIncrease, state.adjustedUtilization - startUtilization) / state.weight;
+          startUtilization = state.adjustedUtilization;
+      }
+
+      if (startUtilization < endUtilization) {
+          fee += priceIntegralDelta(startUtilization, endUtilization);
+      }
+
+      return Math.ceil(fee);
+  }
+
+  function updateFeeChart(utilizationIncreases, fees) {
+      const ctx = document.getElementById('cpuFeeChart').getContext('2d');
+
+      if(window.cpuFeeChartInst) {
+          window.cpuFeeChartInst.destroy();
+      }
+
+      window.cpuFeeChartInst = new Chart(ctx, {
+          type: 'line',
+          data: {
+              labels: utilizationIncreases,
+              datasets: [{
+                  label: 'CPU Fee',
+                  data: fees,
+                  backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                  borderColor: 'rgba(255, 99, 132, 1)',
+                  borderWidth: 1
+              }]
+          },
+          options: {
+              scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Powerup Utilization %'
+                    }
+                },
+                y: {
+                    title: {
+                      display: true,
+                      text: 'Powerup Fee (WAX)'
+                    },
+                    beginAtZero: true
+                  }
+              }
+          }
+      });
+  }
+
+  async function exportImage() {
+      const chartContainer = document.getElementById('exportContainer');
+
+      const canvas = await html2canvas(chartContainer);
+
+      const imgData = canvas.toDataURL('image/png');
+      downloadImage(imgData, 'chart-export.png');
+  }
+
+  function downloadImage(data, filename) {
+      const link = document.createElement('a');
+      link.href = data;
+      link.download = filename;
+      link.click();
+  }
+
+  function setInputValuesFromURL() {
+      // Get URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+
+      // Loop through each input and see if there's a matching URL parameter to set its value
+      const inputFields = document.querySelectorAll('.input-field');
+      inputFields.forEach(field => {
+          const paramValue = urlParams.get(field.id);
+          if (paramValue !== null) {
+              field.value = paramValue;
+          }
+      });
+  }
+
+  function setInputValuesToURL() {
+      // Get URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+
+      // Loop through each input and see if there's a matching URL parameter to set its value
+      const inputFields = document.querySelectorAll('.input-field');
+      let params = '?';
+      inputFields.forEach(field => {
+          if (field.value !== null) {
+            params += `&${field.id}=${field.value}`;
+          }
+      });
+      window.history.replaceState(null, null, window.location.pathname+params);
+  }
+
+  function init() {
+    setInputValuesFromURL();
+    // Initial chart rendering
+    updateChart();
+
+    const inputFields = document.querySelectorAll('.input-field');
+    inputFields.forEach(field => {
+        field.addEventListener('input', updateChart);
+    });
+
+    document.getElementById("exportToPNG").addEventListener("click", function() {
+        exportImage();
+    });
+  }
+  </script>
+</body>
+</html>
