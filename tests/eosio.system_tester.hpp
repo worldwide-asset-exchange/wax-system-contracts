@@ -84,7 +84,7 @@ public:
       }
    }
 
-   void remaining_setup() {
+   void remaining_setup(symbol core_symbol = symbol{CORE_SYM}) {
       produce_blocks();
 
       // Assumes previous setup steps were done with core token symbol set to CORE_SYM
@@ -93,6 +93,10 @@ public:
       create_account_with_resources( "carol1111111"_n, config::system_account_name, core_sym::from_string("1.0000"), false );
 
       BOOST_REQUIRE_EQUAL( core_sym::from_string("1000000000.0000"), get_balance("eosio")  + get_balance("eosio.ramfee") + get_balance("eosio.stake") + get_balance("eosio.ram") );
+
+      // open ram for eosio.fees account
+      open( "eosio.fees"_n, core_symbol );
+      BOOST_REQUIRE_EQUAL( asset(0, core_symbol), get_balance( "eosio.fees", core_symbol ) );
    }
 
    enum class setup_level {
@@ -833,6 +837,14 @@ public:
                                 ("to",      to )
                                 ("quantity", amount)
                                 ("memo", "")
+                                );
+   }
+
+   void open( const name& owner, const symbol& symbolname, const name& manager = config::system_account_name) {
+      base_tester::push_action( "eosio.token"_n, "open"_n, manager, mutable_variant_object()
+                                ("owner",    owner)
+                                ("symbol",      symbolname )
+                                ("ram_payer", manager)
                                 );
    }
 
