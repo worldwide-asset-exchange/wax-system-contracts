@@ -683,15 +683,6 @@ namespace eosiosystem {
                                indexed_by<"byexpires"_n, const_mem_fun<powerup_order, uint64_t, &powerup_order::by_expires>>
                                > powerup_order_table;
 
-   struct [[eosio::table("burn.state"),eosio::contract("eosio.system")]] burn_state {
-
-      uint64_t                   usecs_burn_period      = useconds_per_day;
-      time_point                 last_burn_time;
-
-      uint64_t primary_key()const { return 0; }
-   };
-
-   typedef eosio::singleton<"burn.state"_n, burn_state> burn_state_singleton;
    /**
     * The `eosio.system` smart contract is provided by `block.one` as a sample system contract, and it defines the structures and actions needed for blockchain's core functionality.
     *

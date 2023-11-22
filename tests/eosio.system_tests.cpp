@@ -2280,7 +2280,6 @@ BOOST_FIXTURE_TEST_CASE(adjust_chain_inflation, eosio_system_tester, * boost::un
    create_account_with_resources( "producvoterb"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
 
    BOOST_REQUIRE_EQUAL(success(), regproducer("defproducera"_n));
-   BOOST_REQUIRE_EQUAL(success(), regproducer("defproducerb"_n));
    produce_block(fc::hours(24));
    auto prod = get_producer_info( "defproducera"_n );
    BOOST_REQUIRE_EQUAL("defproducera", prod["owner"].as_string());
@@ -2289,11 +2288,6 @@ BOOST_FIXTURE_TEST_CASE(adjust_chain_inflation, eosio_system_tester, * boost::un
    transfer( config::system_account_name, "producvotera", core_sym::from_string("400000000.0000"), config::system_account_name);
    BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
    BOOST_REQUIRE_EQUAL(success(), vote( "producvotera"_n, { "defproducera"_n }));
-
-   // register producerb
-   transfer( config::system_account_name, "producvoterb", core_sym::from_string("400000000.0000"), config::system_account_name);
-   BOOST_REQUIRE_EQUAL(success(), stake("producvoterb", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
-   BOOST_REQUIRE_EQUAL(success(), vote( "producvoterb"_n, { "defproducerb"_n }));
 
    // Reduce Inflation Rate
    // Simulates a scenario where the tokenomics can adjust the inflation rate.
@@ -2335,14 +2329,14 @@ BOOST_FIXTURE_TEST_CASE(adjust_chain_inflation, eosio_system_tester, * boost::un
 
       auto usecs_between_fills = claim_time - initial_claim_time;
       int32_t secs_between_fills = usecs_between_fills/1000000;
-      uint64_t new_tokens = (initial_supply.get_amount() * double(secs_between_fills) * continuous_rate) / secs_per_year;
+      uint64_t distribute_tokens = (initial_supply.get_amount() * double(secs_between_fills) * continuous_rate) / secs_per_year;
       BOOST_REQUIRE_EQUAL(0, initial_savings);
       BOOST_REQUIRE_EQUAL(0, initial_perblock_bucket);
       BOOST_REQUIRE_EQUAL(0, initial_pervote_bucket);
 
-      BOOST_REQUIRE_EQUAL(new_tokens - init_account_fees.get_amount(), supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 3), savings - initial_savings);
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5), balance.get_amount() - initial_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(distribute_tokens - init_account_fees.get_amount(), supply.get_amount() - initial_supply.get_amount());
+      BOOST_REQUIRE_EQUAL(int64_t(distribute_tokens - (distribute_tokens / 5) * 3), savings - initial_savings);
+      BOOST_REQUIRE_EQUAL(int64_t(distribute_tokens / 5), balance.get_amount() - initial_balance.get_amount());
 
       int64_t from_perblock_bucket = int64_t( initial_supply.get_amount() * double(secs_between_fills) * (continuous_rate / 5.) / secs_per_year ) ;
       int64_t from_pervote_bucket  = 0;
@@ -2359,13 +2353,6 @@ BOOST_FIXTURE_TEST_CASE(adjust_chain_inflation, eosio_system_tester, * boost::un
 
    // Wait 1 day
    produce_block(fc::seconds(24 * 3600));
-
-   auto get_burn_state = [this]() -> fc::variant {
-      vector<char> data = get_row_by_account( config::system_account_name, {},
-                                              "burn.state"_n, "burn.state"_n );
-      BOOST_REQUIRE( !data.empty() );
-      return abi_ser.binary_to_variant("burn_state", data, abi_serializer::create_yield_function(abi_serializer_max_time));
-   };
 
    // No Inflation Rate Adjustment with Token Burn
    // Evaluates the situation where the tokenomics covers inflation rate and tests the burning mechanism for remaining tokens.
@@ -2394,10 +2381,6 @@ BOOST_FIXTURE_TEST_CASE(adjust_chain_inflation, eosio_system_tester, * boost::un
       const int64_t  perblock_bucket   = global_state["perblock_bucket"].as<int64_t>();
       const int64_t  savings           = get_balance("eosio.saving"_n).get_amount();
 
-      const auto     burn_state        = get_burn_state();
-      BOOST_REQUIRE_EQUAL(claim_time,  microseconds_since_epoch_of_iso_string( burn_state["last_burn_time"]) );
-      BOOST_REQUIRE_EQUAL(useconds_per_day,  burn_state["usecs_burn_period"].as<int64_t>() );
-
       prod = get_producer_info("defproducera");
       const asset supply  = get_token_supply();
       const asset account_fees = get_balance("eosio.fees"_n);
@@ -2407,61 +2390,12 @@ BOOST_FIXTURE_TEST_CASE(adjust_chain_inflation, eosio_system_tester, * boost::un
 
       auto usecs_between_fills = claim_time - initial_claim_time;
       int32_t secs_between_fills = usecs_between_fills/1000000;
-      int64_t new_tokens = (initial_supply.get_amount() * double(usecs_between_fills) * continuous_rate) / usecs_per_year;
+      int64_t distribute_tokens = (initial_supply.get_amount() * double(usecs_between_fills) * continuous_rate) / usecs_per_year;
 
-      BOOST_REQUIRE_EQUAL(init_account_fees.get_amount() - new_tokens, initial_supply.get_amount() - supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 3), savings - initial_savings);
+      BOOST_REQUIRE_EQUAL(init_account_fees.get_amount() - distribute_tokens, initial_supply.get_amount() - supply.get_amount());
+      BOOST_REQUIRE_EQUAL(int64_t(distribute_tokens - (distribute_tokens / 5) * 3), savings - initial_savings);
 
    }
-
-   // No Inflation Adjustment without Token Burn
-   // Tests the scenario where no inflation adjustment is needed, and ensures that the tokens are not burned if the burn period has not exceeded.
-   {
-      produce_blocks(100);
-
-      const auto     initial_global_state      = get_global_state();
-      const uint64_t initial_claim_time        = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
-      const int64_t  initial_pervote_bucket    = initial_global_state["pervote_bucket"].as<int64_t>();
-      const int64_t  initial_perblock_bucket   = initial_global_state["perblock_bucket"].as<int64_t>();
-      const int64_t  initial_savings           = get_balance("eosio.saving"_n).get_amount();
-
-      prod = get_producer_info("defproducerb");
-      const uint32_t unpaid_blocks = prod["unpaid_blocks"].as<uint32_t>();
-      BOOST_REQUIRE(1 < unpaid_blocks);
-
-      const asset initial_supply  = get_token_supply();
-      transfer(config::system_account_name, "eosio.fees", core_sym::from_string("200000.0000"), config::system_account_name);
-      const asset init_account_fees = get_balance("eosio.fees"_n);
-
-      BOOST_REQUIRE_EQUAL(success(), push_action("defproducerb"_n, "claimrewards"_n, mvo()("owner", "defproducerb")));
-
-      const auto     global_state      = get_global_state();
-      const uint64_t claim_time        = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
-      const int64_t  pervote_bucket    = global_state["pervote_bucket"].as<int64_t>();
-      const int64_t  perblock_bucket   = global_state["perblock_bucket"].as<int64_t>();
-      const int64_t  savings           = get_balance("eosio.saving"_n).get_amount();
-      const uint32_t tot_unpaid_blocks = global_state["total_unpaid_blocks"].as<uint32_t>();
-
-      const auto     burn_state        = get_burn_state();
-      BOOST_REQUIRE_NE(claim_time,  microseconds_since_epoch_of_iso_string( burn_state["last_burn_time"]) );
-      BOOST_REQUIRE_EQUAL(useconds_per_day,  burn_state["usecs_burn_period"].as<int64_t>() );
-
-      prod = get_producer_info("defproducerb");
-
-      const asset supply  = get_token_supply();
-      const asset account_fees = get_balance("eosio.fees"_n);
-
-      BOOST_REQUIRE_EQUAL(claim_time, microseconds_since_epoch_of_iso_string( prod["last_claim_time"] ));
-
-      auto usecs_between_fills = claim_time - initial_claim_time;
-      int32_t secs_between_fills = usecs_between_fills/1000000;
-      int64_t new_tokens = (initial_supply.get_amount() * double(usecs_between_fills) * continuous_rate) / usecs_per_year;
-
-      BOOST_REQUIRE_EQUAL(0, supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(new_tokens,  init_account_fees.get_amount() - account_fees.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 3), savings - initial_savings);
-   }
-
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
