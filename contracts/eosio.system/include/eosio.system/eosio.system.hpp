@@ -684,9 +684,8 @@ namespace eosiosystem {
                                > powerup_order_table;
 
    struct [[eosio::table("burn.state"),eosio::contract("eosio.system")]] burn_state {
-      static constexpr uint32_t default_burn_period = 24*60*60; // 1 day
 
-      uint32_t                   burn_period      = default_burn_period;
+      uint64_t                   usecs_burn_period      = useconds_per_day;
       time_point                 last_burn_time;
 
       uint64_t primary_key()const { return 0; }

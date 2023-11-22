@@ -82,10 +82,10 @@ namespace eosiosystem {
          burn_state_singleton burn_state_sing{ get_self(), 0 };
          auto                 burn_state = burn_state_sing.get_or_default();
 
-         auto fees_balance =  eosio::token::get_balance(token_account, fees_account, core_symbol().code() );
+         auto current_fees =  eosio::token::get_balance(token_account, fees_account, core_symbol().code() );
          auto new_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
-         auto collected_fees = std::min( new_tokens, fees_balance.amount );
-         auto issue_tokens = new_tokens - collected_fees;
+         auto fees_to_use = std::min( new_tokens, current_fees.amount );
+         auto issue_tokens = new_tokens - fees_to_use;
          // needs to be 2/5 Savings, 2/5 Voters, 1/5 producers
          auto to_per_block_pay = new_tokens / 5;
          auto to_voters        = 2 * to_per_block_pay;
@@ -96,9 +96,9 @@ namespace eosiosystem {
                token::issue_action issue_act{ token_account, { {get_self(), active_permission} } };
                issue_act.send( get_self(), asset(issue_tokens, core_symbol()), "issue tokens for producer pay and savings" );
             }
-            if(collected_fees > 0){
+            if(fees_to_use > 0){
                token::transfer_action transfer_act{ token_account, { {fees_account, active_permission} } };
-               transfer_act.send( fees_account, get_self(), asset(collected_fees, core_symbol()), "collect tokenomic fees" );
+               transfer_act.send( fees_account, get_self(), asset(fees_to_use, core_symbol()), "collect tokenomic fees" );
             }
          }
          {
@@ -112,24 +112,24 @@ namespace eosiosystem {
          _gstate.voters_bucket      += to_voters;
          _gstate.last_pervote_bucket_fill = ct;
 
-         // burn remining tokenomic fees
+         // burn remaining tokenomic fees
          if (!burn_state_sing.exists()) {
             burn_state.last_burn_time = current_time_point();
+            burn_state_sing.set(burn_state, get_self());
          }
-         auto is_burn = (current_time_point() - burn_state.last_burn_time).count() >= burn_state.burn_period;
+         auto burn_flag = (current_time_point() - burn_state.last_burn_time).count() >= (burn_state.usecs_burn_period);
 
-         auto burn_amount = fees_balance.amount  - collected_fees;
-         if(is_burn && burn_amount > 0){
+         auto burn_fees = current_fees.amount  - fees_to_use;
+         if(burn_flag && burn_fees > 0){
             token::transfer_action transfer_act{ token_account, { {fees_account, active_permission} } };
-            transfer_act.send( fees_account, get_self(), asset(burn_amount, core_symbol()), "burn tokenomic fees" );
+            transfer_act.send( fees_account, get_self(), asset(burn_fees, core_symbol()), "burn tokenomic fees" );
 
             token::retire_action retire_act{ token_account, { {get_self(), active_permission} } };
-            retire_act.send( asset(burn_amount, core_symbol()), "burn tokenomic fees" );
+            retire_act.send( asset(burn_fees, core_symbol()), "burn tokenomic fees" );
 
             burn_state.last_burn_time = current_time_point();
             burn_state_sing.set(burn_state, get_self());
          }
-
       }
    }
 
