@@ -111,7 +111,6 @@ namespace eosiosystem {
 
          // burn remaining tokenomic fees
          auto burn_fees = std::max(int64_t(0), (current_fees.amount - fees_to_use) );
-         // auto fees_to_use = std::min( distribute_tokens, current_fees.amount );
          if( burn_fees > 0 ){
             token::transfer_action transfer_act{ token_account, { {fees_account, active_permission} } };
             transfer_act.send( fees_account, get_self(), asset(burn_fees, core_symbol()), "burn tokenomic fees" );
