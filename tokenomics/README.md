@@ -78,7 +78,7 @@ Dynamics to realize:
 
 
 
-![alt_text](images/basic-user-threshold.png "Basic User at Tx/Hr Threshold")
+![alt_text](images/powerup-initial.png "Powerup Initial Config")
 
 
 [Fig 1. Powerup Launch Configuration](https://rawcdn.githack.com/worldwide-asset-exchange/wax-system-contracts/1f379e1fba1db625a4fb850e58c33deee4699618/tokenomics/powerup.html?&minPrice=8750&maxPrice=262500&powerupWeight=1&stakeWeight=10&stakePoolValue=386500018&waxUSDSpotPrice=0.067&resourcePctReservation=0.1)
