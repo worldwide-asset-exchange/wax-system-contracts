@@ -10,8 +10,8 @@ The Worldwide Asset eXchange™ (WAX) is a purpose-built blockchain and protocol
 3. [Incentives and mechanics to address voter apathy](https://wax.io/blog/staking-and-voting-on-wax-a-technical-deep-dive)
 
 Dependencies:
-* [WAX v1.8.x](https://github.com/worldwide-asset-exchange/wax-blockchain/tree/wax-1.8.1-1.0.0)
-* [WAX CDT v1.6.x](https://github.com/worldwide-asset-exchange/wax-cdt/tree/wax-1.6.1-1.0.0)
+* [WAX v3.1.3wax02](https://github.com/worldwide-asset-exchange/wax-blockchain/tree/v3.1.3wax02)
+* [WAX CDT v3.0.1](https://github.com/worldwide-asset-exchange/cdt/tree/v3.0.1)
 
 ### Installation Instructions
 To build the contracts and the unit tests:
@@ -23,9 +23,9 @@ The `main` branch contains the latest state of development; do not use this for 
 
 ## Supported Operating Systems
 
-[CDT](https://github.com/AntelopeIO/cdt) is required to build contracts. Any operating systems supported by CDT is sufficient to build the system contracts.
+[CDT](https://github.com/worldwide-asset-exchange/cdt) is required to build contracts. Any operating systems supported by CDT is sufficient to build the system contracts.
 
-To build and run the tests as well, [Leap](https://github.com/AntelopeIO/leap) is also required as a dependency, which may have its further restrictions on supported operating systems.
+To build and run the tests as well, [Leap](https://github.com/worldwide-asset-exchange/wax-blockchain) is also required as a dependency, which may have its further restrictions on supported operating systems.
 
 ## Building
 
@@ -35,17 +35,17 @@ The build guide below will assume you are running Ubuntu 20.04. However, as ment
 
 The CDT dependency is required. This release of the system contracts requires at least version 3.0 of CDT.
 
-The easiest way to satisfy this dependency is to install CDT on your system through a package. Find the release of a compatible version of CDT from its [releases page](https://github.com/AntelopeIO/cdt/releases), download the package file appropriate for your OS from the attached assets, and install the package.
+The easiest way to satisfy this dependency is to install CDT on your system through a package. Find the release of a compatible version of CDT from its [releases page](https://github.com/worldwide-asset-exchange/cd/releases), download the package file appropriate for your OS from the attached assets, and install the package.
 
-Alternatively, you can build CDT from source. Please refer to the guide in the [CDT README](https://github.com/AntelopeIO/cdt#building-from-source) for instructions on how to do this. If you choose to go with building CDT from source, please keep the path to the build directory in the shell environment variable `CDT_BUILD_PATH` for later use when building the system contracts.
+Alternatively, you can build CDT from source. Please refer to the guide in the [CDT README](https://github.com/worldwide-asset-exchange/cd#building-from-source) for instructions on how to do this. If you choose to go with building CDT from source, please keep the path to the build directory in the shell environment variable `CDT_BUILD_PATH` for later use when building the system contracts.
 
 ### Optionally build Leap dependency
 
 The Leap dependency is optional. It is only needed if you wish to also build the tests using the `BUILD_TESTS` CMake flag.
 
-Unfortunately, it is not currently possible to satisfy the contract testing dependencies through the Leap packages made available from the [Leap releases page](https://github.com/AntelopeIO/leap/releases). So if you want to build the contract tests, you will first need to build Leap from source.
+Unfortunately, it is not currently possible to satisfy the contract testing dependencies through the Leap packages made available from the [Leap releases page](https://github.com/worldwide-asset-exchange/wax-blockchain/releases). So if you want to build the contract tests, you will first need to build Leap from source.
 
-Please refer to the guide in the [Leap README](https://github.com/AntelopeIO/leap#building-from-source) for instructions on how to do this. If you choose to go with building Leap from source, please keep the path to the build directory in the shell environment variable `LEAP_BUILD_PATH` for later use when building the system contracts.
+Please refer to the guide in the [Leap README](https://github.com/worldwide-asset-exchange/wax-blockchain#building-from-source) for instructions on how to do this. If you choose to go with building Leap from source, please keep the path to the build directory in the shell environment variable `LEAP_BUILD_PATH` for later use when building the system contracts.
 
 ### Build system contracts
 
