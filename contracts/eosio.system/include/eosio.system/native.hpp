@@ -149,6 +149,14 @@ namespace eosiosystem {
                           ignore<authority> active);
 
          /**
+          * New slim account action is called after a new slim account is created. This code enforces resource-limits rules
+          * for new accounts as well as new account naming conventions.
+          */
+         [[eosio::action]]
+         void newslimacc( const name&       creator,
+                          const name&       name,
+                          ignore<authority> active);
+         /**
           * Update authorization action updates permission for an account.
           *
           * This contract enforces additional rules:
@@ -309,6 +317,7 @@ namespace eosiosystem {
                        const binary_extension<std::string>& memo ) {}
 
          using newaccount_action = eosio::action_wrapper<"newaccount"_n, &native::newaccount>;
+         using newslimacc_action = eosio::action_wrapper<"newslimacc"_n, &native::newslimacc>;
          using updateauth_action = eosio::action_wrapper<"updateauth"_n, &native::updateauth>;
          using deleteauth_action = eosio::action_wrapper<"deleteauth"_n, &native::deleteauth>;
          using linkauth_action = eosio::action_wrapper<"linkauth"_n, &native::linkauth>;

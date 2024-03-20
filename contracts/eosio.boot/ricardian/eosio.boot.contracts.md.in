@@ -61,6 +61,20 @@ owner permission with authority:
 active permission with authority:
 {{to_json active}}
 
+<h1 class="contract">newslimacc</h1>
+
+---
+spec_version: "0.2.0"
+title: Create New SLim Account
+summary: '{{nowrap creator}} creates a new account with the name {{nowrap name}}'
+icon: @ICON_BASE_URL@/@ACCOUNT_ICON_URI@
+---
+
+{{creator}} creates a new slim account with the name {{name}} and the following permission:
+
+active permission with authority:
+{{to_json active}}
+
 <h1 class="contract">reqactivated</h1>
 
 ---

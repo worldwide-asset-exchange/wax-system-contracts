@@ -459,6 +459,54 @@ namespace eosiosystem {
       }
    }
 
+   /**
+    *  Called after a new slim account is created. This code enforces resource-limits rules
+    *  for new accounts as well as new account naming conventions.
+    *
+    *  Account names containing '.' symbols must have a suffix equal to the name of the creator.
+    *  This allows users who buy a premium name (shorter than 12 characters with no dots) to be the only ones
+    *  who can create accounts with the creator's name as a suffix.
+    *
+    *  account eosio.* MUST NOT be created by newslimacc action
+    */
+   void native::newslimacc( const name&       creator,
+                            const name&       new_account_name,
+                            ignore<authority> owner) {
+
+      if( creator != get_self() ) {
+         uint64_t tmp = new_account_name.value >> 4;
+         bool has_dot = false;
+
+         for( uint32_t i = 0; i < 12; ++i ) {
+           has_dot |= !(tmp & 0x1f);
+           tmp >>= 5;
+         }
+         if( has_dot ) { // or is less than 12 characters
+            auto suffix = new_account_name.suffix();
+            if( suffix == new_account_name ) {
+               name_bid_table bids(get_self(), get_self().value);
+               auto current = bids.find( new_account_name.value );
+               check( current != bids.end(), "no active bid for name" );
+               check( current->high_bidder == creator, "only highest bidder can claim" );
+               check( current->high_bid < 0, "auction for name is not closed yet" );
+               bids.erase( current );
+            } else {
+               check( creator == suffix, "only suffix may create this account" );
+            }
+         }
+      }
+
+      user_resources_table  userres( get_self(), new_account_name.value );
+
+      userres.emplace( new_account_name, [&]( auto& res ) {
+        res.owner = new_account_name;
+        res.net_weight = asset( 0, system_contract::get_core_symbol() );
+        res.cpu_weight = asset( 0, system_contract::get_core_symbol() );
+      });
+
+      set_resource_limits( new_account_name, 0, 0, 0 );
+   }
+   
    void system_contract::init( unsigned_int version, const symbol& core ) {
       require_auth( get_self() );
       check( version.value == 0, "unsupported version for init action" );

@@ -110,6 +110,20 @@ namespace eosioboot {
                           name             name,
                           ignore<authority> owner,
                           ignore<authority> active) {}
+
+         /**
+          * New slim account action
+          *
+          * @details Creates a new slim account.
+          *
+          * @param creator - the creator of the account
+          * @param name - the name of the new account
+          * @param active - the authority for the active permission of the new account
+          */
+         [[eosio::action]]
+         void newslimacc( name             creator,
+                          name             name,
+                          ignore<authority> active) {}
          /**
           * Update authorization action.
           *
@@ -246,6 +260,7 @@ namespace eosioboot {
          void reqactivated( const eosio::checksum256& feature_digest );
 
          using newaccount_action = action_wrapper<"newaccount"_n, &boot::newaccount>;
+         using newslimacc_action = action_wrapper<"newslimacc"_n, &boot::newslimacc>;
          using updateauth_action = action_wrapper<"updateauth"_n, &boot::updateauth>;
          using deleteauth_action = action_wrapper<"deleteauth"_n, &boot::deleteauth>;
          using linkauth_action = action_wrapper<"linkauth"_n, &boot::linkauth>;

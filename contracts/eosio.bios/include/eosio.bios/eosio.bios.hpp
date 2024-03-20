@@ -91,6 +91,22 @@ namespace eosiobios {
                           name             name,
                           ignore<authority> owner,
                           ignore<authority> active){}
+
+         /**
+          * New slim account action, called after a new slim account is created. This code enforces resource-limits rules
+          * for new accounts as well as new account naming conventions.
+          *
+          * 1. accounts cannot contain '.' symbols which forces all acccounts to be 12
+          * characters long without '.' until a future account auction process is implemented
+          * which prevents name squatting.
+          *
+          * 2. new accounts must stake a minimal number of tokens (as set in system parameters)
+          * therefore, this method will execute an inline buyram from receiver for newacnt in
+          * an amount equal to the current new account creation fee.
+          */
+         void newslimacc( name             creator,
+                          name             name,
+                          ignore<authority> owner){}
          /**
           * Update authorization action updates pemission for an account.
           *
@@ -264,6 +280,7 @@ namespace eosiobios {
          typedef eosio::multi_index< "abihash"_n, abi_hash > abi_hash_table;
 
          using newaccount_action = action_wrapper<"newaccount"_n, &bios::newaccount>;
+         using newslimacc_action = action_wrapper<"newslimacc"_n, &bios::newslimacc>;
          using updateauth_action = action_wrapper<"updateauth"_n, &bios::updateauth>;
          using deleteauth_action = action_wrapper<"deleteauth"_n, &bios::deleteauth>;
          using linkauth_action = action_wrapper<"linkauth"_n, &bios::linkauth>;
