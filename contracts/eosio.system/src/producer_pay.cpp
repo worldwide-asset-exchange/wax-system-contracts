@@ -88,6 +88,10 @@ namespace eosiosystem {
          auto to_voters        = 2 * to_per_block_pay;
          auto to_savings       = distribute_tokens - (to_voters + to_per_block_pay);
 
+         auto total_block_pay = to_per_block_pay;
+         auto total_weight = (21ULL * PAY_SPLIT_SCALE) + (_gstate4.standby_slot_weight * _gstate4.num_standby_slots);
+         auto to_producers_pay = (total_block_pay * 21ULL * PAY_SPLIT_SCALE) / total_weight;
+         auto to_standby_pay   = total_block_pay - to_producers_pay;
          {
             if( issue_tokens > 0 ){
                token::issue_action issue_act{ token_account, { {get_self(), active_permission} } };
@@ -105,9 +109,12 @@ namespace eosiosystem {
             transfer_act.send( get_self(), bpay_account, asset(to_per_block_pay, core_symbol()), "fund bpay bucket" );
          }
 
-         _gstate.perblock_bucket    += to_per_block_pay;
+         _gstate.perblock_bucket    += to_producers_pay;
          _gstate.voters_bucket      += to_voters;
          _gstate.last_pervote_bucket_fill = ct;
+
+         _gstate4.standby_bucket += to_standby_pay;
+         _gstate4.last_standby_state_update = ct;
 
          // burn remaining tokenomic fees
          auto burn_fees = std::max(int64_t(0), (current_fees.amount - fees_to_use) );
