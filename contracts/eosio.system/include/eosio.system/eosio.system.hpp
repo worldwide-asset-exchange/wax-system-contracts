@@ -85,6 +85,8 @@ namespace eosiosystem {
    static constexpr int64_t  default_inflation_pay_factor  = 50000;   // producers pay share = 10000 / 50000 = 20% of the inflation
    static constexpr int64_t  default_votepay_factor        = 40000;   // per-block pay share = 10000 / 40000 = 25% of the producer pay
 
+   static const     uint64_t PAY_SPLIT_SCALE = 10000;    // produce base weight for payout scaling
+
 #ifdef SYSTEM_BLOCKCHAIN_PARAMETERS
    struct blockchain_parameters_v1 : eosio::blockchain_parameters
    {
@@ -708,6 +710,45 @@ namespace eosiosystem {
                                indexed_by<"byexpires"_n, const_mem_fun<powerup_order, uint64_t, &powerup_order::by_expires>>
                                > powerup_order_table;
 
+   // Defines new global state parameters added after version 1.3.0
+   struct [[eosio::table("global4"), eosio::contract("eosio.system")]] eosio_global_state4 {
+      eosio_global_state4() { }
+      time_point        last_standby_state_update;
+      uint64_t          standby_bucket = 0;
+      uint64_t          total_standby_share = 0;
+      uint64_t          standby_slot_weight = 0;
+      uint32_t          num_standby_slots = 0;
+
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_slot_weight)(num_standby_slots) )
+   };
+   typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
+
+   // Defines new standby producer info structure
+   struct [[eosio::table, eosio::contract("eosio.system")]] standby_producer_info {
+      name            owner;
+      uint64_t        standby_share = 0;
+      time_point      last_standby_share_update;
+      time_point      last_claim_time;
+      bool            is_active = true;
+      
+      uint64_t primary_key()const { return owner.value; }
+      uint64_t by_active()const  { return is_active ? 0 : 1; } // sort by active first
+
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE(standby_producer_info, (owner)(standby_share)(last_standby_share_update)(last_claim_time)(is_active))
+   };
+   typedef eosio::multi_index< "standbys"_n, standby_producer_info,
+            indexed_by<"byactive"_n, const_mem_fun<standby_producer_info, uint64_t, &standby_producer_info::by_active>>
+         >  standby_table;
+    // Defines new standby producer info structure
+   struct [[eosio::table, eosio::contract("eosio.system")]] standby_disallow_info {
+      name            owner;
+      uint64_t primary_key()const { return owner.value; }
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE(standby_disallow_info, (owner))
+   };
+   typedef eosio::multi_index< "sbdisallow"_n, standby_disallow_info >  standby_disallow_table;
+
    /**
     * The `eosio.system` smart contract is provided by `block.one` as a sample system contract, and it defines the structures and actions needed for blockchain's core functionality.
     *
@@ -732,9 +773,13 @@ namespace eosiosystem {
          global_state_singleton  _global;
          global_state2_singleton _global2;
          global_state3_singleton _global3;
+         global_state4_singleton _global4;
          eosio_global_state      _gstate;
          eosio_global_state2     _gstate2;
          eosio_global_state3     _gstate3;
+         eosio_global_state4     _gstate4;
+         standby_disallow_table  _standby_disallow;
+         standby_table           _standbys;
          rammarket               _rammarket;
          proposer_table          _proposers;
          proposal_table          _proposals;
@@ -742,6 +787,7 @@ namespace eosiosystem {
          reviewer_table          _reviewers;
          wps_global_state_singleton _wps_global;
          wps_global_state        _wps_state;
+
 
       public:
          static constexpr eosio::name active_permission{"active"_n};
@@ -1374,6 +1420,27 @@ namespace eosiosystem {
          [[eosio::action]]
          void powerup( const name& payer, const name& receiver, uint32_t days, int64_t net_frac, int64_t cpu_frac, const asset& max_payment );
 
+
+         /** set standby ratio */
+         [[eosio::action]]
+         void setsbratio( uint64_t ratio );
+
+         /** set standby slots */
+         [[eosio::action]]
+         void setsbslot( uint32_t num_slots );
+
+         /** add name to block list */
+         [[eosio::action]]
+         void disallowsb(const name account);
+
+         /** remove name from block list */
+         [[eosio::action]]
+         void allowsb(const name account);  
+
+         /** claim standby reward */
+         [[eosio::action]]
+         void claimstandby(const name owner);  
+
        /**
         * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
         *
@@ -1452,6 +1519,10 @@ namespace eosiosystem {
        using cfgpowerup_action = eosio::action_wrapper<"cfgpowerup"_n, &system_contract::cfgpowerup>;
        using powerupexec_action = eosio::action_wrapper<"powerupexec"_n, &system_contract::powerupexec>;
        using powerup_action = eosio::action_wrapper<"powerup"_n, &system_contract::powerup>;
+       using set_standby_pay_ratio_action = eosio::action_wrapper<"setsbratio"_n, &system_contract::setsbratio>;
+       using set_standby_slots_action = eosio::action_wrapper<"setsbslot"_n, &system_contract::setsbslot>;
+       using add_standby_block_action = eosio::action_wrapper<"disallowsb"_n, &system_contract::disallowsb>;
+       using rm_standby_block_action = eosio::action_wrapper<"allowsb"_n, &system_contract::allowsb>;
 
       private:
          // WAX specifics
@@ -1539,6 +1610,11 @@ namespace eosiosystem {
             time_point_sec now, symbol core_symbol, powerup_state& state,
             powerup_order_table& orders, uint32_t max_items, int64_t& net_delta_available,
             int64_t& cpu_delta_available);
+
+          // defined in standby.cpp
+         bool is_disallow_standby( name account );
+         void update_standby_share();
+         void update_standby_producers(const std::vector<eosio::name>& standby_producers);
    };
 
    double stake2vote( int64_t staked );

@@ -23,6 +23,7 @@ namespace eosiosystem {
    using eosio::indexed_by;
    using eosio::microseconds;
    using eosio::singleton;
+   using eosio::token;
 
    void system_contract::register_producer( const name& producer, const eosio::block_signing_authority& producer_authority, const std::string& url, uint16_t location ) {
       auto prod = _producers.find( producer.value );
@@ -111,7 +112,11 @@ namespace eosiosystem {
       using value_type = std::pair<eosio::producer_authority, uint16_t>;
       std::vector< value_type > top_producers;
       top_producers.reserve(21);
+      const uint32_t num_standby_slots = _gstate4.num_standby_slots;
 
+      std::vector<eosio::name> standby_producers;
+      standby_producers.reserve(num_standby_slots);
+      auto current_it = idx.cbegin();
       for( auto it = idx.cbegin(); it != idx.cend() && top_producers.size() < 21 && 0 < it->total_votes && it->active(); ++it ) {
          top_producers.emplace_back(
             eosio::producer_authority{
@@ -120,6 +125,14 @@ namespace eosiosystem {
             },
             it->location
          );
+         current_it = it;
+      }
+
+      for( auto it = ++current_it; it != idx.cend() && standby_producers.size() < num_standby_slots && 0 < it->total_votes && it->active(); ++it ) {
+         // check if producer is not on standbyblock list
+         if( !is_disallow_standby( it->owner ) ){
+            standby_producers.emplace_back( it->owner );
+         }
       }
 
       if( top_producers.size() == 0 || top_producers.size() < _gstate.last_producer_schedule_size ) {
@@ -143,6 +156,9 @@ namespace eosiosystem {
 
       if( set_proposed_producers( producers ) >= 0 ) {
          _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
+      }
+      if (standby_producers.size() > 0) {
+         update_standby_producers( standby_producers );
       }
    }
 
