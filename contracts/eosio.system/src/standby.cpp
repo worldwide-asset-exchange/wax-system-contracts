@@ -38,4 +38,46 @@ namespace eosiosystem {
        const auto & itr = _standby_disallow.find( account.value );
        return itr != _standby_disallow.end();
    }
+
+   
+   void system_contract::update_standby_share(){
+      const auto ct = current_time_point();
+
+      if( ct <= _gstate4.last_standby_state_update ) {
+         return;
+      }
+
+      auto idx = _standbys.get_index<"byactive"_n>();
+      double total_standby_time_share_increase = 0;
+      for ( auto itr = idx.begin(); itr != idx.end(); itr++ ) {
+          if(itr->is_active){
+              time_point last_update = itr->last_standby_share_update;
+              double share_increase = double((ct - last_update).count());
+              double new_account_share = itr->standby_share + share_increase;
+              total_standby_time_share_increase += share_increase;
+
+              idx.modify( itr, same_payer, [&](auto& row) {
+                  row.standby_share = new_account_share;
+                  row.last_standby_share_update = ct;
+              });
+          }else{
+              break;
+          }
+      }
+      _gstate4.last_standby_state_update = ct;
+      _gstate4.total_standy_share += total_standby_time_share_increase;
+   }
+
+   /*
+
+   bool system_contract::add_standby_account( name account )
+   {
+   }
+
+   bool system_contract::remove_standby_account( name account )
+   {
+   }
+   */
+
+
 }

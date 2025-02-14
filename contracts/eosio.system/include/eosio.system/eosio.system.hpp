@@ -712,9 +712,9 @@ namespace eosiosystem {
    struct [[eosio::table("global4"), eosio::contract("eosio.system")]] eosio_global_state4 {
       eosio_global_state4() { }
       time_point        last_standby_state_update;
-      double            total_standy_share_change_rate = 0;
+      double            total_standy_share = 0;
 
-      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(total_standy_share_change_rate) )
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(total_standy_share) )
    };
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 
@@ -726,12 +726,14 @@ namespace eosiosystem {
       bool            is_active = true;
       
       uint64_t primary_key()const { return owner.value; }
+      uint64_t by_active()const  { return is_active ? 0 : 1; } // sort by active first
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
       EOSLIB_SERIALIZE(standby_producer_info, (owner)(standby_share)(last_standby_share_update)(is_active))
    };
-   typedef eosio::multi_index< "standbys"_n, standby_producer_info >  standby_table;
-
+   typedef eosio::multi_index< "standbys"_n, standby_producer_info,
+            indexed_by<"byactive"_n, const_mem_fun<standby_producer_info, uint64_t, &standby_producer_info::by_active>>
+         >  standby_table;
     // Defines new standby producer info structure
    struct [[eosio::table, eosio::contract("eosio.system")]] standby_disallow_info {
       name            owner;
@@ -1582,6 +1584,7 @@ namespace eosiosystem {
          void add_standby_block(const name account);
          void remove_standby_block(const name account);  
          bool is_disallow_standby( name account );
+         void update_standby_share();
    };
 
    double stake2vote( int64_t staked );
