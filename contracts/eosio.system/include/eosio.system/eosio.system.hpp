@@ -708,6 +708,39 @@ namespace eosiosystem {
                                indexed_by<"byexpires"_n, const_mem_fun<powerup_order, uint64_t, &powerup_order::by_expires>>
                                > powerup_order_table;
 
+   // Defines new global state parameters added after version 1.3.0
+   struct [[eosio::table("global4"), eosio::contract("eosio.system")]] eosio_global_state4 {
+      eosio_global_state4() { }
+      time_point        last_standby_state_update;
+      double            total_standy_share_change_rate = 0;
+
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(total_standy_share_change_rate) )
+   };
+   typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
+
+   // Defines new standby producer info structure
+   struct [[eosio::table, eosio::contract("eosio.system")]] standby_producer_info {
+      name            owner;
+      double          standby_share = 0;
+      time_point      last_standby_share_update;
+      bool            is_active = true;
+      
+      uint64_t primary_key()const { return owner.value; }
+
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE(standby_producer_info, (owner)(standby_share)(last_standby_share_update)(is_active))
+   };
+   typedef eosio::multi_index< "standbys"_n, standby_producer_info >  standby_table;
+
+    // Defines new standby producer info structure
+   struct [[eosio::table, eosio::contract("eosio.system")]] standby_disallow_info {
+      name            owner;
+      uint64_t primary_key()const { return owner.value; }
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE(standby_disallow_info, (owner))
+   };
+   typedef eosio::multi_index< "stdbdisallow"_n, standby_disallow_info >  standby_disallow_table;
+
    /**
     * The `eosio.system` smart contract is provided by `block.one` as a sample system contract, and it defines the structures and actions needed for blockchain's core functionality.
     *
@@ -732,9 +765,13 @@ namespace eosiosystem {
          global_state_singleton  _global;
          global_state2_singleton _global2;
          global_state3_singleton _global3;
+         global_state4_singleton _global4;
          eosio_global_state      _gstate;
          eosio_global_state2     _gstate2;
          eosio_global_state3     _gstate3;
+         eosio_global_state4     _gstate4;
+         standby_disallow_table  _standby_disallow;
+         standby_table           _standbys;
          rammarket               _rammarket;
          proposer_table          _proposers;
          proposal_table          _proposals;
@@ -742,6 +779,7 @@ namespace eosiosystem {
          reviewer_table          _reviewers;
          wps_global_state_singleton _wps_global;
          wps_global_state        _wps_state;
+
 
       public:
          static constexpr eosio::name active_permission{"active"_n};
@@ -1539,6 +1577,11 @@ namespace eosiosystem {
             time_point_sec now, symbol core_symbol, powerup_state& state,
             powerup_order_table& orders, uint32_t max_items, int64_t& net_delta_available,
             int64_t& cpu_delta_available);
+
+          // defined in standby.cpp
+         void add_standby_block(const name account);
+         void remove_standby_block(const name account);  
+         bool is_disallow_standby( name account );
    };
 
    double stake2vote( int64_t staked );
