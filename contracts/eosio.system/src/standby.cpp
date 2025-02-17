@@ -68,6 +68,46 @@ namespace eosiosystem {
       _gstate4.total_standy_share += total_standby_time_share_increase;
    }
 
+   void system_contract::update_standby_producers(const std::vector<eosio::name>& standby_producers) {
+      update_standby_share();
+      require_auth( get_self() );
+      // disable _standbys active record if not in standby_producers
+      auto idx = _standbys.get_index<"byactive"_n>();
+      double total_standby_time_share_increase = 0;
+      for ( auto itr = idx.begin(); itr != idx.end(); itr++ ) {
+          if(itr->is_active){
+              if(std::find(standby_producers.begin(), standby_producers.end(), itr->owner) == standby_producers.end()){
+                  idx.modify( itr, same_payer, [&](auto& row) {
+                      row.is_active = false;
+                  });
+              }
+          }else{
+              // sort by active so break if not active
+              break;
+          }
+      }
+      auto ct = current_time_point();
+      for(auto& producer: standby_producers){
+         // check if record is in _standbys
+          auto itr = _standbys.find( producer.value );
+          if( itr == _standbys.end() ) {
+              _standbys.emplace( _self, [&]( auto& row ) {
+                  row.owner = producer;
+                  row.standby_share = 0;
+                  row.last_standby_share_update = ct;
+                  row.is_active = true;
+              });
+          }else{
+              if (itr->is_active == false){
+                  _standbys.modify( itr, same_payer, [&](auto& row) {
+                      row.is_active = true;
+                      row.last_standby_share_update = ct;
+                  });
+              }
+          }  
+      }
+   }
+
    /*
 
    bool system_contract::add_standby_account( name account )

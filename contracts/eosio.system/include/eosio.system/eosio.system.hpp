@@ -1585,6 +1585,7 @@ namespace eosiosystem {
          void remove_standby_block(const name account);  
          bool is_disallow_standby( name account );
          void update_standby_share();
+         void update_standby_producers(const std::vector<eosio::name>& standby_producers);
    };
 
    double stake2vote( int64_t staked );
