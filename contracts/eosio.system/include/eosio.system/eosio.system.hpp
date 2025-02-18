@@ -713,8 +713,10 @@ namespace eosiosystem {
       eosio_global_state4() { }
       time_point        last_standby_state_update;
       double            total_standy_share = 0;
+      double            standby_pay_ratio = 0;
+      uint32_t          num_standby_slots = 0;
 
-      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(total_standy_share) )
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(total_standy_share)(standby_pay_ratio)(num_standby_slots) )
    };
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 
@@ -1414,6 +1416,23 @@ namespace eosiosystem {
          [[eosio::action]]
          void powerup( const name& payer, const name& receiver, uint32_t days, int64_t net_frac, int64_t cpu_frac, const asset& max_payment );
 
+
+         /** set standby ratio */
+         [[eosio::action]]
+         void setstdbratio( double ratio );
+
+         /** set standby slots */
+         [[eosio::action]]
+         void setstdbslot( uint32_t num_slots );
+
+         /** add name to block list */
+         [[eosio::action]]
+         void addstdbblock(const name account);
+
+         /** remove name from block list */
+         [[eosio::action]]
+         void rmstdbblock(const name account);  
+
        /**
         * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
         *
@@ -1492,6 +1511,10 @@ namespace eosiosystem {
        using cfgpowerup_action = eosio::action_wrapper<"cfgpowerup"_n, &system_contract::cfgpowerup>;
        using powerupexec_action = eosio::action_wrapper<"powerupexec"_n, &system_contract::powerupexec>;
        using powerup_action = eosio::action_wrapper<"powerup"_n, &system_contract::powerup>;
+       using set_standby_pay_ratio_action = eosio::action_wrapper<"setstdbratio"_n, &system_contract::setstdbratio>;
+       using set_standby_slots_action = eosio::action_wrapper<"setstdbslot"_n, &system_contract::setstdbslot>;
+       using add_standby_block_action = eosio::action_wrapper<"addstdbblock"_n, &system_contract::addstdbblock>;
+       using rm_standby_block_action = eosio::action_wrapper<"rmstdbblock"_n, &system_contract::rmstdbblock>;
 
       private:
          // WAX specifics
@@ -1581,8 +1604,6 @@ namespace eosiosystem {
             int64_t& cpu_delta_available);
 
           // defined in standby.cpp
-         void add_standby_block(const name account);
-         void remove_standby_block(const name account);  
          bool is_disallow_standby( name account );
          void update_standby_share();
          void update_standby_producers(const std::vector<eosio::name>& standby_producers);

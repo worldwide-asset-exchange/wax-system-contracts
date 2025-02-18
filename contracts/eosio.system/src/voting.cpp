@@ -111,8 +111,10 @@ namespace eosiosystem {
       using value_type = std::pair<eosio::producer_authority, uint16_t>;
       std::vector< value_type > top_producers;
       top_producers.reserve(21);
+      const uint32_t num_standby_slots = _gstate4.num_standby_slots;
+
       std::vector<eosio::name> standby_producers;
-      standby_producers.reserve(5);
+      standby_producers.reserve(num_standby_slots);
 
       for( auto it = idx.cbegin(); it != idx.cend() && top_producers.size() < 21 && 0 < it->total_votes && it->active(); ++it ) {
          top_producers.emplace_back(
@@ -124,10 +126,12 @@ namespace eosiosystem {
          );
       }
 
-      for( auto it = idx.cbegin(); it != idx.cend() && standby_producers.size() < 5 && 0 < it->total_votes && it->active(); ++it ) {
-         // check if producer is not on standbyblock list
-         if( !is_disallow_standby( it->owner ) ){
-            standby_producers.emplace_back( it->owner );
+      if (num_standby_slots > 0) {
+         for( auto it = idx.cbegin(); it != idx.cend() && standby_producers.size() < 5 && 0 < it->total_votes && it->active(); ++it ) {
+            // check if producer is not on standbyblock list
+            if( !is_disallow_standby( it->owner ) ){
+               standby_producers.emplace_back( it->owner );
+            }
          }
       }
 

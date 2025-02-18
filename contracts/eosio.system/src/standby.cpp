@@ -11,7 +11,7 @@ namespace eosiosystem {
    using eosio::microseconds;
    using eosio::singleton;
 
-   void system_contract::add_standby_block(const name account) {
+   void system_contract::addstdbblock(const name account) {
     require_auth( get_self() );
     auto itr = _standby_disallow.find( account.value );
     if( itr == _standby_disallow.end() ) {
@@ -23,7 +23,7 @@ namespace eosiosystem {
     }
    }
 
-   void system_contract::remove_standby_block(const name account) {
+   void system_contract::rmstdbblock(const name account) {
     require_auth( get_self() );
     auto itr = _standby_disallow.find( account.value );
     if( itr == _standby_disallow.end() ) {
@@ -35,10 +35,21 @@ namespace eosiosystem {
 
    bool system_contract::is_disallow_standby( name account )
    {
-       const auto & itr = _standby_disallow.find( account.value );
-       return itr != _standby_disallow.end();
+      const auto & itr = _standby_disallow.find( account.value );
+      return itr != _standby_disallow.end();
    }
 
+   void system_contract::setstdbratio( double ratio ){
+      require_auth( get_self() );
+      check(ratio >= 0 && ratio <= 1, "ratio must be between 0 and 1");
+      _gstate4.standby_pay_ratio = ratio;
+   }
+
+   void system_contract::setstdbslot( uint32_t num_slots ){
+      require_auth( get_self() );
+      check(num_slots >= 0, "num_slots must be greater than 0");
+      _gstate4.num_standby_slots = num_slots;
+   }
    
    void system_contract::update_standby_share(){
       const auto ct = current_time_point();
