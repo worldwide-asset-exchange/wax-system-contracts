@@ -2,7 +2,6 @@
 #include <eosio.system/eosio.system.hpp>
 #include <eosio.token/eosio.token.hpp>
 
-
 namespace eosiosystem {
 
    using eosio::const_mem_fun;
@@ -10,6 +9,8 @@ namespace eosiosystem {
    using eosio::indexed_by;
    using eosio::microseconds;
    using eosio::singleton;
+   using namespace eosio;
+
 
    void system_contract::addstdbblock(const name account) {
     require_auth( get_self() );
@@ -76,7 +77,7 @@ namespace eosiosystem {
           }
       }
       _gstate4.last_standby_state_update = ct;
-      _gstate4.total_standy_share += total_standby_time_share_increase;
+      _gstate4.total_standby_share += total_standby_time_share_increase;
    }
 
    void system_contract::update_standby_producers(const std::vector<eosio::name>& standby_producers) {
@@ -119,16 +120,35 @@ namespace eosiosystem {
       }
    }
 
-   /*
+   void system_contract::claimstbdrw(const name owner) {
+    update_standby_share();
+    require_auth( owner );
+    auto itr = _standbys.find( owner.value );
+    check(itr != _standbys.end(), "account not in standby list");
 
-   bool system_contract::add_standby_account( name account )
-   {
+    double share = itr->standby_share;
+    check(share > 0, "no standby share to claim");
+    const auto ct = current_time_point();
+
+    double total_share = _gstate4.total_standby_share;
+    double amount = 0;
+    if (total_share > 0){
+        double total_bucket = _gstate4.standby_bucket;
+        amount = total_bucket * share / total_share;
+    }
+    check(amount > 0, "no standby share to claim");
+
+    _gstate4.standby_bucket -= amount;
+    _gstate4.total_standby_share -= share;
+
+    _standbys.modify( itr, same_payer, [&](auto& row) {
+        row.standby_share = 0;
+        row.last_standby_share_update = ct;
+    });
+
+    if( amount > 0 ) {
+        token::transfer_action transfer_act{ token_account, { {bpay_account, active_permission}, {owner, active_permission} } };
+        transfer_act.send( bpay_account, owner, asset(amount, core_symbol()), "standby producer pay" );
+      }
    }
-
-   bool system_contract::remove_standby_account( name account )
-   {
-   }
-   */
-
-
 }

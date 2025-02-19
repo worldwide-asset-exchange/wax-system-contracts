@@ -712,11 +712,12 @@ namespace eosiosystem {
    struct [[eosio::table("global4"), eosio::contract("eosio.system")]] eosio_global_state4 {
       eosio_global_state4() { }
       time_point        last_standby_state_update;
-      double            total_standy_share = 0;
+      double            standby_bucket = 0;
+      double            total_standby_share = 0;
       double            standby_pay_ratio = 0;
       uint32_t          num_standby_slots = 0;
 
-      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(total_standy_share)(standby_pay_ratio)(num_standby_slots) )
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_pay_ratio)(num_standby_slots) )
    };
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 
@@ -1432,6 +1433,10 @@ namespace eosiosystem {
          /** remove name from block list */
          [[eosio::action]]
          void rmstdbblock(const name account);  
+
+         /** claim standby reward */
+         [[eosio::action]]
+         void claimstbdrw(const name owner);  
 
        /**
         * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.

@@ -23,6 +23,7 @@ namespace eosiosystem {
    using eosio::indexed_by;
    using eosio::microseconds;
    using eosio::singleton;
+   using eosio::token;
 
    void system_contract::register_producer( const name& producer, const eosio::block_signing_authority& producer_authority, const std::string& url, uint16_t location ) {
       auto prod = _producers.find( producer.value );
