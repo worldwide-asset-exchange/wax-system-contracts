@@ -38,10 +38,15 @@ FC_REFLECT(standby_disallow_state, (owner))
 
 using namespace eosio_system;
 
+
+bool within_error(int64_t a, int64_t b, int64_t err) { return std::abs(a - b) <= err; };
+bool within_one(int64_t a, int64_t b) { return within_error(a, b, 1); }
+bool within_and_gte(int64_t a, int64_t b, int64_t w) { return a - b <= w && a >= b; }
+
+
+
 struct eosio_standby_tester : eosio_system_tester {
   eosio_standby_tester() {  }
-
-
 
   standby_producer_state get_standby_producer_state(name acc) {
    vector<char> data = get_row_by_account(config::system_account_name, config::system_account_name, "standbys"_n, acc);
@@ -71,7 +76,7 @@ struct eosio_standby_tester : eosio_system_tester {
     standby_producer_state r;
 
     auto lower = idx.lower_bound(boost::make_tuple(table_id, 0));
-    for (auto itr = lower; itr != idx.end(); ++itr){
+    for (auto itr = lower; itr->t_id == table_id && itr != idx.end(); ++itr){
          fc::datastream<const char*> ds(itr->value.data(), itr->value.size());
          fc::raw::unpack(ds, r);
          result.push_back(r);
@@ -185,7 +190,7 @@ BOOST_FIXTURE_TEST_CASE(standby_list, eosio_standby_tester ) try {
   );
 
   auto producer_names = active_and_vote_producers_and_standbys();
-  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+  // fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
 
   ilog( "------ get producers----------" );
   wdump((producer_names));
@@ -207,11 +212,92 @@ BOOST_FIXTURE_TEST_CASE(standby_list, eosio_standby_tester ) try {
   BOOST_TEST_REQUIRE( name("defproducerx") == standby_producers[2].owner );
   BOOST_TEST_REQUIRE( name("defproducery") == standby_producers[3].owner );
   BOOST_TEST_REQUIRE( name("defproducerz") == standby_producers[4].owner );
-  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);
+  // fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);
 
 }
 FC_LOG_AND_RETHROW()
 
+
+BOOST_FIXTURE_TEST_CASE(standby_claims, eosio_standby_tester ) try {
+  
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setstdbratio"_n, mvo()("ratio", 0.5) )
+  );
+
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setstdbslot"_n, mvo()("num_slots", 5) )
+  );
+
+  auto producer_names = active_and_vote_producers_and_standbys();
+  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+  ilog( "------ get producers----------" );
+  wdump((producer_names));
+
+  auto producer_keys = control->head_block_state()->active_schedule.producers;
+
+  wdump((producer_keys));
+
+  const auto& gs4 = get_global_state4();
+  BOOST_TEST_REQUIRE( 0.5 == gs4["standby_pay_ratio"].as_double() );
+  BOOST_TEST_REQUIRE( 5 == gs4["num_standby_slots"].as_uint64() );
+  BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_double() );
+
+  auto standby_producers = get_stanby_table();
+  wdump((standby_producers));
+
+  {
+    produce_blocks(23 * 12 + 20);
+    bool all_21_produced = true;
+    for (uint32_t i = 0; i < 21; ++i) {
+       if (0 == get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
+          all_21_produced = false;
+       }
+    }
+    bool rest_didnt_produce = true;
+    for (uint32_t i = 21; i < producer_names.size(); ++i) {
+       if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
+          rest_didnt_produce = false;
+       }
+    }
+    BOOST_REQUIRE(all_21_produced && rest_didnt_produce);
+ }
+
+  produce_blocks(5);
+
+  
+  const u_int32_t standby_index = 2;
+  const auto& stbd_producer = standby_producers[standby_index];  
+  const auto& prod_name = stbd_producer.owner;
+
+  const asset initial_balance  = get_balance(prod_name);
+
+  BOOST_REQUIRE_EQUAL(success(), push_action(prod_name, "claimstandby"_n, mvo()("owner", prod_name)));
+  
+  const asset    balance           = get_balance(prod_name);
+
+  ilog("before balance:                  ${x}", ("x", initial_balance.get_amount()));
+  ilog("after balance:                   ${x}", ("x", balance.get_amount()));
+
+  BOOST_TEST_REQUIRE( initial_balance.get_amount() < balance.get_amount());
+
+  
+  auto standby_producers2 = get_stanby_table();
+  wdump((standby_producers2));
+
+  const auto& gs41 = get_global_state4();
+  const double standby_bucket = gs41["standby_bucket"].as_double();
+  const double total_standby_share = gs41["total_standby_share"].as_double();
+
+  ilog("total_standby_share: ${x}", ("x", gs41["total_standby_share"].as_double()));
+  ilog("standby bucket: ${x}", ("x", gs41["standby_bucket"].as_double()));
+
+  BOOST_REQUIRE( within_one(standby_bucket / 4.0, balance.get_amount() - initial_balance.get_amount() ) );
+
+  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);
+
+}
+FC_LOG_AND_RETHROW()
 
 
 BOOST_AUTO_TEST_SUITE_END()

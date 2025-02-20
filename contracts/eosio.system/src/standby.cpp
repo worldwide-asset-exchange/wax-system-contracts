@@ -54,10 +54,6 @@ namespace eosiosystem {
    void system_contract::update_standby_share(){
       const auto ct = current_time_point();
 
-      if( ct <= _gstate4.last_standby_state_update ) {
-         return;
-      }
-
       auto idx = _standbys.get_index<"byactive"_n>();
       double total_standby_time_share_increase = 0;
       for ( auto itr = idx.begin(); itr != idx.end(); itr++ ) {
@@ -119,8 +115,9 @@ namespace eosiosystem {
       }
    }
 
-   void system_contract::claimstbdrw(const name owner) {
+   void system_contract::claimstandby(const name owner) {
     require_auth( owner );
+    fill_buckets();
     update_standby_share();
 
     auto itr = _standbys.find( owner.value );
@@ -138,7 +135,7 @@ namespace eosiosystem {
         double total_bucket = _gstate4.standby_bucket;
         amount = total_bucket * share / total_share;
     }
-    check(amount > 0, "no standby share to claim");
+    check(amount > 0, "no standby reward to claim");
 
     _gstate4.standby_bucket -= amount;
     _gstate4.total_standby_share -= share;

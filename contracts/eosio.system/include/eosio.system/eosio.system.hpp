@@ -1437,7 +1437,7 @@ namespace eosiosystem {
 
          /** claim standby reward */
          [[eosio::action]]
-         void claimstbdrw(const name owner);  
+         void claimstandby(const name owner);  
 
        /**
         * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
