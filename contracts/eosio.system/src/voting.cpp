@@ -116,7 +116,7 @@ namespace eosiosystem {
 
       std::vector<eosio::name> standby_producers;
       standby_producers.reserve(num_standby_slots);
-
+      auto current_it = idx.cbegin();
       for( auto it = idx.cbegin(); it != idx.cend() && top_producers.size() < 21 && 0 < it->total_votes && it->active(); ++it ) {
          top_producers.emplace_back(
             eosio::producer_authority{
@@ -125,10 +125,11 @@ namespace eosiosystem {
             },
             it->location
          );
+         current_it = it;
       }
 
       if (num_standby_slots > 0) {
-         for( auto it = idx.cbegin(); it != idx.cend() && standby_producers.size() < 5 && 0 < it->total_votes && it->active(); ++it ) {
+         for( auto it = ++current_it; it != idx.cend() && standby_producers.size() < 5 && 0 < it->total_votes && it->active(); ++it ) {
             // check if producer is not on standbyblock list
             if( !is_disallow_standby( it->owner ) ){
                standby_producers.emplace_back( it->owner );
@@ -157,7 +158,9 @@ namespace eosiosystem {
 
       if( set_proposed_producers( producers ) >= 0 ) {
          _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
-         update_standby_producers( standby_producers );
+         if (standby_producers.size() > 0) {
+            update_standby_producers( standby_producers );
+         }
       }
    }
 

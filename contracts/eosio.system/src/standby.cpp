@@ -11,7 +11,6 @@ namespace eosiosystem {
    using eosio::singleton;
    using namespace eosio;
 
-
    void system_contract::addstdbblock(const name account) {
     require_auth( get_self() );
     auto itr = _standby_disallow.find( account.value );
@@ -121,14 +120,17 @@ namespace eosiosystem {
    }
 
    void system_contract::claimstbdrw(const name owner) {
-    update_standby_share();
     require_auth( owner );
+    update_standby_share();
+
     auto itr = _standbys.find( owner.value );
     check(itr != _standbys.end(), "account not in standby list");
 
+    const auto ct = current_time_point();
+    check( ct - itr->last_claim_time > microseconds(useconds_per_day), "already claimed rewards within past day" );
+
     double share = itr->standby_share;
     check(share > 0, "no standby share to claim");
-    const auto ct = current_time_point();
 
     double total_share = _gstate4.total_standby_share;
     double amount = 0;
@@ -144,6 +146,7 @@ namespace eosiosystem {
     _standbys.modify( itr, same_payer, [&](auto& row) {
         row.standby_share = 0;
         row.last_standby_share_update = ct;
+        row.last_claim_time = ct;
     });
 
     if( amount > 0 ) {

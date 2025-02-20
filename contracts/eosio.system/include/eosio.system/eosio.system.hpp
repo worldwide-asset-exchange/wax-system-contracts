@@ -726,13 +726,14 @@ namespace eosiosystem {
       name            owner;
       double          standby_share = 0;
       time_point      last_standby_share_update;
+      time_point      last_claim_time;
       bool            is_active = true;
       
       uint64_t primary_key()const { return owner.value; }
       uint64_t by_active()const  { return is_active ? 0 : 1; } // sort by active first
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE(standby_producer_info, (owner)(standby_share)(last_standby_share_update)(is_active))
+      EOSLIB_SERIALIZE(standby_producer_info, (owner)(standby_share)(last_standby_share_update)(last_claim_time)(is_active))
    };
    typedef eosio::multi_index< "standbys"_n, standby_producer_info,
             indexed_by<"byactive"_n, const_mem_fun<standby_producer_info, uint64_t, &standby_producer_info::by_active>>
