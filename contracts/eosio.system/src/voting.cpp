@@ -129,7 +129,7 @@ namespace eosiosystem {
       }
 
       if (num_standby_slots > 0) {
-         for( auto it = ++current_it; it != idx.cend() && standby_producers.size() < 5 && 0 < it->total_votes && it->active(); ++it ) {
+         for( auto it = ++current_it; it != idx.cend() && standby_producers.size() < num_standby_slots && 0 < it->total_votes && it->active(); ++it ) {
             // check if producer is not on standbyblock list
             if( !is_disallow_standby( it->owner ) ){
                standby_producers.emplace_back( it->owner );
