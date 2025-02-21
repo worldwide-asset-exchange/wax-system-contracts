@@ -77,22 +77,32 @@ namespace eosiosystem {
 
    void system_contract::update_standby_producers(const std::vector<eosio::name>& standby_producers) {
       update_standby_share();
-      require_auth( get_self() );
       // disable _standbys active record if not in standby_producers
       auto idx = _standbys.get_index<"byactive"_n>();
       double total_standby_time_share_increase = 0;
+      std::vector<eosio::name> remove_standby_producers;
+      remove_standby_producers.reserve(standby_producers.size());
       for ( auto itr = idx.begin(); itr != idx.end(); itr++ ) {
-          if(itr->is_active){
-              if(std::find(standby_producers.begin(), standby_producers.end(), itr->owner) == standby_producers.end()){
-                  idx.modify( itr, same_payer, [&](auto& row) {
-                      row.is_active = false;
-                  });
-              }
-          }else{
-              // sort by active so break if not active
-              break;
-          }
-      }
+            eosio::print(itr->owner.to_string() + ": " + std::to_string(itr->is_active));
+            if(itr->is_active){
+                if(std::find(standby_producers.begin(), standby_producers.end(), itr->owner) == standby_producers.end()){
+                    remove_standby_producers.push_back(itr->owner);
+                }
+            }else{
+                // sort by active so break if not active
+                break;
+            }
+        }
+
+        for(auto& name : remove_standby_producers){
+            auto itr = _standbys.find( name.value );
+            if( itr != _standbys.end() ) {
+                _standbys.modify( itr, same_payer, [&](auto& row) {
+                    row.is_active = false;
+                });
+            }
+        }
+
       auto ct = current_time_point();
       for(auto& producer: standby_producers){
          // check if record is in _standbys

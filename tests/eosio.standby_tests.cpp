@@ -106,7 +106,7 @@ struct eosio_standby_tester : eosio_system_tester {
           }
        }
        {
-          const std::string root("abcproducer");
+          const std::string root("zzzproducer");
           for ( char c = 'a'; c <= 'n'; ++c ) {
              producer_names.emplace_back(root + std::string(1, c));
           }
@@ -229,8 +229,6 @@ BOOST_FIXTURE_TEST_CASE(standby_claims, eosio_standby_tester ) try {
   );
 
   auto producer_names = active_and_vote_producers_and_standbys();
-  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
-
   ilog( "------ get producers----------" );
   wdump((producer_names));
 
@@ -294,10 +292,58 @@ BOOST_FIXTURE_TEST_CASE(standby_claims, eosio_standby_tester ) try {
 
   BOOST_REQUIRE( within_one(standby_bucket / 4.0, balance.get_amount() - initial_balance.get_amount() ) );
 
+}
+FC_LOG_AND_RETHROW()
+
+
+
+BOOST_FIXTURE_TEST_CASE(change_standbys_active, eosio_standby_tester ) try {
+  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setstdbratio"_n, mvo()("ratio", 0.5) )
+  );
+
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setstdbslot"_n, mvo()("num_slots", 5) )
+  );
+  auto producer_names = active_and_vote_producers_and_standbys();
+
+
+  ilog( "------ get producers----------" );
+  wdump((producer_names));
+
+
+  auto standby_producers = get_stanby_table();
+  wdump((standby_producers));
+
+
+  // auto producer_keys = control->head_block_state()->active_schedule.producers;
+
+  // wdump((producer_keys));
+
+  // change vote to make standbys change
+  // producers: a-u
+  // retain standbys: defproducerv, defproducerw
+  // add new standbys 
+  {
+    BOOST_REQUIRE_EQUAL(success(), vote("producvotera"_n, vector<account_name>(producer_names.begin()+1, producer_names.begin()+22)));
+    BOOST_REQUIRE_EQUAL(success(), vote("producvoterb"_n, vector<account_name>(producer_names.begin()+1, producer_names.begin()+22)));
+    BOOST_REQUIRE_EQUAL(success(), vote("producvoterc"_n, vector<account_name>(producer_names.begin()+1, producer_names.begin()+22)));
+    BOOST_REQUIRE_EQUAL(success(), vote("producvoterd"_n, vector<account_name>(producer_names.begin()+24, producer_names.end())));
+  }
+  produce_block( fc::hours(24) );
+
+  
+  auto standby_producers2 = get_stanby_table();
+  wdump((standby_producers2));
+
+
   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);
 
 }
 FC_LOG_AND_RETHROW()
+
 
 
 BOOST_AUTO_TEST_SUITE_END()
