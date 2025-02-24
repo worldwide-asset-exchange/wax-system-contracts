@@ -85,6 +85,8 @@ namespace eosiosystem {
    static constexpr int64_t  default_inflation_pay_factor  = 50000;   // producers pay share = 10000 / 50000 = 20% of the inflation
    static constexpr int64_t  default_votepay_factor        = 40000;   // per-block pay share = 10000 / 40000 = 25% of the producer pay
 
+   static const     uint64_t STANDBY_PAY_RATIO_DENOMINATOR = 10000;   // base for standby pay ratio
+
 #ifdef SYSTEM_BLOCKCHAIN_PARAMETERS
    struct blockchain_parameters_v1 : eosio::blockchain_parameters
    {
@@ -712,19 +714,19 @@ namespace eosiosystem {
    struct [[eosio::table("global4"), eosio::contract("eosio.system")]] eosio_global_state4 {
       eosio_global_state4() { }
       time_point        last_standby_state_update;
-      double            standby_bucket = 0;
-      double            total_standby_share = 0;
-      double            standby_pay_ratio = 0;
+      uint64_t          standby_bucket = 0;
+      uint64_t          total_standby_share = 0;
+      uint64_t          standby_pay_ratio_numerator = 0;
       uint32_t          num_standby_slots = 0;
 
-      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_pay_ratio)(num_standby_slots) )
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_pay_ratio_numerator)(num_standby_slots) )
    };
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 
    // Defines new standby producer info structure
    struct [[eosio::table, eosio::contract("eosio.system")]] standby_producer_info {
       name            owner;
-      double          standby_share = 0;
+      uint64_t        standby_share = 0;
       time_point      last_standby_share_update;
       time_point      last_claim_time;
       bool            is_active = true;
@@ -745,7 +747,7 @@ namespace eosiosystem {
       // explicit serialization macro is not necessary, used here only to improve compilation time
       EOSLIB_SERIALIZE(standby_disallow_info, (owner))
    };
-   typedef eosio::multi_index< "stdbdisallow"_n, standby_disallow_info >  standby_disallow_table;
+   typedef eosio::multi_index< "sbdisallow"_n, standby_disallow_info >  standby_disallow_table;
 
    /**
     * The `eosio.system` smart contract is provided by `block.one` as a sample system contract, and it defines the structures and actions needed for blockchain's core functionality.
@@ -1421,19 +1423,19 @@ namespace eosiosystem {
 
          /** set standby ratio */
          [[eosio::action]]
-         void setstdbratio( double ratio );
+         void setsbratio( uint64_t ratio );
 
          /** set standby slots */
          [[eosio::action]]
-         void setstdbslot( uint32_t num_slots );
+         void setsbslot( uint32_t num_slots );
 
          /** add name to block list */
          [[eosio::action]]
-         void addstdbblock(const name account);
+         void disallowsb(const name account);
 
          /** remove name from block list */
          [[eosio::action]]
-         void rmstdbblock(const name account);  
+         void allowsb(const name account);  
 
          /** claim standby reward */
          [[eosio::action]]
@@ -1517,10 +1519,10 @@ namespace eosiosystem {
        using cfgpowerup_action = eosio::action_wrapper<"cfgpowerup"_n, &system_contract::cfgpowerup>;
        using powerupexec_action = eosio::action_wrapper<"powerupexec"_n, &system_contract::powerupexec>;
        using powerup_action = eosio::action_wrapper<"powerup"_n, &system_contract::powerup>;
-       using set_standby_pay_ratio_action = eosio::action_wrapper<"setstdbratio"_n, &system_contract::setstdbratio>;
-       using set_standby_slots_action = eosio::action_wrapper<"setstdbslot"_n, &system_contract::setstdbslot>;
-       using add_standby_block_action = eosio::action_wrapper<"addstdbblock"_n, &system_contract::addstdbblock>;
-       using rm_standby_block_action = eosio::action_wrapper<"rmstdbblock"_n, &system_contract::rmstdbblock>;
+       using set_standby_pay_ratio_action = eosio::action_wrapper<"setsbratio"_n, &system_contract::setsbratio>;
+       using set_standby_slots_action = eosio::action_wrapper<"setsbslot"_n, &system_contract::setsbslot>;
+       using add_standby_block_action = eosio::action_wrapper<"disallowsb"_n, &system_contract::disallowsb>;
+       using rm_standby_block_action = eosio::action_wrapper<"allowsb"_n, &system_contract::allowsb>;
 
       private:
          // WAX specifics

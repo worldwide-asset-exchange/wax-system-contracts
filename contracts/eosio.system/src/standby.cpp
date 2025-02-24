@@ -11,7 +11,7 @@ namespace eosiosystem {
    using eosio::singleton;
    using namespace eosio;
 
-   void system_contract::addstdbblock(const name account) {
+   void system_contract::disallowsb(const name account) {
     require_auth( get_self() );
     auto itr = _standby_disallow.find( account.value );
     if( itr == _standby_disallow.end() ) {
@@ -23,7 +23,7 @@ namespace eosiosystem {
     }
    }
 
-   void system_contract::rmstdbblock(const name account) {
+   void system_contract::allowsb(const name account) {
     require_auth( get_self() );
     auto itr = _standby_disallow.find( account.value );
     if( itr == _standby_disallow.end() ) {
@@ -39,13 +39,13 @@ namespace eosiosystem {
       return itr != _standby_disallow.end();
    }
 
-   void system_contract::setstdbratio( double ratio ){
+   void system_contract::setsbratio( uint64_t ratio ){
       require_auth( get_self() );
-      check(ratio >= 0 && ratio <= 1, "ratio must be between 0 and 1");
-      _gstate4.standby_pay_ratio = ratio;
+      check(ratio >= 0 && ratio <= STANDBY_PAY_RATIO_DENOMINATOR, "ratio must be between 0 and RATIO_DENOMINATOR");
+      _gstate4.standby_pay_ratio_numerator = ratio;
    }
 
-   void system_contract::setstdbslot( uint32_t num_slots ){
+   void system_contract::setsbslot( uint32_t num_slots ){
       require_auth( get_self() );
       check(num_slots >= 0, "num_slots must be greater than 0");
       _gstate4.num_standby_slots = num_slots;
@@ -55,12 +55,12 @@ namespace eosiosystem {
       const auto ct = current_time_point();
 
       auto idx = _standbys.get_index<"byactive"_n>();
-      double total_standby_time_share_increase = 0;
+      uint64_t total_standby_time_share_increase = 0;
       for ( auto itr = idx.begin(); itr != idx.end(); itr++ ) {
           if(itr->is_active){
               time_point last_update = itr->last_standby_share_update;
-              double share_increase = double((ct - last_update).count());
-              double new_account_share = itr->standby_share + share_increase;
+              uint64_t share_increase = (ct - last_update).count();
+              uint64_t new_account_share = itr->standby_share + share_increase;
               total_standby_time_share_increase += share_increase;
 
               idx.modify( itr, same_payer, [&](auto& row) {

@@ -54,7 +54,7 @@ struct eosio_standby_tester : eosio_system_tester {
   }
 
   standby_disallow_state get_standby_disallow_state(name acc) {
-    vector<char> data = get_row_by_account(config::system_account_name, config::system_account_name, "stdbdisallow"_n, acc);
+    vector<char> data = get_row_by_account(config::system_account_name, config::system_account_name, "sbdisallow"_n, acc);
     return fc::raw::unpack<standby_disallow_state>(data);
   }
 
@@ -145,20 +145,20 @@ BOOST_AUTO_TEST_SUITE(eosio_standby_tests)
 
 BOOST_FIXTURE_TEST_CASE(standby_config_tests, eosio_standby_tester ) try {
   const auto& gs4 = get_global_state4();
-  BOOST_TEST_REQUIRE( 0 == gs4["standby_pay_ratio"].as_double() );
+  BOOST_TEST_REQUIRE( 0 == gs4["standby_pay_ratio_numerator"].as_uint64() );
   BOOST_TEST_REQUIRE( 0 == gs4["num_standby_slots"].as_uint64() );
-  BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_double() );
+  BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_uint64() );
 
   BOOST_REQUIRE_EQUAL( 
-    success(), push_action( config::system_account_name, "setstdbratio"_n, mvo()("ratio", 0.5) )
+    success(), push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", 5000) )
   );
 
   const auto& gs42 = get_global_state4();
-  BOOST_TEST_REQUIRE( 0.5 == gs42["standby_pay_ratio"].as_double() );
+  BOOST_TEST_REQUIRE( 5000 == gs42["standby_pay_ratio_numerator"].as_uint64() );
 
 
   BOOST_REQUIRE_EQUAL( 
-    success(), push_action( config::system_account_name, "setstdbslot"_n, mvo()("num_slots", 5) )
+    success(), push_action( config::system_account_name, "setsbslot"_n, mvo()("num_slots", 5) )
   );
 
   const auto& gs43 = get_global_state4();
@@ -170,7 +170,7 @@ FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(standby_disallow_tests, eosio_standby_tester ) try {
   BOOST_REQUIRE_EQUAL( 
-    success(), push_action( config::system_account_name, "addstdbblock"_n, mvo()("account", alice) )
+    success(), push_action( config::system_account_name, "disallowsb"_n, mvo()("account", alice) )
   );
 
   const auto& sps = get_standby_disallow_state(alice);
@@ -182,11 +182,11 @@ FC_LOG_AND_RETHROW()
 BOOST_FIXTURE_TEST_CASE(standby_list, eosio_standby_tester ) try {
   
   BOOST_REQUIRE_EQUAL( 
-    success(), push_action( config::system_account_name, "setstdbratio"_n, mvo()("ratio", 0.5) )
+    success(), push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", 5000) )
   );
 
   BOOST_REQUIRE_EQUAL( 
-    success(), push_action( config::system_account_name, "setstdbslot"_n, mvo()("num_slots", 5) )
+    success(), push_action( config::system_account_name, "setsbslot"_n, mvo()("num_slots", 5) )
   );
 
   auto producer_names = active_and_vote_producers_and_standbys();
@@ -200,9 +200,9 @@ BOOST_FIXTURE_TEST_CASE(standby_list, eosio_standby_tester ) try {
   wdump((producer_keys));
 
   const auto& gs4 = get_global_state4();
-  BOOST_TEST_REQUIRE( 0.5 == gs4["standby_pay_ratio"].as_double() );
+  BOOST_TEST_REQUIRE( 5000 == gs4["standby_pay_ratio_numerator"].as_uint64() );
   BOOST_TEST_REQUIRE( 5 == gs4["num_standby_slots"].as_uint64() );
-  BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_double() );
+  BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_uint64() );
 
   auto standby_producers = get_stanby_table();
   wdump((standby_producers));
@@ -221,11 +221,11 @@ FC_LOG_AND_RETHROW()
 BOOST_FIXTURE_TEST_CASE(standby_claims, eosio_standby_tester ) try {
   
   BOOST_REQUIRE_EQUAL( 
-    success(), push_action( config::system_account_name, "setstdbratio"_n, mvo()("ratio", 0.5) )
+    success(), push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", 5000) )
   );
 
   BOOST_REQUIRE_EQUAL( 
-    success(), push_action( config::system_account_name, "setstdbslot"_n, mvo()("num_slots", 5) )
+    success(), push_action( config::system_account_name, "setsbslot"_n, mvo()("num_slots", 5) )
   );
 
   auto producer_names = active_and_vote_producers_and_standbys();
@@ -237,9 +237,9 @@ BOOST_FIXTURE_TEST_CASE(standby_claims, eosio_standby_tester ) try {
   wdump((producer_keys));
 
   const auto& gs4 = get_global_state4();
-  BOOST_TEST_REQUIRE( 0.5 == gs4["standby_pay_ratio"].as_double() );
+  BOOST_TEST_REQUIRE( 5000 == gs4["standby_pay_ratio_numerator"].as_uint64() );
   BOOST_TEST_REQUIRE( 5 == gs4["num_standby_slots"].as_uint64() );
-  BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_double() );
+  BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_uint64() );
 
   auto standby_producers = get_stanby_table();
   wdump((standby_producers));
@@ -284,13 +284,13 @@ BOOST_FIXTURE_TEST_CASE(standby_claims, eosio_standby_tester ) try {
   wdump((standby_producers2));
 
   const auto& gs41 = get_global_state4();
-  const double standby_bucket = gs41["standby_bucket"].as_double();
-  const double total_standby_share = gs41["total_standby_share"].as_double();
+  const double standby_bucket = gs41["standby_bucket"].as_uint64();
+  const double total_standby_share = gs41["total_standby_share"].as_uint64();
 
-  ilog("total_standby_share: ${x}", ("x", gs41["total_standby_share"].as_double()));
-  ilog("standby bucket: ${x}", ("x", gs41["standby_bucket"].as_double()));
+  ilog("total_standby_share: ${x}", ("x", gs41["total_standby_share"].as_uint64()));
+  ilog("standby bucket: ${x}", ("x", gs41["standby_bucket"].as_uint64()));
 
-  BOOST_REQUIRE( within_one(standby_bucket / 4.0, balance.get_amount() - initial_balance.get_amount() ) );
+  BOOST_REQUIRE( within_one(standby_bucket / 4, balance.get_amount() - initial_balance.get_amount() ) );
 
 }
 FC_LOG_AND_RETHROW()
@@ -301,11 +301,11 @@ BOOST_FIXTURE_TEST_CASE(change_standbys_active, eosio_standby_tester ) try {
   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
 
   BOOST_REQUIRE_EQUAL( 
-    success(), push_action( config::system_account_name, "setstdbratio"_n, mvo()("ratio", 0.5) )
+    success(), push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", 5000) )
   );
 
   BOOST_REQUIRE_EQUAL( 
-    success(), push_action( config::system_account_name, "setstdbslot"_n, mvo()("num_slots", 5) )
+    success(), push_action( config::system_account_name, "setsbslot"_n, mvo()("num_slots", 5) )
   );
   auto producer_names = active_and_vote_producers_and_standbys();
 
