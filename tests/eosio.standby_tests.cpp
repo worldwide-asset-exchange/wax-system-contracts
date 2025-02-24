@@ -314,8 +314,8 @@ BOOST_FIXTURE_TEST_CASE(change_standbys_active, eosio_standby_tester ) try {
   wdump((producer_names));
 
 
-  auto standby_producers = get_stanby_table();
-  wdump((standby_producers));
+  // auto standby_producers = get_stanby_table();
+  // wdump((standby_producers));
 
 
   // auto producer_keys = control->head_block_state()->active_schedule.producers;
@@ -337,6 +337,26 @@ BOOST_FIXTURE_TEST_CASE(change_standbys_active, eosio_standby_tester ) try {
   
   auto standby_producers2 = get_stanby_table();
   wdump((standby_producers2));
+
+
+  BOOST_TEST_REQUIRE( 8 == standby_producers2.size() );
+  BOOST_TEST_REQUIRE( name("defproducerv") == standby_producers2[0].owner );
+  BOOST_TEST_REQUIRE( name("defproducerw") == standby_producers2[1].owner );
+  BOOST_TEST_REQUIRE( name("defproducerx") == standby_producers2[2].owner );
+  BOOST_TEST_REQUIRE( name("defproducery") == standby_producers2[3].owner );
+  BOOST_TEST_REQUIRE( name("defproducerz") == standby_producers2[4].owner );
+  BOOST_TEST_REQUIRE( name("zzzproducera") == standby_producers2[5].owner );
+  BOOST_TEST_REQUIRE( name("zzzproducerb") == standby_producers2[6].owner );
+  BOOST_TEST_REQUIRE( name("zzzproducerc") == standby_producers2[7].owner );
+
+  BOOST_TEST_REQUIRE( standby_producers2[0].is_active == false );
+  BOOST_TEST_REQUIRE( standby_producers2[1].is_active == false );
+  BOOST_TEST_REQUIRE( standby_producers2[2].is_active == false );
+  BOOST_TEST_REQUIRE( standby_producers2[3].is_active == true );
+  BOOST_TEST_REQUIRE( standby_producers2[4].is_active == true );
+  BOOST_TEST_REQUIRE( standby_producers2[5].is_active == true );
+  BOOST_TEST_REQUIRE( standby_producers2[6].is_active == true );
+  BOOST_TEST_REQUIRE( standby_producers2[7].is_active == true );
 
 
   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);
