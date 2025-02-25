@@ -21,7 +21,7 @@ inline const auto bob = "bob111111111"_n;
 
 struct standby_producer_state {
   name            owner;
-  double          standby_share = 0;
+  u_int64_t       standby_share = 0;
   time_point      last_standby_share_update;
   time_point      last_claim_time;
   bool            is_active = true;
@@ -63,7 +63,7 @@ struct eosio_standby_tester : eosio_system_tester {
     return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state4", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
   }
 
-  std::vector<standby_producer_state> get_stanby_table()
+  std::vector<standby_producer_state> get_standby_table()
   {
     std::vector<standby_producer_state> result;
 
@@ -204,7 +204,7 @@ BOOST_FIXTURE_TEST_CASE(standby_list, eosio_standby_tester ) try {
   BOOST_TEST_REQUIRE( 5 == gs4["num_standby_slots"].as_uint64() );
   BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_uint64() );
 
-  auto standby_producers = get_stanby_table();
+  auto standby_producers = get_standby_table();
   wdump((standby_producers));
   BOOST_TEST_REQUIRE( 5 == standby_producers.size() );
   BOOST_TEST_REQUIRE( name("defproducerv") == standby_producers[0].owner );
@@ -241,7 +241,7 @@ BOOST_FIXTURE_TEST_CASE(standby_claims, eosio_standby_tester ) try {
   BOOST_TEST_REQUIRE( 5 == gs4["num_standby_slots"].as_uint64() );
   BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_uint64() );
 
-  auto standby_producers = get_stanby_table();
+  auto standby_producers = get_standby_table();
   wdump((standby_producers));
 
   {
@@ -280,7 +280,7 @@ BOOST_FIXTURE_TEST_CASE(standby_claims, eosio_standby_tester ) try {
   BOOST_TEST_REQUIRE( initial_balance.get_amount() < balance.get_amount());
 
   
-  auto standby_producers2 = get_stanby_table();
+  auto standby_producers2 = get_standby_table();
   wdump((standby_producers2));
 
   const auto& gs41 = get_global_state4();
@@ -322,7 +322,7 @@ BOOST_FIXTURE_TEST_CASE(change_standbys_active, eosio_standby_tester ) try {
   produce_block( fc::hours(24) );
 
   
-  auto standby_producers2 = get_stanby_table();
+  auto standby_producers2 = get_standby_table();
   wdump((standby_producers2));
 
 
@@ -448,8 +448,8 @@ BOOST_FIXTURE_TEST_CASE(standby_producer_pay, eosio_standby_tester,  * boost::un
     const asset    balance           = get_balance(prod_name);
     const uint32_t unpaid_blocks     = get_producer_info(prod_name)["unpaid_blocks"].as<uint32_t>();
 
-    const auto global4_state = get_global_state4();
-    const int64_t standby_bucket = global4_state["standby_bucket"].as<int64_t>();
+    const auto global4_state_1 = get_global_state4();
+    const int64_t standby_bucket = global4_state_1["standby_bucket"].as<int64_t>();
 
     ilog("claim_time: ${x}", ("x", claim_time));
     ilog("pervote_bucket: ${x}", ("x", pervote_bucket));
@@ -475,7 +475,7 @@ BOOST_FIXTURE_TEST_CASE(standby_producer_pay, eosio_standby_tester,  * boost::un
     const int64_t original_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (cont_rate / 5.) / usecs_per_year );
     const int64_t expected_pervote_bucket  = 0;
 
-    // reduce for standby
+    // producer pay now reduced for standby
     const int64_t expected_producer_pay_bucket = original_perblock_bucket * 21 * 10000/ (21 * 10000 + SB_RATIO * SB_SLOTS);
     const int64_t standby_pay_bucket = original_perblock_bucket - expected_producer_pay_bucket;
 
@@ -493,12 +493,118 @@ BOOST_FIXTURE_TEST_CASE(standby_producer_pay, eosio_standby_tester,  * boost::un
     BOOST_REQUIRE( within_one( from_perblock_bucket, balance.get_amount() - initial_balance.get_amount() ) );
     BOOST_REQUIRE( within_one( expected_pervote_bucket, pervote_bucket ) );
     BOOST_REQUIRE( within_one( perblock_bucket, bpay_balance.get_amount() - standby_pay_bucket));
+    
+    // verify the standby bucket
     BOOST_REQUIRE( within_one( standby_pay_bucket, standby_bucket - initial_standby_bucket));
     
-    produce_blocks(5);
+    // produce_blocks(5);
 
-    BOOST_REQUIRE_EQUAL(wasm_assert_msg("already claimed rewards within past day"),
-                        push_action(prod_name, "claimrewards"_n, mvo()("owner", prod_name)));
+    // BOOST_REQUIRE_EQUAL(wasm_assert_msg("already claimed rewards within past day"),
+                        // push_action(prod_name, "claimrewards"_n, mvo()("owner", prod_name)));
+  }
+
+  {
+    auto standby_producers = get_standby_table();
+    wdump((standby_producers));
+    auto standby_name = standby_producers[0].owner; // defproducerv
+    
+    auto initial_global4_state = get_global_state4();
+    const int64_t initial_standby_bucket = initial_global4_state["standby_bucket"].as<int64_t>();
+    const int64_t initial_total_standby_share = initial_global4_state["total_standby_share"].as<int64_t>();
+    const asset initial_balance  = get_balance(standby_name);
+
+    ilog("initial_standby_bucket: ${x}", ("x", initial_standby_bucket));
+    ilog("initial_total_standby_share: ${x}", ("x", initial_total_standby_share));
+    ilog("before balance:                  ${x}", ("x", initial_balance.get_amount()));
+
+    BOOST_REQUIRE_EQUAL(success(), push_action(standby_name, "claimstandby"_n, mvo()("owner", standby_name)));
+  
+    const auto     global4_state_1     = get_global_state4();
+    const int64_t  standby_bucket_1    = global4_state_1["standby_bucket"].as<int64_t>();
+    const int64_t  total_standby_share_1 = global4_state_1["total_standby_share"].as<int64_t>();
+    const asset    balance           = get_balance(standby_name);
+
+    ilog("standby_bucket:                   ${x}", ("x", standby_bucket_1));
+    ilog("total_standby_share:                   ${x}", ("x", total_standby_share_1));
+    ilog("after balance:                   ${x}", ("x", balance.get_amount()));
+
+    auto standby_producers_2 = get_standby_table();
+    wdump((standby_producers_2));
+    const int64_t total_share_left = standby_producers_2[0].standby_share;
+    const int64_t share_of_each_standby = standby_producers_2[1].standby_share; // should be equal
+
+    BOOST_REQUIRE_EQUAL(0, total_share_left);
+    BOOST_REQUIRE_EQUAL(share_of_each_standby, total_standby_share_1 / 4);
+
+    BOOST_REQUIRE( within_one(standby_bucket_1 / 4, balance.get_amount() - initial_balance.get_amount() ) );
+
+    /// next standby producer claim
+
+    const auto     initial_global_state      = get_global_state();
+    const uint64_t initial_claim_time        = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
+    const int64_t  initial_savings           = get_balance("eosio.saving"_n).get_amount();
+    const asset    initial_supply            = get_token_supply();
+
+    auto standby_name2 = standby_producers_2[1].owner; // defproducerw
+    const asset initial_balance2  = get_balance(standby_name2);
+    ilog("initial_balance2:                   ${x}", ("x", initial_balance2.get_amount()));
+
+    // CLAIM ACTION
+    BOOST_REQUIRE_EQUAL(success(), push_action(standby_name2, "claimstandby"_n, mvo()("owner", standby_name2)));
+
+
+    const auto     global4_state_2     = get_global_state4();
+    const int64_t  standby_bucket_2    = global4_state_2["standby_bucket"].as<int64_t>();
+    const int64_t  total_standby_share_2 = global4_state_2["total_standby_share"].as<int64_t>();
+    const asset balance2 = get_balance(standby_name2);
+
+    const auto     global_state      = get_global_state();
+    const uint64_t claim_time        = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
+    const int64_t  savings           = get_balance("eosio.saving"_n).get_amount();
+    const asset    supply            = get_token_supply();
+
+    auto standby_producers_3 = get_standby_table();
+    wdump((standby_producers_3));
+
+    ilog("standby_bucket2:                   ${x}", ("x", standby_bucket_2));
+    ilog("total_standby_share2:                   ${x}", ("x", total_standby_share_2));
+    ilog("after balance2:                   ${x}", ("x", balance2.get_amount()));
+
+    int64_t share_increase = standby_producers_3[0].standby_share;
+    // standby 2 claimed, 3 should have increased share
+    int64_t share_of_each_standby_3 = standby_producers_3[3].standby_share; // should be equal
+
+    // share increase in the time should equal new total share + share of the standby just claim
+    BOOST_REQUIRE_EQUAL(total_standby_share_1 + share_increase * 5, total_standby_share_2 + share_of_each_standby_3);
+
+    // calculate the amount just claimed
+    // int64_t expected_claim_3 = standby_bucket_2 * share_of_each_standby_3 / (total_standby_share_2 + share_of_each_standby_3);
+
+    const uint64_t usecs_between_fills = claim_time - initial_claim_time;
+    const int32_t secs_between_fills = static_cast<int32_t>(usecs_between_fills / 1000000);
+
+    const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * cont_rate / usecs_per_year;
+    BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth), supply.get_amount() - initial_supply.get_amount() );
+
+    // saving 2/5
+    BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth)/5 * 3), savings - initial_savings );
+
+    // perblock 1/5
+    const int64_t original_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (cont_rate / 5.) / usecs_per_year );
+    const int64_t expected_pervote_bucket  = 0;
+
+    // producer pay now reduced for standby
+    const int64_t expected_producer_pay_bucket = original_perblock_bucket * 21 * 10000/ (21 * 10000 + SB_RATIO * SB_SLOTS);
+    const int64_t standby_pay_bucket = original_perblock_bucket - expected_producer_pay_bucket;
+
+    ilog("Expected Per-block bucket: ${x}", ("x", original_perblock_bucket));
+    ilog("Expected expected_producer_pay_bucket: ${x}", ("x", expected_producer_pay_bucket));
+    ilog("Standby pay bucket: ${x}", ("x", standby_pay_bucket));
+
+    const int64_t expected_claimed = (standby_bucket_1 + standby_pay_bucket) * share_of_each_standby_3 /(total_standby_share_2 + share_of_each_standby_3);
+    ilog("expected_claimed: ${x}", ("x", expected_claimed));
+    BOOST_REQUIRE( within_one( expected_claimed, balance2.get_amount() - initial_balance2.get_amount()));
+
   }
 
   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);

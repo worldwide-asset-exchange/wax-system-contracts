@@ -83,7 +83,6 @@ namespace eosiosystem {
       std::vector<eosio::name> remove_standby_producers;
       remove_standby_producers.reserve(standby_producers.size());
       for ( auto itr = idx.begin(); itr != idx.end(); itr++ ) {
-            eosio::print(itr->owner.to_string() + ": " + std::to_string(itr->is_active));
             if(itr->is_active){
                 if(std::find(standby_producers.begin(), standby_producers.end(), itr->owner) == standby_producers.end()){
                     remove_standby_producers.push_back(itr->owner);
@@ -155,10 +154,8 @@ namespace eosiosystem {
         row.last_standby_share_update = ct;
         row.last_claim_time = ct;
     });
-
-    if( amount > 0 ) {
-        token::transfer_action transfer_act{ token_account, { {bpay_account, active_permission}, {owner, active_permission} } };
-        transfer_act.send( bpay_account, owner, asset(amount, core_symbol()), "standby producer pay" );
-      }
+    // amount already > 0
+    token::transfer_action transfer_act{ token_account, { {bpay_account, active_permission}, {owner, active_permission} } };
+    transfer_act.send( bpay_account, owner, asset(amount, core_symbol()), "standby producer pay" );
    }
 }
