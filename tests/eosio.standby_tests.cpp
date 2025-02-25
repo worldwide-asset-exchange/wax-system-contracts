@@ -298,7 +298,6 @@ FC_LOG_AND_RETHROW()
 
 
 BOOST_FIXTURE_TEST_CASE(change_standbys_active, eosio_standby_tester ) try {
-  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
 
   BOOST_REQUIRE_EQUAL( 
     success(), push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", 5000) )
@@ -310,21 +309,9 @@ BOOST_FIXTURE_TEST_CASE(change_standbys_active, eosio_standby_tester ) try {
   auto producer_names = active_and_vote_producers_and_standbys();
 
 
-  ilog( "------ get producers----------" );
-  wdump((producer_names));
-
-
-  // auto standby_producers = get_stanby_table();
-  // wdump((standby_producers));
-
-
-  // auto producer_keys = control->head_block_state()->active_schedule.producers;
-
-  // wdump((producer_keys));
-
   // change vote to make standbys change
-  // producers: a-u
-  // retain standbys: defproducerv, defproducerw
+  // producers: b-w
+  // retain standbys: defproducery, defproducerz
   // add new standbys 
   {
     BOOST_REQUIRE_EQUAL(success(), vote("producvotera"_n, vector<account_name>(producer_names.begin()+1, producer_names.begin()+22)));
@@ -358,12 +345,165 @@ BOOST_FIXTURE_TEST_CASE(change_standbys_active, eosio_standby_tester ) try {
   BOOST_TEST_REQUIRE( standby_producers2[6].is_active == true );
   BOOST_TEST_REQUIRE( standby_producers2[7].is_active == true );
 
+}
+FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(standby_producer_pay, eosio_standby_tester,  * boost::unit_test::tolerance(1e-10)) try {
+  auto within_one = [](int64_t a, int64_t b) -> bool { return std::abs( a - b ) <= 1; };
+
+  const int64_t secs_per_year  = 52 * 7 * 24 * 3600;
+  const double  usecs_per_year = secs_per_year * 1000000;
+  const double  cont_rate      = 0.04879;;
+
+  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+  const u_int64_t SB_RATIO = 5000;
+  const u_int32_t SB_SLOTS = 5;
+
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", SB_RATIO) )
+  );
+
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setsbslot"_n, mvo()("num_slots", SB_SLOTS) )
+  );
+  auto producer_names = active_and_vote_producers_and_standbys();
+  wdump((producer_names));
+
+  auto producer_keys = control->head_block_state()->active_schedule.producers;
+
+  wdump((producer_keys));
+
+  {
+    bool all_21_produced = true;
+    for (uint32_t i = 0; i < 21; ++i) {
+      if (0 == get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
+          all_21_produced = false;
+      }
+    }
+    bool rest_didnt_produce = true;
+    for (uint32_t i = 21; i < producer_names.size(); ++i) {
+      if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
+          rest_didnt_produce = false;
+      }
+    }
+    BOOST_REQUIRE(all_21_produced && rest_didnt_produce);
+  }
+
+
+  std::vector<double> vote_shares(producer_names.size());
+  {
+     double total_votes = 0;
+     for (uint32_t i = 0; i < producer_names.size(); ++i) {
+        vote_shares[i] = get_producer_info(producer_names[i])["total_votes"].as<double>();
+        total_votes += vote_shares[i];
+     }
+     BOOST_TEST(total_votes == get_global_state()["total_producer_vote_weight"].as<double>());
+     std::for_each(vote_shares.begin(), vote_shares.end(), [total_votes](double& x) { x /= total_votes; });
+
+     BOOST_TEST(double(1) == std::accumulate(vote_shares.begin(), vote_shares.end(), double(0)));
+     BOOST_TEST(double(3./71.) == vote_shares.front());
+     BOOST_TEST(double(1./71.) == vote_shares.back());
+  }
+
+  {
+    const uint32_t prod_index = 2;
+    const auto prod_name = producer_names[prod_index];
+
+    const auto     initial_global_state      = get_global_state();
+    const uint64_t initial_claim_time        = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
+    const int64_t  initial_pervote_bucket    = initial_global_state["pervote_bucket"].as<int64_t>();
+    const int64_t  initial_perblock_bucket   = initial_global_state["perblock_bucket"].as<int64_t>();
+    const int64_t  initial_savings           = get_balance("eosio.saving"_n).get_amount();
+    const uint32_t initial_tot_unpaid_blocks = initial_global_state["total_unpaid_blocks"].as<uint32_t>();
+    const asset    initial_supply            = get_token_supply();
+    const asset    initial_bpay_balance      = get_balance("eosio.bpay"_n);
+    const asset    initial_balance           = get_balance(prod_name);
+    const uint32_t initial_unpaid_blocks     = get_producer_info(prod_name)["unpaid_blocks"].as<uint32_t>();
+
+    const auto initial_global4_state = get_global_state4();
+    const int64_t initial_standby_bucket = initial_global4_state["standby_bucket"].as<int64_t>();
+
+    ilog("initial_claim_time: ${x}", ("x", initial_claim_time));
+    ilog("initial_pervote_bucket: ${x}", ("x", initial_pervote_bucket));
+    ilog("initial_perblock_bucket: ${x}", ("x", initial_perblock_bucket));
+    ilog("initial_savings: ${x}", ("x", initial_savings));
+    ilog("initial_tot_unpaid_blocks: ${x}", ("x", initial_tot_unpaid_blocks));
+    ilog("initial_supply: ${x}", ("x", initial_supply));
+    ilog("initial_bpay_balance: ${x}", ("x", initial_bpay_balance));
+    ilog("initial_balance: ${x}", ("x", initial_balance));
+    ilog("initial_unpaid_blocks: ${x}", ("x", initial_unpaid_blocks));
+    ilog("initial_standby_bucket: ${x}", ("x", initial_standby_bucket));
+
+    BOOST_REQUIRE_EQUAL(success(), push_action(prod_name, "claimrewards"_n, mvo()("owner", prod_name)));
+
+    const auto     global_state      = get_global_state();
+    const uint64_t claim_time        = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
+    const int64_t  pervote_bucket    = global_state["pervote_bucket"].as<int64_t>();
+    const int64_t  perblock_bucket   = global_state["perblock_bucket"].as<int64_t>();
+    const int64_t  savings           = get_balance("eosio.saving"_n).get_amount();
+    const uint32_t tot_unpaid_blocks = global_state["total_unpaid_blocks"].as<uint32_t>();
+    const asset    supply            = get_token_supply();
+    const asset    bpay_balance      = get_balance("eosio.bpay"_n);
+    const asset    balance           = get_balance(prod_name);
+    const uint32_t unpaid_blocks     = get_producer_info(prod_name)["unpaid_blocks"].as<uint32_t>();
+
+    const auto global4_state = get_global_state4();
+    const int64_t standby_bucket = global4_state["standby_bucket"].as<int64_t>();
+
+    ilog("claim_time: ${x}", ("x", claim_time));
+    ilog("pervote_bucket: ${x}", ("x", pervote_bucket));
+    ilog("perblock_bucket: ${x}", ("x", perblock_bucket));
+    ilog("savings: ${x}", ("x", savings));
+    ilog("tot_unpaid_blocks: ${x}", ("x", tot_unpaid_blocks));
+    ilog("supply: ${x}", ("x", supply));
+    ilog("bpay_balance: ${x}", ("x", bpay_balance));
+    ilog("balance: ${x}", ("x", balance));
+    ilog("unpaid_blocks: ${x}", ("x", unpaid_blocks));
+    ilog("standby_bucket: ${x}", ("x", standby_bucket));
+
+    const uint64_t usecs_between_fills = claim_time - initial_claim_time;
+    const int32_t secs_between_fills = static_cast<int32_t>(usecs_between_fills / 1000000);
+
+    const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * cont_rate / usecs_per_year;
+    BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth), supply.get_amount() - initial_supply.get_amount() );
+
+    // saving 2/5
+    BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth)/5 * 3), savings - initial_savings );
+
+    // perblock 1/5
+    const int64_t original_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (cont_rate / 5.) / usecs_per_year );
+    const int64_t expected_pervote_bucket  = 0;
+
+    // reduce for standby
+    const int64_t expected_producer_pay_bucket = original_perblock_bucket * 21 * 10000/ (21 * 10000 + SB_RATIO * SB_SLOTS);
+    const int64_t standby_pay_bucket = original_perblock_bucket - expected_producer_pay_bucket;
+
+    const int64_t from_perblock_bucket = initial_unpaid_blocks * expected_producer_pay_bucket / initial_tot_unpaid_blocks ;
+    const int64_t from_pervote_bucket  = 0;
+
+    BOOST_REQUIRE( 1 >= abs(int32_t(initial_tot_unpaid_blocks - tot_unpaid_blocks) - int32_t(initial_unpaid_blocks - unpaid_blocks)) );
+    
+   
+    ilog("Expected Per-block bucket: ${x}", ("x", original_perblock_bucket));
+    ilog("Expected expected_producer_pay_bucket: ${x}", ("x", expected_producer_pay_bucket));
+    ilog("From perblock bucket: ${x}", ("x", from_perblock_bucket));
+    ilog("Standby pay bucket: ${x}", ("x", standby_pay_bucket));
+
+    BOOST_REQUIRE( within_one( from_perblock_bucket, balance.get_amount() - initial_balance.get_amount() ) );
+    BOOST_REQUIRE( within_one( expected_pervote_bucket, pervote_bucket ) );
+    BOOST_REQUIRE( within_one( perblock_bucket, bpay_balance.get_amount() - standby_pay_bucket));
+    BOOST_REQUIRE( within_one( standby_pay_bucket, standby_bucket - initial_standby_bucket));
+    
+    produce_blocks(5);
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("already claimed rewards within past day"),
+                        push_action(prod_name, "claimrewards"_n, mvo()("owner", prod_name)));
+  }
 
   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);
 
 }
 FC_LOG_AND_RETHROW()
-
-
 
 BOOST_AUTO_TEST_SUITE_END()
