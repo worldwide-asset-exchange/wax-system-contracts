@@ -149,6 +149,19 @@ BOOST_FIXTURE_TEST_CASE(standby_config_tests, eosio_standby_tester ) try {
   BOOST_TEST_REQUIRE( 0 == gs4["num_standby_slots"].as_uint64() );
   BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_uint64() );
 
+
+  // Test invalid values for setsbratio
+  BOOST_REQUIRE_EQUAL( 
+    wasm_assert_msg("ratio must be between 0 and RATIO_DENOMINATOR"),
+    push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", -1) )
+  );
+
+  BOOST_REQUIRE_EQUAL( 
+    wasm_assert_msg("ratio must be between 0 and RATIO_DENOMINATOR"),
+    push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", 10001) )
+  );
+
+
   BOOST_REQUIRE_EQUAL( 
     success(), push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", 5000) )
   );
