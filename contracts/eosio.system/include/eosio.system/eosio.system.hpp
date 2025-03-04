@@ -10,6 +10,7 @@
 
 #include <eosio.system/exchange_state.hpp>
 #include <eosio.system/native.hpp>
+#include <alcorpriceoracle_interface.hpp>
 
 #include <deque>
 #include <optional>
