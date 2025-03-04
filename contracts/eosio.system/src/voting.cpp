@@ -104,8 +104,36 @@ namespace eosiosystem {
       });
    }
 
+   /**
+    * price in 2^64 base
+    */
+
+   // declrate 2^64 constant here
+   const uint64_t BASE = 1ULL << 64;
+
+   std::tuple<uint128_t, uint32_t, uint32_t> system_contract::get_wax_price(){
+      auto poolId = _gstate4.pair_id;
+      auto twapInterval = _gstate4.twap_interval;
+
+      auto pool = AlcorPriceOracle::getPool(poolId);
+      eosio::extended_asset tokenA = pool.tokenA;
+      eosio::extended_asset tokenB = pool.tokenB;
+      uint32_t decimalA = tokenA.get_extended_symbol().get_symbol().precision();
+      uint32_t decimalB = tokenB.get_extended_symbol().get_symbol().precision();
+
+      uint128_t price = AlcorPriceOracle::getPriceTwapX64(poolId, twapInterval);
+      return {price, decimalA, decimalB};
+   }
+
    void system_contract::update_elected_producers( const block_timestamp& block_time ) {
       _gstate.last_producer_schedule_update = block_time;
+      const asset token_supply   = eosio::token::get_supply(token_account, core_symbol().code() );
+
+      uint128_t waxPrice;
+      uint32_t decimalA;
+      uint32_t decimalB;
+      std::tie(waxPrice, decimalA, decimalB)  = get_wax_price();
+      auto wax_inflation_30_days = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(seconds_30_days)) / double(useconds_per_year) );
 
       auto idx = _producers.get_index<"prototalvote"_n>();
 

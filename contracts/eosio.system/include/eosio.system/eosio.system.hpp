@@ -61,6 +61,7 @@ namespace eosiosystem {
 
    static constexpr uint32_t seconds_per_year      = 52 * 7 * 24 * 3600;
    static constexpr uint32_t seconds_per_day       = 24 * 3600;
+   static constexpr uint32_t seconds_30_days       = 30 * 24 * 3600;
    static constexpr uint32_t seconds_per_hour      = 3600;
    static constexpr int64_t  useconds_per_year     = int64_t(seconds_per_year) * 1000'000ll;
    static constexpr int64_t  useconds_per_day      = int64_t(seconds_per_day) * 1000'000ll;
@@ -719,8 +720,14 @@ namespace eosiosystem {
       uint64_t          total_standby_share = 0;
       uint64_t          standby_pay_ratio_numerator = 0;
       uint32_t          num_standby_slots = 0;
+      uint32_t          pair_id = 0;
+      uint32_t          twap_interval = 0;
+      uint32_t          usd_per_bp = 0;
+      uint32_t          min_bps = 0;
+      uint32_t          max_bps = 0;
+      uint32_t          standby_offset = 0;
 
-      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_pay_ratio_numerator)(num_standby_slots) )
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_pay_ratio_numerator)(num_standby_slots)(pair_id)(twap_interval)(usd_per_bp)(min_bps)(max_bps)(standby_offset) )
    };
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 
@@ -1616,6 +1623,7 @@ namespace eosiosystem {
          bool is_disallow_standby( name account );
          void update_standby_share();
          void update_standby_producers(const std::vector<eosio::name>& standby_producers);
+         std::tuple<uint128_t, uint32_t, uint32_t>  get_wax_price();
    };
 
    double stake2vote( int64_t staked );
