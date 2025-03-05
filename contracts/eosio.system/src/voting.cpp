@@ -109,9 +109,10 @@ namespace eosiosystem {
     */
 
    // declrate 2^64 constant here
-   const uint64_t BASE = 1ULL << 64;
+   const uint128_t BASE = uint128_t(1) << 64;
+   const uint64_t RATE_DECIMAL = 10000;
 
-   std::tuple<uint128_t, uint32_t, uint32_t> system_contract::get_wax_price(){
+   uint128_t system_contract::get_wax_price(){
       auto poolId = _gstate4.pair_id;
       auto twapInterval = _gstate4.twap_interval;
 
@@ -122,30 +123,38 @@ namespace eosiosystem {
       uint32_t decimalB = tokenB.get_extended_symbol().get_symbol().precision();
 
       uint128_t price = AlcorPriceOracle::getPriceTwapX64(poolId, twapInterval);
-      return {price, decimalA, decimalB};
+      uint128_t priceRate = price * RATE_DECIMAL * std::pow(10, decimalA) / std::pow(10, decimalB) / BASE;
+      return priceRate;
    }
 
    void system_contract::update_elected_producers( const block_timestamp& block_time ) {
       _gstate.last_producer_schedule_update = block_time;
       const asset token_supply   = eosio::token::get_supply(token_account, core_symbol().code() );
 
-      uint128_t waxPrice;
-      uint32_t decimalA;
-      uint32_t decimalB;
-      std::tie(waxPrice, decimalA, decimalB)  = get_wax_price();
+      uint128_t waxPriceRate = get_wax_price();
+      // calculate wax need for current rate
+      uint32_t usd_per_bp = _gstate4.usd_per_bp; // usd without decimal
+      uint32_t wax_per_bp = usd_per_bp * RATE_DECIMAL * std::pow(10, core_symbol().precision()) / waxPriceRate; // wax with decimal precision
+
+      
       auto wax_inflation_30_days = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(seconds_30_days)) / double(useconds_per_year) );
+
+      uint32_t raw_producers = wax_inflation_30_days / wax_per_bp;
+      uint32_t adjusted_producers = raw_producers - _gstate4.standby_offset;
+      uint32_t num_producers = std::max(_gstate4.min_bps, std::min(adjusted_producers, _gstate4.max_bps));
+
 
       auto idx = _producers.get_index<"prototalvote"_n>();
 
       using value_type = std::pair<eosio::producer_authority, uint16_t>;
       std::vector< value_type > top_producers;
-      top_producers.reserve(21);
+      top_producers.reserve(num_producers);
       const uint32_t num_standby_slots = _gstate4.num_standby_slots;
 
       std::vector<eosio::name> standby_producers;
       standby_producers.reserve(num_standby_slots);
       auto current_it = idx.cbegin();
-      for( auto it = idx.cbegin(); it != idx.cend() && top_producers.size() < 21 && 0 < it->total_votes && it->active(); ++it ) {
+      for( auto it = idx.cbegin(); it != idx.cend() && top_producers.size() < num_producers && 0 < it->total_votes && it->active(); ++it ) {
          top_producers.emplace_back(
             eosio::producer_authority{
                .producer_name = it->owner,

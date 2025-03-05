@@ -1623,7 +1623,7 @@ namespace eosiosystem {
          bool is_disallow_standby( name account );
          void update_standby_share();
          void update_standby_producers(const std::vector<eosio::name>& standby_producers);
-         std::tuple<uint128_t, uint32_t, uint32_t>  get_wax_price();
+         uint128_t get_wax_price();
    };
 
    double stake2vote( int64_t staked );
