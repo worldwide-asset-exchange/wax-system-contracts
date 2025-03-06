@@ -53,6 +53,9 @@ namespace eosiosystem {
    
    void system_contract::setpairtwap( uint32_t pair_id, uint32_t twap_interval ){
       require_auth( get_self() );
+      auto pool = AlcorPriceOracle::getPool(pair_id);
+      eosio::extended_asset tokenA = pool.tokenA;
+      check(tokenA.get_extended_symbol().get_symbol().code() == core_symbol().code(), "tokenA must be core symbol");
       _gstate4.pair_id = pair_id;
       _gstate4.twap_interval = twap_interval;
    }
