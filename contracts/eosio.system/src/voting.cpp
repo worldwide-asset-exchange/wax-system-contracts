@@ -134,7 +134,7 @@ namespace eosiosystem {
       uint128_t waxPriceRate = get_wax_price();
       // calculate wax need for current rate
       uint32_t usd_per_bp = _gstate4.usd_per_bp; // usd without decimal
-      uint32_t wax_per_bp = usd_per_bp * RATE_DECIMAL * std::pow(10, core_symbol().precision()) / waxPriceRate; // wax with decimal precision
+      uint32_t wax_per_bp = static_cast<uint32_t>(usd_per_bp * RATE_DECIMAL * std::pow(10, core_symbol().precision()) / waxPriceRate); // wax with decimal precision
 
       
       auto wax_inflation_30_days = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(seconds_30_days)) / double(useconds_per_year) );

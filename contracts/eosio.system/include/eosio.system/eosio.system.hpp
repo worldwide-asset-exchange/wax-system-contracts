@@ -1437,6 +1437,18 @@ namespace eosiosystem {
          [[eosio::action]]
          void setsbslot( uint32_t num_slots );
 
+         /** set pair id and twap interval */
+         [[eosio::action]]
+         void setpairtwap( uint32_t pair_id, uint32_t twap_interval );
+
+         /** set USD per BP value */
+         [[eosio::action]]
+         void setusdbp( uint32_t usd_per_bp );
+
+         /** set BPS parameters (min_bps, max_bps, standby_offset) */
+         [[eosio::action]]
+         void setbpsparams( uint32_t min_bps, uint32_t max_bps, uint32_t standby_offset );
+
          /** add name to block list */
          [[eosio::action]]
          void disallowsb(const name account);
@@ -1529,6 +1541,9 @@ namespace eosiosystem {
        using powerup_action = eosio::action_wrapper<"powerup"_n, &system_contract::powerup>;
        using set_standby_pay_ratio_action = eosio::action_wrapper<"setsbratio"_n, &system_contract::setsbratio>;
        using set_standby_slots_action = eosio::action_wrapper<"setsbslot"_n, &system_contract::setsbslot>;
+       using set_pair_twap_action = eosio::action_wrapper<"setpairtwap"_n, &system_contract::setpairtwap>;
+       using set_usd_bp_action = eosio::action_wrapper<"setusdbp"_n, &system_contract::setusdbp>;
+       using set_bps_params_action = eosio::action_wrapper<"setbpsparams"_n, &system_contract::setbpsparams>;
        using add_standby_block_action = eosio::action_wrapper<"disallowsb"_n, &system_contract::disallowsb>;
        using rm_standby_block_action = eosio::action_wrapper<"allowsb"_n, &system_contract::allowsb>;
 

@@ -51,6 +51,24 @@ namespace eosiosystem {
       _gstate4.num_standby_slots = num_slots;
    }
    
+   void system_contract::setpairtwap( uint32_t pair_id, uint32_t twap_interval ){
+      require_auth( get_self() );
+      _gstate4.pair_id = pair_id;
+      _gstate4.twap_interval = twap_interval;
+   }
+   
+   void system_contract::setusdbp( uint32_t usd_per_bp ){
+      require_auth( get_self() );
+      _gstate4.usd_per_bp = usd_per_bp;
+   }
+   
+   void system_contract::setbpsparams( uint32_t min_bps, uint32_t max_bps, uint32_t standby_offset ){
+      require_auth( get_self() );
+      _gstate4.min_bps = min_bps;
+      _gstate4.max_bps = max_bps;
+      _gstate4.standby_offset = standby_offset;
+   }
+   
    void system_contract::update_standby_share(){
       const auto ct = current_time_point();
 
