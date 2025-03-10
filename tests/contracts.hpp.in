@@ -15,6 +15,11 @@ struct contracts {
    static std::vector<uint8_t> bios_wasm() { return read_wasm("${CMAKE_BINARY_DIR}/contracts/eosio.bios/eosio.bios.wasm"); }
    static std::vector<char>    bios_abi() { return read_abi("${CMAKE_BINARY_DIR}/contracts/eosio.bios/eosio.bios.abi"); }
 
+   // add alcorswap contract
+   static std::vector<uint8_t> alcorswap_wasm() { return read_wasm("/opt/contracts/tests/test_contracts/alcorswap.wasm"); }
+   static std::vector<char>    alcorswap_abi() { return read_abi("/opt/contracts/tests/test_contracts/alcorswap.abi"); }
+   
+
    struct util {
       static std::vector<uint8_t> reject_all_wasm() { return read_wasm("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/reject_all.wasm"); }
       static std::vector<uint8_t> exchange_wasm() { return read_wasm("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/exchange.wasm"); }

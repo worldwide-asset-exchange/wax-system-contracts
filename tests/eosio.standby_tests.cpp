@@ -46,7 +46,68 @@ bool within_and_gte(int64_t a, int64_t b, int64_t w) { return a - b <= w && a >=
 
 
 struct eosio_standby_tester : eosio_system_tester {
-  eosio_standby_tester() {  }
+  eosio_standby_tester() { 
+
+    create_accounts( { "alice"_n, "bob"_n, "carol"_n, "eosio.token"_n , "swap.alcor"_n} );
+    produce_blocks( 2 );
+
+    set_code( "eosio.token"_n, contracts::token_wasm() );
+    set_abi( "eosio.token"_n, contracts::token_abi().data() );
+
+    set_code( "swap.alcor"_n, contracts::alcorswap_wasm() );
+    set_abi( "swap.alcor"_n, contracts::alcorswap_abi().data() );
+  }
+
+  void create_token(account_name token_account, asset maximum_supply) {
+    push_action(
+      token_account, "create"_n,
+      mvo()
+        ("issuer", token_account)
+        ("maximum_supply", maximum_supply)
+    );
+
+    push_action(
+      token_account, "issue"_n,
+      mvo()
+        ("to", token_account)
+        ("quantity", maximum_supply)
+        ("memo", "issue")    );
+  }
+
+  void transfer_token(
+    account_name token_account,
+    account_name from_account,
+    account_name to_account,
+    asset quantity,
+    string memo
+  ) {
+    push_action(
+      token_account, "transfer"_n,
+      mvo()
+        ("from", from_account)
+        ("to", to_account)
+        ("quantity", quantity)
+        ("memo", memo)
+          );
+  }
+
+  string build_memo(
+    const string& service_name,
+    const string& pool_id,
+    const string& account_name,
+    const string& contract_name,
+    const string& asset,
+    const string& deadline
+  ) {
+    std::stringstream memo;
+    memo << service_name << "#"
+         << pool_id << "#"
+         << account_name << "#"
+         << asset << "@"
+         << contract_name << "#"
+         << deadline;
+    return memo.str();
+  }
 
   standby_producer_state get_standby_producer_state(name acc) {
    vector<char> data = get_row_by_account(config::system_account_name, config::system_account_name, "standbys"_n, acc);

@@ -1,0 +1,1203 @@
+{
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT ",
+    "version": "eosio::abi/1.2",
+    "types": [],
+    "structs": [
+        {
+            "name": "BalanceS",
+            "base": "",
+            "fields": [
+                {
+                    "name": "id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "assetBalance",
+                    "type": "extended_asset"
+                }
+            ]
+        },
+        {
+            "name": "BitmapS",
+            "base": "",
+            "fields": [
+                {
+                    "name": "pos",
+                    "type": "int16"
+                },
+                {
+                    "name": "bitmap",
+                    "type": "uint128"
+                }
+            ]
+        },
+        {
+            "name": "CurrSlotS",
+            "base": "",
+            "fields": [
+                {
+                    "name": "sqrtPriceX64",
+                    "type": "uint128"
+                },
+                {
+                    "name": "tick",
+                    "type": "int32"
+                },
+                {
+                    "name": "lastObservationTimestamp",
+                    "type": "uint32"
+                },
+                {
+                    "name": "currentObservationNum",
+                    "type": "uint32"
+                },
+                {
+                    "name": "maxObservationNum",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "IncentiveS",
+            "base": "",
+            "fields": [
+                {
+                    "name": "id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "reward",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "startTime",
+                    "type": "uint32"
+                },
+                {
+                    "name": "endTime",
+                    "type": "uint32"
+                },
+                {
+                    "name": "refundee",
+                    "type": "name"
+                },
+                {
+                    "name": "totalRewardUnclaimed",
+                    "type": "uint64"
+                },
+                {
+                    "name": "totalSecondsClaimedX64",
+                    "type": "uint128"
+                },
+                {
+                    "name": "numberOfStakes",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "ObservationS",
+            "base": "",
+            "fields": [
+                {
+                    "name": "timestampInSec",
+                    "type": "uint32"
+                },
+                {
+                    "name": "tickCumulative",
+                    "type": "int64"
+                },
+                {
+                    "name": "secondsPerLiquidityCumulativeX64",
+                    "type": "uint128"
+                }
+            ]
+        },
+        {
+            "name": "PoolS",
+            "base": "",
+            "fields": [
+                {
+                    "name": "id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "active",
+                    "type": "bool"
+                },
+                {
+                    "name": "tokenA",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "tokenB",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "fee",
+                    "type": "uint32"
+                },
+                {
+                    "name": "feeProtocol",
+                    "type": "uint8"
+                },
+                {
+                    "name": "tickSpacing",
+                    "type": "int32"
+                },
+                {
+                    "name": "maxLiquidityPerTick",
+                    "type": "uint64"
+                },
+                {
+                    "name": "currSlot",
+                    "type": "CurrSlotS"
+                },
+                {
+                    "name": "feeGrowthGlobalAX64",
+                    "type": "uint128"
+                },
+                {
+                    "name": "feeGrowthGlobalBX64",
+                    "type": "uint128"
+                },
+                {
+                    "name": "protocolFeeA",
+                    "type": "asset"
+                },
+                {
+                    "name": "protocolFeeB",
+                    "type": "asset"
+                },
+                {
+                    "name": "liquidity",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "PositionS",
+            "base": "",
+            "fields": [
+                {
+                    "name": "id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "tickLower",
+                    "type": "int32"
+                },
+                {
+                    "name": "tickUpper",
+                    "type": "int32"
+                },
+                {
+                    "name": "liquidity",
+                    "type": "uint64"
+                },
+                {
+                    "name": "feeGrowthInsideALastX64",
+                    "type": "uint128"
+                },
+                {
+                    "name": "feeGrowthInsideBLastX64",
+                    "type": "uint128"
+                },
+                {
+                    "name": "feesA",
+                    "type": "uint64"
+                },
+                {
+                    "name": "feesB",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "StakeS",
+            "base": "",
+            "fields": [
+                {
+                    "name": "id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "incentiveId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "posId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "secondsPerLiquidityInsideLastX64",
+                    "type": "uint128"
+                },
+                {
+                    "name": "liquidity",
+                    "type": "uint64"
+                },
+                {
+                    "name": "reward",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "SymtemS",
+            "base": "",
+            "fields": [
+                {
+                    "name": "id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "active",
+                    "type": "bool"
+                },
+                {
+                    "name": "poolIdCounter",
+                    "type": "uint64"
+                },
+                {
+                    "name": "posIdCounter",
+                    "type": "uint64"
+                },
+                {
+                    "name": "activeFee",
+                    "type": "extended_asset"
+                }
+            ]
+        },
+        {
+            "name": "TickS",
+            "base": "",
+            "fields": [
+                {
+                    "name": "id",
+                    "type": "int32"
+                },
+                {
+                    "name": "liquidityGross",
+                    "type": "uint64"
+                },
+                {
+                    "name": "liquidityNet",
+                    "type": "int64"
+                },
+                {
+                    "name": "feeGrowthOutsideAX64",
+                    "type": "uint128"
+                },
+                {
+                    "name": "feeGrowthOutsideBX64",
+                    "type": "uint128"
+                },
+                {
+                    "name": "tickCumulativeOutside",
+                    "type": "int64"
+                },
+                {
+                    "name": "secondsPerLiquidityOutsideX64",
+                    "type": "uint128"
+                },
+                {
+                    "name": "secondsOutside",
+                    "type": "uint32"
+                },
+                {
+                    "name": "initialized",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "WhitelistTokenS",
+            "base": "",
+            "fields": [
+                {
+                    "name": "token",
+                    "type": "extended_asset"
+                }
+            ]
+        },
+        {
+            "name": "addliquid",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "tokenADesired",
+                    "type": "asset"
+                },
+                {
+                    "name": "tokenBDesired",
+                    "type": "asset"
+                },
+                {
+                    "name": "tickLower",
+                    "type": "int32"
+                },
+                {
+                    "name": "tickUpper",
+                    "type": "int32"
+                },
+                {
+                    "name": "tokenAMin",
+                    "type": "asset"
+                },
+                {
+                    "name": "tokenBMin",
+                    "type": "asset"
+                },
+                {
+                    "name": "deadline",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "addoraclerow",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "payer",
+                    "type": "name"
+                },
+                {
+                    "name": "previousRam",
+                    "type": "int64"
+                }
+            ]
+        },
+        {
+            "name": "cfgtoken",
+            "base": "",
+            "fields": [
+                {
+                    "name": "whitelistToken",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "isErase",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "collect",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "recipient",
+                    "type": "name"
+                },
+                {
+                    "name": "tickLower",
+                    "type": "int32"
+                },
+                {
+                    "name": "tickUpper",
+                    "type": "int32"
+                },
+                {
+                    "name": "tokenAMax",
+                    "type": "asset"
+                },
+                {
+                    "name": "tokenBMax",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "createpool",
+            "base": "",
+            "fields": [
+                {
+                    "name": "account",
+                    "type": "name"
+                },
+                {
+                    "name": "tokenA",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "tokenB",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "sqrtPriceX64",
+                    "type": "uint128"
+                },
+                {
+                    "name": "fee",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "endincentive",
+            "base": "",
+            "fields": [
+                {
+                    "name": "incentiveId",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "getfees",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "recipient",
+                    "type": "name"
+                },
+                {
+                    "name": "tokenARequested",
+                    "type": "asset"
+                },
+                {
+                    "name": "tokenBRequested",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "init",
+            "base": "",
+            "fields": []
+        },
+        {
+            "name": "logaddoracle",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "payer",
+                    "type": "name"
+                },
+                {
+                    "name": "rows",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "logburn",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "posId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "tickLower",
+                    "type": "int32"
+                },
+                {
+                    "name": "tickUpper",
+                    "type": "int32"
+                },
+                {
+                    "name": "liquidity",
+                    "type": "uint64"
+                },
+                {
+                    "name": "tokenA",
+                    "type": "asset"
+                },
+                {
+                    "name": "tokenB",
+                    "type": "asset"
+                },
+                {
+                    "name": "reserveA",
+                    "type": "asset"
+                },
+                {
+                    "name": "reserveB",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "logcollect",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "posId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "recipient",
+                    "type": "name"
+                },
+                {
+                    "name": "tickLower",
+                    "type": "int32"
+                },
+                {
+                    "name": "tickUpper",
+                    "type": "int32"
+                },
+                {
+                    "name": "liquidity",
+                    "type": "uint64"
+                },
+                {
+                    "name": "tokenA",
+                    "type": "asset"
+                },
+                {
+                    "name": "tokenB",
+                    "type": "asset"
+                },
+                {
+                    "name": "reserveA",
+                    "type": "asset"
+                },
+                {
+                    "name": "reserveB",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "loggetfee",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "recipient",
+                    "type": "name"
+                },
+                {
+                    "name": "tokenA",
+                    "type": "asset"
+                },
+                {
+                    "name": "tokenB",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "logmint",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "posId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "tickLower",
+                    "type": "int32"
+                },
+                {
+                    "name": "tickUpper",
+                    "type": "int32"
+                },
+                {
+                    "name": "liquidity",
+                    "type": "uint64"
+                },
+                {
+                    "name": "tokenA",
+                    "type": "asset"
+                },
+                {
+                    "name": "tokenB",
+                    "type": "asset"
+                },
+                {
+                    "name": "reserveA",
+                    "type": "asset"
+                },
+                {
+                    "name": "reserveB",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "logpool",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "tokenA",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "tokenB",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "fee",
+                    "type": "uint32"
+                },
+                {
+                    "name": "feeProtocol",
+                    "type": "uint8"
+                },
+                {
+                    "name": "tickSpacing",
+                    "type": "uint32"
+                },
+                {
+                    "name": "sqrtPriceX64",
+                    "type": "uint128"
+                },
+                {
+                    "name": "tick",
+                    "type": "int32"
+                }
+            ]
+        },
+        {
+            "name": "logsetfee",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "feeProtocolOld",
+                    "type": "uint8"
+                },
+                {
+                    "name": "feeProtocolNew",
+                    "type": "uint8"
+                }
+            ]
+        },
+        {
+            "name": "logstaked",
+            "base": "",
+            "fields": [
+                {
+                    "name": "incentiveId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "posId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "liquidity",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "logswap",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "sender",
+                    "type": "name"
+                },
+                {
+                    "name": "recipient",
+                    "type": "name"
+                },
+                {
+                    "name": "tokenA",
+                    "type": "asset"
+                },
+                {
+                    "name": "tokenB",
+                    "type": "asset"
+                },
+                {
+                    "name": "sqrtPriceX64",
+                    "type": "uint128"
+                },
+                {
+                    "name": "liquidity",
+                    "type": "uint64"
+                },
+                {
+                    "name": "tick",
+                    "type": "int32"
+                },
+                {
+                    "name": "reserveA",
+                    "type": "asset"
+                },
+                {
+                    "name": "reserveB",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "logunstaked",
+            "base": "",
+            "fields": [
+                {
+                    "name": "incentiveId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "posId",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "newincentive",
+            "base": "",
+            "fields": [
+                {
+                    "name": "creator",
+                    "type": "name"
+                },
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "rewardToken",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "startTime",
+                    "type": "uint32"
+                },
+                {
+                    "name": "endTime",
+                    "type": "uint32"
+                },
+                {
+                    "name": "refundee",
+                    "type": "name"
+                }
+            ]
+        },
+        {
+            "name": "rmvpool",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "setactive",
+            "base": "",
+            "fields": [
+                {
+                    "name": "active",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "setactivefee",
+            "base": "",
+            "fields": [
+                {
+                    "name": "activeFee",
+                    "type": "extended_asset"
+                }
+            ]
+        },
+        {
+            "name": "setfee",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "feeProtocol",
+                    "type": "uint8"
+                }
+            ]
+        },
+        {
+            "name": "stake",
+            "base": "",
+            "fields": [
+                {
+                    "name": "incentiveId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "posId",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "subliquid",
+            "base": "",
+            "fields": [
+                {
+                    "name": "poolId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "liquidity",
+                    "type": "uint64"
+                },
+                {
+                    "name": "tickLower",
+                    "type": "int32"
+                },
+                {
+                    "name": "tickUpper",
+                    "type": "int32"
+                },
+                {
+                    "name": "tokenAMin",
+                    "type": "asset"
+                },
+                {
+                    "name": "tokenBMin",
+                    "type": "asset"
+                },
+                {
+                    "name": "deadline",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "unstake",
+            "base": "",
+            "fields": [
+                {
+                    "name": "incentiveId",
+                    "type": "uint64"
+                },
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "posId",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "withdraw",
+            "base": "",
+            "fields": [
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "assetInput",
+                    "type": "extended_asset"
+                }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "name": "addliquid",
+            "type": "addliquid",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "addoraclerow",
+            "type": "addoraclerow",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "cfgtoken",
+            "type": "cfgtoken",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "collect",
+            "type": "collect",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "createpool",
+            "type": "createpool",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "endincentive",
+            "type": "endincentive",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "getfees",
+            "type": "getfees",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "init",
+            "type": "init",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "logaddoracle",
+            "type": "logaddoracle",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "logburn",
+            "type": "logburn",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "logcollect",
+            "type": "logcollect",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "loggetfee",
+            "type": "loggetfee",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "logmint",
+            "type": "logmint",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "logpool",
+            "type": "logpool",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "logsetfee",
+            "type": "logsetfee",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "logstaked",
+            "type": "logstaked",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "logswap",
+            "type": "logswap",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "logunstaked",
+            "type": "logunstaked",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "newincentive",
+            "type": "newincentive",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "rmvpool",
+            "type": "rmvpool",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setactive",
+            "type": "setactive",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setactivefee",
+            "type": "setactivefee",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setfee",
+            "type": "setfee",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "stake",
+            "type": "stake",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "subliquid",
+            "type": "subliquid",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "unstake",
+            "type": "unstake",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "withdraw",
+            "type": "withdraw",
+            "ricardian_contract": ""
+        }
+    ],
+    "tables": [
+        {
+            "name": "balances",
+            "type": "BalanceS",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "bitmaps",
+            "type": "BitmapS",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "incentives",
+            "type": "IncentiveS",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "observations",
+            "type": "ObservationS",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "pools",
+            "type": "PoolS",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "positions",
+            "type": "PositionS",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "stakes",
+            "type": "StakeS",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "system",
+            "type": "SymtemS",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "ticks",
+            "type": "TickS",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "whitelist",
+            "type": "WhitelistTokenS",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        }
+    ],
+    "kv_tables": {},
+    "ricardian_clauses": [],
+    "variants": [],
+    "action_results": []
+}
