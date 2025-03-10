@@ -728,7 +728,7 @@ namespace eosiosystem {
       uint32_t          standby_offset = 0;
       bool              enable_dynamic_bp = false;
 
-      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_pay_ratio_numerator)(num_standby_slots)(pair_id)(twap_interval)(usd_per_bp)(min_bps)(max_bps)(standby_offset) )
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_pay_ratio_numerator)(num_standby_slots)(pair_id)(twap_interval)(usd_per_bp)(min_bps)(max_bps)(standby_offset)(enable_dynamic_bp) )
    };
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 

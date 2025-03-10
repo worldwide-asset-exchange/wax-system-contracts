@@ -80,6 +80,14 @@ namespace eosiosystem {
 
    void system_contract::enabledynbp( bool enable_dynamic_bp ) {
       require_auth( get_self() );
+      // check for other conditions before enabling dynamic bp
+      if (enable_dynamic_bp){
+            check(_gstate4.pair_id > 0, "pair_id must be set");
+            check(_gstate4.twap_interval > 0, "twap_interval must be set");
+            check(_gstate4.usd_per_bp > 0, "usd_per_bp must be set");
+            check(_gstate4.min_bps > 0, "min_bps must be set");
+            check(_gstate4.max_bps > 0, "max_bps must be set");
+      }
       _gstate4.enable_dynamic_bp = enable_dynamic_bp;
    }
    
