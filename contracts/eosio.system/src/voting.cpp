@@ -129,20 +129,24 @@ namespace eosiosystem {
 
    void system_contract::update_elected_producers( const block_timestamp& block_time ) {
       _gstate.last_producer_schedule_update = block_time;
-      const asset token_supply   = eosio::token::get_supply(token_account, core_symbol().code() );
 
-      uint128_t waxPriceRate = get_wax_price();
-      // calculate wax need for current rate
-      uint32_t usd_per_bp = _gstate4.usd_per_bp; // usd without decimal
-      uint32_t wax_per_bp = static_cast<uint32_t>(usd_per_bp * RATE_DECIMAL * std::pow(10, core_symbol().precision()) / waxPriceRate); // wax with decimal precision
+      uint32_t num_producers = 21;
 
-      
-      auto wax_inflation_30_days = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(seconds_30_days)) / double(useconds_per_year) );
+      if (_gstate4.enable_dynamic_bp){
+         const asset token_supply   = eosio::token::get_supply(token_account, core_symbol().code() );
 
-      uint32_t raw_producers = wax_inflation_30_days / wax_per_bp;
-      uint32_t adjusted_producers = raw_producers - _gstate4.standby_offset;
-      uint32_t num_producers = std::max(_gstate4.min_bps, std::min(adjusted_producers, _gstate4.max_bps));
+         uint128_t waxPriceRate = get_wax_price();
+         // calculate wax need for current rate
+         uint32_t usd_per_bp = _gstate4.usd_per_bp; // usd without decimal
+         uint32_t wax_per_bp = static_cast<uint32_t>(usd_per_bp * RATE_DECIMAL * std::pow(10, core_symbol().precision()) / waxPriceRate); // wax with decimal precision
 
+         
+         auto wax_inflation_30_days = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(seconds_30_days)) / double(useconds_per_year) );
+
+         uint32_t raw_producers = wax_inflation_30_days / wax_per_bp;
+         uint32_t adjusted_producers = raw_producers - _gstate4.standby_offset;
+         num_producers = std::max(_gstate4.min_bps, std::min(adjusted_producers, _gstate4.max_bps));
+      }
 
       auto idx = _producers.get_index<"prototalvote"_n>();
 

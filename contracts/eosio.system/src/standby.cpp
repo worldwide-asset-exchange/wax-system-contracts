@@ -62,14 +62,25 @@ namespace eosiosystem {
    
    void system_contract::setusdbp( uint32_t usd_per_bp ){
       require_auth( get_self() );
+      check(usd_per_bp >= 0, "usd_per_bp must be greater than 0");
       _gstate4.usd_per_bp = usd_per_bp;
    }
    
    void system_contract::setbpsparams( uint32_t min_bps, uint32_t max_bps, uint32_t standby_offset ){
       require_auth( get_self() );
-      _gstate4.min_bps = min_bps;
-      _gstate4.max_bps = max_bps;
-      _gstate4.standby_offset = standby_offset;
+      check(min_bps >= 0, "min_bps must be greater than 0");
+      check(max_bps >= 0, "max_bps must be greater than 0");
+      check(standby_offset >= 0, "standby_offset must be greater than 0");
+        check(min_bps <= max_bps, "min_bps must be less than or equal to max_bps");
+
+        _gstate4.min_bps = min_bps;
+        _gstate4.max_bps = max_bps;
+        _gstate4.standby_offset = standby_offset;
+   }
+
+   void system_contract::enabledynbp( bool enable_dynamic_bp ) {
+      require_auth( get_self() );
+      _gstate4.enable_dynamic_bp = enable_dynamic_bp;
    }
    
    void system_contract::update_standby_share(){

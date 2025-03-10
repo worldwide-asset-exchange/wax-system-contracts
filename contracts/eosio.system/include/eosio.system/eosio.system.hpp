@@ -726,6 +726,7 @@ namespace eosiosystem {
       uint32_t          min_bps = 0;
       uint32_t          max_bps = 0;
       uint32_t          standby_offset = 0;
+      bool              enable_dynamic_bp = false;
 
       EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_pay_ratio_numerator)(num_standby_slots)(pair_id)(twap_interval)(usd_per_bp)(min_bps)(max_bps)(standby_offset) )
    };
@@ -1449,6 +1450,10 @@ namespace eosiosystem {
          [[eosio::action]]
          void setbpsparams( uint32_t min_bps, uint32_t max_bps, uint32_t standby_offset );
 
+         /** enable or disable dynamic bp */
+         [[eosio::action]]
+         void enabledynbp( bool enable_dynamic_bp );
+
          /** add name to block list */
          [[eosio::action]]
          void disallowsb(const name account);
@@ -1546,6 +1551,7 @@ namespace eosiosystem {
        using set_bps_params_action = eosio::action_wrapper<"setbpsparams"_n, &system_contract::setbpsparams>;
        using add_standby_block_action = eosio::action_wrapper<"disallowsb"_n, &system_contract::disallowsb>;
        using rm_standby_block_action = eosio::action_wrapper<"allowsb"_n, &system_contract::allowsb>;
+       using enable_dynamic_bp_action = eosio::action_wrapper<"enabledynbp"_n, &system_contract::enabledynbp>;
 
       private:
          // WAX specifics
