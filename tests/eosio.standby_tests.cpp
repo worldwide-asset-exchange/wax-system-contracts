@@ -277,6 +277,75 @@ struct eosio_standby_tester : eosio_system_tester {
     return producer_names;
   }
 
+  void create_swap_pool(){
+    create_accounts_with_resources({"alice"_n,"bob"_n});
+
+    issue_and_transfer("alice"_n, core_sym::from_string("100000.0000"));
+
+    // Create test tokens
+    symbol testTokenSymbol =  eosio::chain::symbol::from_string("4,TSTUSDT");
+
+    create_currency( "eosio.token"_n, config::system_account_name, asset(100000000000000, testTokenSymbol));
+    issue( asset::from_string("1000000.0000 TSTUSDT") );
+    produce_blocks(1);
+    transfer( config::system_account_name, "alice"_n, asset::from_string("1000000.0000 TSTUSDT") , config::system_account_name );
+    produce_blocks(1);
+
+    auto alice_balance = get_balance("alice"_n, testTokenSymbol);
+    auto alice_wax_balance = get_balance("alice"_n);
+    ilog("alice balance: ${x}", ("x", alice_balance));
+    ilog("alice wax balance: ${x}", ("x", alice_wax_balance));
+
+
+    // Create pool using the createPool helper function
+    auto assetA = extended_asset(core_sym::from_string("0.0000"), "eosio.token"_n);
+    auto assetB = extended_asset(asset::from_string("0.0000 TSTUSDT"), "eosio.token"_n);
+    ilog("assetA: ${x}", ("x", assetA.quantity));
+    ilog("assetB: ${x}", ("x", assetB.quantity));
+    
+    // 2^64 = 18446744073709551616
+    createPool(
+      "alice"_n,
+      assetA,
+      assetB,
+      "58276834595106022400",  // sqrtPriceX64 for price 1/10
+      3000 // fee MEDIUM
+    );
+
+    auto pool = get_pool(0);
+    ilog("pool: ${x}", ("x", pool["id"].as<uint64_t>()));
+    ilog("pool: ${x}", ("x", pool["tokenA"].as<extended_asset>().quantity));
+    ilog("pool: ${x}", ("x", pool["tokenB"].as<extended_asset>().quantity));
+
+    /**
+     * Add liquidity using the addLiquid helper function   
+     *  getMinTick(TICK_SPACINGS.get(FeeAmount.MEDIUM)), 60
+        getMaxTick(TICK_SPACINGS.get(FeeAmount.MEDIUM)), 60
+    */
+
+    transferToken( "alice"_n, "swap.alcor"_n, asset::from_string("100000.0000 TSTUSDT"),"deposit", "alice"_n);
+    transferToken( "alice"_n, "swap.alcor"_n, asset::from_string("10000.0000 TST"),"deposit", "alice"_n);
+    
+
+    addLiquid(
+      0, // poolId
+      "alice"_n,
+      asset::from_string("10000.0000 TST"),
+      asset::from_string("100000.0000 TSTUSDT"),
+      getMinTick(60), // tickLower
+      getMaxTick(60),  // tickUpper
+      asset::from_string("0.0000 TST"),
+      asset::from_string("0.0000 TSTUSDT"),
+      last_block_time() + 300 // deadline
+    ); 
+
+    ilog("add liquidity done!");
+    auto pool1 = get_pool(0);
+    ilog("pool: ${x}", ("x", pool1["id"].as<uint64_t>()));
+    ilog("pool: ${x}", ("x", pool1["tokenA"].as<extended_asset>().quantity));
+    ilog("pool: ${x}", ("x", pool1["tokenB"].as<extended_asset>().quantity));
+  }
+
 };
 
 
@@ -767,77 +836,17 @@ FC_LOG_AND_RETHROW()
 BOOST_FIXTURE_TEST_CASE(alcor_pool_tests, eosio_standby_tester) try {
   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
 
-  create_accounts_with_resources({"alice"_n,"bob"_n});
+  create_swap_pool();
+  produce_blocks(5);
 
-  issue_and_transfer("alice"_n, core_sym::from_string("100000.0000"));
-
-  // Create test tokens
-  symbol testTokenSymbol =  eosio::chain::symbol::from_string("4,TKN");
-
-  create_currency( "eosio.token"_n, config::system_account_name, asset(100000000000000, testTokenSymbol));
-  issue( asset::from_string("1000000.0000 TKN") );
-  produce_blocks(1);
-  transfer( config::system_account_name, "alice"_n, asset::from_string("1000000.0000 TKN") , config::system_account_name );
-  produce_blocks(1);
-
-
-
-  auto alice_balance = get_balance("alice"_n, testTokenSymbol);
-  auto alice_wax_balance = get_balance("alice"_n);
-  ilog("alice balance: ${x}", ("x", alice_balance));
-  ilog("alice wax balance: ${x}", ("x", alice_wax_balance));
-
-
-  // Create pool using the createPool helper function
-  auto assetA = extended_asset(core_sym::from_string("0.0000"), "eosio.token"_n);
-  auto assetB = extended_asset(asset::from_string("0.0000 TKN"), "eosio.token"_n);
-  ilog("assetA: ${x}", ("x", assetA.quantity));
-  ilog("assetB: ${x}", ("x", assetB.quantity));
-  
-  createPool(
-    "alice"_n,
-    assetB,
-    assetA,
-    "18446744073709551616",  // sqrtPriceX64
-    3000 // fee MEDIUM
+  const uint32_t POOL_ID = 0;
+  const uint32_t TWAP_INTERVAL = 0;
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setpairtwap"_n, mvo()("pair_id", POOL_ID)("twap_interval", TWAP_INTERVAL) )
   );
 
-  auto pool = get_pool(0);
-  ilog("pool: ${x}", ("x", pool["id"].as<uint64_t>()));
-  ilog("pool: ${x}", ("x", pool["tokenA"].as<extended_asset>().quantity));
-  ilog("pool: ${x}", ("x", pool["tokenB"].as<extended_asset>().quantity));
+  auto gs4 = get_global_state4();
 
-   /**
-   * Add liquidity using the addLiquid helper function   
-   *  getMinTick(TICK_SPACINGS.get(FeeAmount.MEDIUM)), 60
-      getMaxTick(TICK_SPACINGS.get(FeeAmount.MEDIUM)), 60
-   */
-
-  transferToken( "alice"_n, "swap.alcor"_n, asset::from_string("100000.0000 TKN"),"deposit", "alice"_n);
-  transferToken( "alice"_n, "swap.alcor"_n, asset::from_string("10000.0000 TST"),"deposit", "alice"_n);
-  
-
-  addLiquid(
-    0, // poolId
-    "alice"_n,
-    asset::from_string("100000.0000 TKN"),
-    asset::from_string("10000.0000 TST"),
-    getMinTick(60), // tickLower
-    getMaxTick(60),  // tickUpper
-    asset::from_string("0.0000 TKN"),
-    asset::from_string("0.0000 TST"),
-    last_block_time() + 300 // deadline
-  ); 
-
-  ilog("add liquidity done!");
-  auto pool1 = get_pool(0);
-  ilog("pool: ${x}", ("x", pool1["id"].as<uint64_t>()));
-  ilog("pool: ${x}", ("x", pool1["tokenA"].as<extended_asset>().quantity));
-  ilog("pool: ${x}", ("x", pool1["tokenB"].as<extended_asset>().quantity));
-
-
-  // Verify pool creation and liquidity addition
-  // TODO: Add verification checks for pool state and balances
   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);
 
 }
