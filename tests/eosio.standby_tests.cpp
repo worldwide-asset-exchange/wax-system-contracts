@@ -11,6 +11,7 @@
 
 #include "eosio.system_tester.hpp"
 
+
 inline const auto alice = "alice1111111"_n;
 inline const auto bob = "bob111111111"_n;
 
@@ -43,53 +44,68 @@ bool within_error(int64_t a, int64_t b, int64_t err) { return std::abs(a - b) <=
 bool within_one(int64_t a, int64_t b) { return within_error(a, b, 1); }
 bool within_and_gte(int64_t a, int64_t b, int64_t w) { return a - b <= w && a >= b; }
 
+const int32_t MIN_TICK = -443636;
+/// @dev The maximum tick that may be passed to #getSqrtRatioAtTick computed from log base 1.0001 of 2**64
+const int32_t MAX_TICK = -MIN_TICK;
 
+
+int32_t getMinTick(int32_t tickSpacing) {
+  return ((MIN_TICK + tickSpacing - 1) / tickSpacing) * tickSpacing;
+}
+
+
+int32_t getMaxTick(int32_t tickSpacing) {
+  return (MAX_TICK / tickSpacing) * tickSpacing;
+}
 
 struct eosio_standby_tester : eosio_system_tester {
+  abi_serializer alcor_abi_ser;
   eosio_standby_tester() { 
 
-    create_accounts( { "alice"_n, "bob"_n, "carol"_n, "eosio.token"_n , "swap.alcor"_n} );
+    const asset net = core_sym::from_string("800.0000");
+    const asset cpu = core_sym::from_string("800.0000");
+    const std::vector<account_name> accounts = { "swap.alcor"_n,  };
+    for (const auto& v: accounts) {
+       create_account_with_resources( v, config::system_account_name, core_sym::from_string("100.0000"), false, net, cpu );
+       transfer( config::system_account_name, v, core_sym::from_string("100000000.0000"), config::system_account_name );
+       BOOST_REQUIRE_EQUAL(success(), stake(v, core_sym::from_string("30000000.0000"), core_sym::from_string("30000000.0000")) );
+    }
+
     produce_blocks( 2 );
 
-    set_code( "eosio.token"_n, contracts::token_wasm() );
-    set_abi( "eosio.token"_n, contracts::token_abi().data() );
+    // fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
 
     set_code( "swap.alcor"_n, contracts::alcorswap_wasm() );
     set_abi( "swap.alcor"_n, contracts::alcorswap_abi().data() );
-  }
 
-  void create_token(account_name token_account, asset maximum_supply) {
-    push_action(
-      token_account, "create"_n,
-      mvo()
-        ("issuer", token_account)
-        ("maximum_supply", maximum_supply)
+    {
+      const auto& accnt = control->db().get<account_object,by_name>( "swap.alcor"_n );
+      abi_def abi;
+      BOOST_REQUIRE_EQUAL(abi_serializer::to_abi(accnt.abi, abi), true);
+      alcor_abi_ser.set_abi(abi, abi_serializer::create_yield_function(abi_serializer_max_time));
+   }
+
+    base_tester::push_action(config::system_account_name, updateauth::get_name(), "swap.alcor"_n, mvo()
+      ("account", "swap.alcor"_n.to_string())
+      ("permission", name(config::active_name).to_string())
+      ("parent", name(config::owner_name).to_string())
+      ("auth",  authority(1, {key_weight{get_public_key("swap.alcor"_n, "active" ), 1}}, {
+            permission_level_weight{{config::system_account_name, config::eosio_code_name}, 1},
+            permission_level_weight{{"swap.alcor"_n, config::eosio_code_name}, 1}
+              //  permission_level_weight{{config::producers_account_name,  config::active_name}, 1}
+        }
+      ))
     );
 
-    push_action(
-      token_account, "issue"_n,
-      mvo()
-        ("to", token_account)
-        ("quantity", maximum_supply)
-        ("memo", "issue")    );
+      base_tester::push_action(
+        "swap.alcor"_n,
+        "init"_n,
+        "swap.alcor"_n,
+        mvo()
+      );
   }
 
-  void transfer_token(
-    account_name token_account,
-    account_name from_account,
-    account_name to_account,
-    asset quantity,
-    string memo
-  ) {
-    push_action(
-      token_account, "transfer"_n,
-      mvo()
-        ("from", from_account)
-        ("to", to_account)
-        ("quantity", quantity)
-        ("memo", memo)
-          );
-  }
 
   string build_memo(
     const string& service_name,
@@ -109,6 +125,54 @@ struct eosio_standby_tester : eosio_system_tester {
     return memo.str();
   }
 
+  void createPool(
+    name account,
+    extended_asset tokenA,
+    extended_asset tokenB,
+    string sqrtPriceX64,
+    uint32_t fee
+  ) {
+    base_tester::push_action(
+      "swap.alcor"_n,
+      "createpool"_n,
+      account,
+      mvo()
+        ("account", account)
+        ("tokenA", tokenA)
+        ("tokenB", tokenB)
+        ("sqrtPriceX64", sqrtPriceX64)
+        ("fee", fee)
+    );
+  }
+
+  void addLiquid(
+    uint64_t poolId,
+    name owner,
+    asset tokenADesired,
+    asset tokenBDesired,
+    int32_t tickLower,
+    int32_t tickUpper,
+    asset tokenAMin,
+    asset tokenBMin,
+    uint32_t deadline
+  ) {
+    base_tester::push_action(
+      "swap.alcor"_n,
+      "addliquid"_n,
+      owner,
+      mvo()
+        ("poolId", poolId)
+        ("owner", owner)
+        ("tokenADesired", tokenADesired)
+        ("tokenBDesired", tokenBDesired)
+        ("tickLower", tickLower)
+        ("tickUpper", tickUpper)
+        ("tokenAMin", tokenAMin)
+        ("tokenBMin", tokenBMin)
+        ("deadline", deadline)
+    );
+  }
+
   standby_producer_state get_standby_producer_state(name acc) {
    vector<char> data = get_row_by_account(config::system_account_name, config::system_account_name, "standbys"_n, acc);
     return fc::raw::unpack<standby_producer_state>(data);
@@ -122,6 +186,20 @@ struct eosio_standby_tester : eosio_system_tester {
   fc::variant get_global_state4() {
     vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global4"_n, "global4"_n );
     return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state4", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
+  }
+
+  fc::variant get_pool( uint64_t pool_id ) {
+    vector<char> data = get_row_by_account( "swap.alcor"_n, "swap.alcor"_n, "pools"_n, account_name(pool_id) );
+    return data.empty() ? fc::variant() : alcor_abi_ser.binary_to_variant( "PoolS", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
+ }
+
+  void transferToken( const name& from, const name& to, const asset& amount, string memo, const name& manager) {
+    base_tester::push_action( "eosio.token"_n, "transfer"_n, manager, mutable_variant_object()
+                              ("from",    from)
+                              ("to",      to )
+                              ("quantity", amount)
+                              ("memo", memo)
+                              );
   }
 
   std::vector<standby_producer_state> get_standby_table()
@@ -430,7 +508,7 @@ BOOST_FIXTURE_TEST_CASE(standby_producer_pay, eosio_standby_tester,  * boost::un
   const double  usecs_per_year = secs_per_year * 1000000;
   const double  cont_rate      = 0.04879;;
 
-  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+  // fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
   const u_int64_t SB_RATIO = 5000;
   const u_int32_t SB_SLOTS = 5;
 
@@ -686,4 +764,85 @@ BOOST_FIXTURE_TEST_CASE(standby_producer_pay, eosio_standby_tester,  * boost::un
 }
 FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(alcor_pool_tests, eosio_standby_tester) try {
+  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+  create_accounts_with_resources({"alice"_n,"bob"_n});
+
+  issue_and_transfer("alice"_n, core_sym::from_string("100000.0000"));
+
+  // Create test tokens
+  symbol testTokenSymbol =  eosio::chain::symbol::from_string("4,TKN");
+
+  create_currency( "eosio.token"_n, config::system_account_name, asset(100000000000000, testTokenSymbol));
+  issue( asset::from_string("1000000.0000 TKN") );
+  produce_blocks(1);
+  transfer( config::system_account_name, "alice"_n, asset::from_string("1000000.0000 TKN") , config::system_account_name );
+  produce_blocks(1);
+
+
+
+  auto alice_balance = get_balance("alice"_n, testTokenSymbol);
+  auto alice_wax_balance = get_balance("alice"_n);
+  ilog("alice balance: ${x}", ("x", alice_balance));
+  ilog("alice wax balance: ${x}", ("x", alice_wax_balance));
+
+
+  // Create pool using the createPool helper function
+  auto assetA = extended_asset(core_sym::from_string("0.0000"), "eosio.token"_n);
+  auto assetB = extended_asset(asset::from_string("0.0000 TKN"), "eosio.token"_n);
+  ilog("assetA: ${x}", ("x", assetA.quantity));
+  ilog("assetB: ${x}", ("x", assetB.quantity));
+  
+  createPool(
+    "alice"_n,
+    assetB,
+    assetA,
+    "18446744073709551616",  // sqrtPriceX64
+    3000 // fee MEDIUM
+  );
+
+  auto pool = get_pool(0);
+  ilog("pool: ${x}", ("x", pool["id"].as<uint64_t>()));
+  ilog("pool: ${x}", ("x", pool["tokenA"].as<extended_asset>().quantity));
+  ilog("pool: ${x}", ("x", pool["tokenB"].as<extended_asset>().quantity));
+
+   /**
+   * Add liquidity using the addLiquid helper function   
+   *  getMinTick(TICK_SPACINGS.get(FeeAmount.MEDIUM)), 60
+      getMaxTick(TICK_SPACINGS.get(FeeAmount.MEDIUM)), 60
+   */
+
+  transferToken( "alice"_n, "swap.alcor"_n, asset::from_string("100000.0000 TKN"),"deposit", "alice"_n);
+  transferToken( "alice"_n, "swap.alcor"_n, asset::from_string("10000.0000 TST"),"deposit", "alice"_n);
+  
+
+  addLiquid(
+    0, // poolId
+    "alice"_n,
+    asset::from_string("100000.0000 TKN"),
+    asset::from_string("10000.0000 TST"),
+    getMinTick(60), // tickLower
+    getMaxTick(60),  // tickUpper
+    asset::from_string("0.0000 TKN"),
+    asset::from_string("0.0000 TST"),
+    last_block_time() + 300 // deadline
+  ); 
+
+  ilog("add liquidity done!");
+  auto pool1 = get_pool(0);
+  ilog("pool: ${x}", ("x", pool1["id"].as<uint64_t>()));
+  ilog("pool: ${x}", ("x", pool1["tokenA"].as<extended_asset>().quantity));
+  ilog("pool: ${x}", ("x", pool1["tokenB"].as<extended_asset>().quantity));
+
+
+  // Verify pool creation and liquidity addition
+  // TODO: Add verification checks for pool state and balances
+  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);
+
+}
+FC_LOG_AND_RETHROW()
+
+
+// end test suite - do not remove this line
 BOOST_AUTO_TEST_SUITE_END()
