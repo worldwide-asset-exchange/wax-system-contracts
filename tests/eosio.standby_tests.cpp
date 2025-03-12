@@ -273,7 +273,7 @@ struct eosio_standby_tester : eosio_system_tester {
     produce_blocks(23 * 12 + 20);
 
     auto producer_keys = control->head_block_state()->active_schedule.producers;
-    BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
+    // BOOST_REQUIRE_EQUAL( 21, producer_keys.size() ); // remove this for dynamic bp
     BOOST_REQUIRE_EQUAL( name("defproducera"), producer_keys[0].producer_name );
 
     return producer_names;
@@ -310,7 +310,7 @@ struct eosio_standby_tester : eosio_system_tester {
       from_user,
       assetA,
       assetB,
-      "58276834595106022400",  // sqrtPriceX64 for price 1/10
+      "1844674407370955161",  // sqrtPriceX64 for price 1/100
       3000 // fee MEDIUM
     );
 
@@ -846,11 +846,55 @@ BOOST_FIXTURE_TEST_CASE(alcor_pool_tests, eosio_standby_tester) try {
 
   const uint32_t POOL_ID = 1;
   const uint32_t TWAP_INTERVAL = 0;
+  const uint32_t USD_PER_BP = 2000;
+  const uint32_t MIN_BPS = 7;
+  const uint32_t MAX_BPS = 21;
+  const uint32_t STANDBY_OFFSET = 3;
+
   BOOST_REQUIRE_EQUAL( 
     success(), push_action( config::system_account_name, "setpairtwap"_n, mvo()("pair_id", POOL_ID)("twap_interval", TWAP_INTERVAL) )
   );
 
-  auto gs4 = get_global_state4();
+  // set usd per bp
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setusdbp"_n, mvo()("usd_per_bp", USD_PER_BP) )
+  );
+
+  // set min max bps
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setbpsparams"_n, mvo()("min_bps", MIN_BPS)("max_bps", MAX_BPS)("standby_offset", STANDBY_OFFSET) )
+  );
+
+  // enable dynamic bps
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "enabledynbp"_n, mvo()("enable_dynamic_bp", true) )
+  );
+
+  produce_blocks(5);
+
+  auto producer_names = active_and_vote_producers_and_standbys();
+  wdump((producer_names));
+
+  auto producer_keys = control->head_block_state()->active_schedule.producers;
+  wdump((producer_keys));
+
+  // check producers length is 17
+  BOOST_TEST_REQUIRE( 17 == producer_keys.size() );
+
+  const asset    initial_supply            = get_token_supply();
+  const int64_t secs_per_year  = 52 * 7 * 24 * 3600;
+  const double  usecs_per_year = secs_per_year * 1000000;
+  const double secs_per_30_days = 30 * 24 * 3600;
+  const double usecs_per_30_days = secs_per_30_days * 1000000;
+  const double  cont_rate      = 0.04879;;
+
+  const double expected_supply_growth_30_days = initial_supply.get_amount() * double(usecs_per_30_days) * cont_rate / usecs_per_year;
+  ilog("expected_supply_growth_30_days: ${x}", ("x", expected_supply_growth_30_days));
+  uint32_t wax_per_bp = USD_PER_BP * 100 * 10000; // 2000 usd with rate wax/usd = 1/100 and decimal of 4
+  auto raw_producers = std::floor(expected_supply_growth_30_days / wax_per_bp);
+  ilog("raw_producers: ${x}", ("x", raw_producers));
+
+  BOOST_TEST_REQUIRE( 17 == raw_producers - STANDBY_OFFSET );
 
   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);
 
