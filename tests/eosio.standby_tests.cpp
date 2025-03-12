@@ -279,9 +279,9 @@ struct eosio_standby_tester : eosio_system_tester {
     return producer_names;
   }
 
-  void create_swap_pool(string tokenAmount){
+  void create_swap_pool(name from_user, string tokenAmount, uint64_t poolId){
 
-    issue_and_transfer("alice"_n, core_sym::from_string("100000.0000"));
+    issue_and_transfer(from_user, core_sym::from_string("100000.0000"));
 
     // Create test tokens
     asset testTokenAmount = asset::from_string(tokenAmount);
@@ -291,11 +291,11 @@ struct eosio_standby_tester : eosio_system_tester {
     create_currency( "eosio.token"_n, config::system_account_name, testTokenAmount);
     issue( testTokenAmount );
     produce_blocks(1);
-    transfer( config::system_account_name, "alice"_n, testTokenAmount , config::system_account_name );
+    transfer( config::system_account_name, from_user, testTokenAmount , config::system_account_name );
     produce_blocks(1);
 
-    auto alice_balance = get_balance("alice"_n, testTokenSymbol);
-    auto alice_wax_balance = get_balance("alice"_n);
+    auto alice_balance = get_balance(from_user, testTokenSymbol);
+    auto alice_wax_balance = get_balance(from_user);
     ilog("alice balance: ${x}", ("x", alice_balance));
     ilog("alice wax balance: ${x}", ("x", alice_wax_balance));
 
@@ -307,14 +307,14 @@ struct eosio_standby_tester : eosio_system_tester {
     
     // 2^64 = 18446744073709551616
     createPool(
-      "alice"_n,
+      from_user,
       assetA,
       assetB,
       "58276834595106022400",  // sqrtPriceX64 for price 1/10
       3000 // fee MEDIUM
     );
 
-    auto pool = get_pool(0);
+    auto pool = get_pool(poolId);
     ilog("pool: ${x}", ("x", pool["id"].as<uint64_t>()));
     ilog("pool: ${x}", ("x", pool["tokenA"].as<extended_asset>().quantity));
     ilog("pool: ${x}", ("x", pool["tokenB"].as<extended_asset>().quantity));
@@ -325,13 +325,13 @@ struct eosio_standby_tester : eosio_system_tester {
         getMaxTick(TICK_SPACINGS.get(FeeAmount.MEDIUM)), 60
     */
 
-    transferToken( "alice"_n, "swap.alcor"_n, testTokenAmount,"deposit", "alice"_n);
-    transferToken( "alice"_n, "swap.alcor"_n, asset::from_string("10000.0000 TST"),"deposit", "alice"_n);
+    transferToken( from_user, "swap.alcor"_n, testTokenAmount,"deposit", from_user);
+    transferToken( from_user, "swap.alcor"_n, asset::from_string("10000.0000 TST"),"deposit", from_user);
     
 
     addLiquid(
-      0, // poolId
-      "alice"_n,
+      poolId, // poolId
+      from_user,
       asset::from_string("10000.0000 TST"),
       testTokenAmount,
       getMinTick(60), // tickLower
@@ -342,7 +342,7 @@ struct eosio_standby_tester : eosio_system_tester {
     ); 
 
     ilog("add liquidity done!");
-    auto pool1 = get_pool(0);
+    auto pool1 = get_pool(poolId);
     ilog("pool: ${x}", ("x", pool1["id"].as<uint64_t>()));
     ilog("pool: ${x}", ("x", pool1["tokenA"].as<extended_asset>().quantity));
     ilog("pool: ${x}", ("x", pool1["tokenB"].as<extended_asset>().quantity));
@@ -838,10 +838,13 @@ FC_LOG_AND_RETHROW()
 BOOST_FIXTURE_TEST_CASE(alcor_pool_tests, eosio_standby_tester) try {
   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
 
-  create_swap_pool("100000.0000 TSTUSDT");
+  create_swap_pool("alice"_n,"100000.0000 TSTUSDT", 0);
+  produce_blocks( 5 );
+
+  create_swap_pool("bob"_n,"100000.0000 TSTUSDC", 1);
   produce_blocks(5);
 
-  const uint32_t POOL_ID = 0;
+  const uint32_t POOL_ID = 1;
   const uint32_t TWAP_INTERVAL = 0;
   BOOST_REQUIRE_EQUAL( 
     success(), push_action( config::system_account_name, "setpairtwap"_n, mvo()("pair_id", POOL_ID)("twap_interval", TWAP_INTERVAL) )
