@@ -88,7 +88,9 @@ namespace eosiosystem {
          auto to_voters        = 2 * to_per_block_pay;
          auto to_savings       = distribute_tokens - (to_voters + to_per_block_pay);
 
-         auto to_producers_pay = to_per_block_pay * 21 * STANDBY_PAY_RATIO_DENOMINATOR / ( _gstate4.standby_pay_ratio_numerator * _gstate4.num_standby_slots + 21 * STANDBY_PAY_RATIO_DENOMINATOR);
+         auto producer_size    =  _gstate.last_producer_schedule_size;
+
+         auto to_producers_pay = to_per_block_pay * producer_size * STANDBY_PAY_RATIO_DENOMINATOR / ( _gstate4.standby_pay_ratio_numerator * _gstate4.num_standby_slots + producer_size * STANDBY_PAY_RATIO_DENOMINATOR);
          auto to_standby_pay   = to_per_block_pay - to_producers_pay;
          {
             if( issue_tokens > 0 ){

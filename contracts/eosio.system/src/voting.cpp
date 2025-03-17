@@ -104,8 +104,6 @@ namespace eosiosystem {
       });
    }
 
-
-
    uint64_t system_contract::get_wax_price(){
       uint64_t priceRate = _gstate4.last_average_price;
       return priceRate;
