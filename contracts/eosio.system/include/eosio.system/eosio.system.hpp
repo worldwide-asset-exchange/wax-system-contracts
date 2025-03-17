@@ -837,7 +837,7 @@ namespace eosiosystem {
           * - version is 0 and
           * - symbol is found and
           * - system token supply is greater than 0,
-          * - and system contract wasn’t already been initialized.
+          * - and system contract wasn't already been initialized.
           *
           * @param version - the version, has to be 0,
           * @param core - the system symbol.
@@ -1273,7 +1273,7 @@ namespace eosiosystem {
           * @param revision - it has to be incremented by 1 compared with current revision.
           *
           * @pre Current revision can not be higher than 254, and has to be smaller
-          * than or equal 1 (“set upper bound to greatest revision supported in the code”).
+          * than or equal 1 ("set upper bound to greatest revision supported in the code").
           */
          [[eosio::action]]
          void updtrevision( uint8_t revision );
@@ -1465,6 +1465,10 @@ namespace eosiosystem {
          [[eosio::action]]
          void enabledynbp( bool enable_dynamic_bp );
 
+         /** set delphi oracle parameters (delphi_pair and price_average_days) */
+         [[eosio::action]]
+         void setdelphiprm( const name delphi_pair, uint32_t price_average_days );
+
        /**
         * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
         *
@@ -1550,6 +1554,7 @@ namespace eosiosystem {
        using set_usd_bp_action = eosio::action_wrapper<"setusdbp"_n, &system_contract::setusdbp>;
        using set_bps_params_action = eosio::action_wrapper<"setbpsparams"_n, &system_contract::setbpsparams>;
        using enable_dynamic_bp_action = eosio::action_wrapper<"enabledynbp"_n, &system_contract::enabledynbp>;
+       using set_delphi_params_action = eosio::action_wrapper<"setdelphiprm"_n, &system_contract::setdelphiprm>;
       private:
          // WAX specifics
 

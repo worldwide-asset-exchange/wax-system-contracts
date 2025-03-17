@@ -1,4 +1,3 @@
-
 #include <eosio.system/eosio.system.hpp>
 #include <eosio.token/eosio.token.hpp>
 
@@ -79,6 +78,15 @@ namespace eosiosystem {
             // TODO: check more for delphioracle value here
       }
       _gstate4.enable_dynamic_bp = enable_dynamic_bp;
+   }
+   
+   void system_contract::setdelphiprm( const name delphi_pair, uint32_t price_average_days ) {
+      require_auth( get_self() );
+      check(delphi_pair != name(), "delphi_pair must be a valid name");
+      check(price_average_days > 0, "price_average_days must be greater than 0");
+      
+      _gstate4.delphi_pair = delphi_pair;
+      _gstate4.price_average_days = price_average_days;
    }
    
    void system_contract::update_standby_share(){
