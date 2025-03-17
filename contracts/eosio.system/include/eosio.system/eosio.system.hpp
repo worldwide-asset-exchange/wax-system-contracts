@@ -61,7 +61,9 @@ namespace eosiosystem {
    static constexpr uint32_t seconds_per_year      = 52 * 7 * 24 * 3600;
    static constexpr uint32_t seconds_per_day       = 24 * 3600;
    static constexpr uint32_t seconds_per_hour      = 3600;
+   static constexpr uint32_t seconds_30_days       = 30 * 24 * 3600;
    static constexpr int64_t  useconds_per_year     = int64_t(seconds_per_year) * 1000'000ll;
+   static constexpr int64_t useconds_per_30_days   = int64_t(seconds_30_days) * 1000'000ll;
    static constexpr int64_t  useconds_per_day      = int64_t(seconds_per_day) * 1000'000ll;
    static constexpr int64_t  useconds_per_hour     = int64_t(seconds_per_hour) * 1000'000ll;
    static constexpr uint32_t blocks_per_day        = 2 * seconds_per_day; // half seconds per day
@@ -718,8 +720,18 @@ namespace eosiosystem {
       uint64_t          total_standby_share = 0;
       uint64_t          standby_pay_ratio_numerator = 0;
       uint32_t          num_standby_slots = 0;
-
-      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_pay_ratio_numerator)(num_standby_slots) )
+      // dynamic block producer
+      uint32_t          usd_per_bp = 0;
+      uint32_t          min_bps = 0;
+      uint32_t          max_bps = 0;
+      uint32_t          standby_offset = 0;
+      bool              enable_dynamic_bp = false;
+      // delphioracle
+      name              delphi_pair;
+      uint32_t          price_average_days; // 30 days
+      uint64_t          last_average_price; 
+      uint64_t          last_average_price_update;
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_pay_ratio_numerator)(num_standby_slots)(usd_per_bp)(min_bps)(max_bps)(standby_offset)(enable_dynamic_bp)(delphi_pair)(price_average_days)(last_average_price)(last_average_price_update) )
    };
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 
@@ -1441,6 +1453,18 @@ namespace eosiosystem {
          [[eosio::action]]
          void claimstandby(const name owner);  
 
+          /** set USD per BP value */
+         [[eosio::action]]
+         void setusdbp( uint32_t usd_per_bp );
+
+         /** set BPS parameters (min_bps, max_bps, standby_offset) */
+         [[eosio::action]]
+         void setbpsparams( uint32_t min_bps, uint32_t max_bps, uint32_t standby_offset );
+
+         /** enable or disable dynamic bp */
+         [[eosio::action]]
+         void enabledynbp( bool enable_dynamic_bp );
+
        /**
         * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
         *
@@ -1523,7 +1547,9 @@ namespace eosiosystem {
        using set_standby_slots_action = eosio::action_wrapper<"setsbslot"_n, &system_contract::setsbslot>;
        using add_standby_block_action = eosio::action_wrapper<"disallowsb"_n, &system_contract::disallowsb>;
        using rm_standby_block_action = eosio::action_wrapper<"allowsb"_n, &system_contract::allowsb>;
-
+       using set_usd_bp_action = eosio::action_wrapper<"setusdbp"_n, &system_contract::setusdbp>;
+       using set_bps_params_action = eosio::action_wrapper<"setbpsparams"_n, &system_contract::setbpsparams>;
+       using enable_dynamic_bp_action = eosio::action_wrapper<"enabledynbp"_n, &system_contract::enabledynbp>;
       private:
          // WAX specifics
 
@@ -1615,6 +1641,7 @@ namespace eosiosystem {
          bool is_disallow_standby( name account );
          void update_standby_share();
          void update_standby_producers(const std::vector<eosio::name>& standby_producers);
+         uint128_t get_wax_price();
    };
 
    double stake2vote( int64_t staked );
