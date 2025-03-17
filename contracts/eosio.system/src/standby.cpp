@@ -93,6 +93,10 @@ namespace eosiosystem {
 
    void system_contract::update_delphi_price(){
       const auto ct = current_time_point();
+      // check if last price update is more than 1 day
+      if (ct - _gstate4.last_price_update < microseconds(useconds_per_day)){
+        return;
+      }
 
       auto delphi_pair_name = _gstate4.delphi_pair;
       delphioracle::datapoints_t datapoints = delphioracle::get_datapoints(delphi_pair_name);
@@ -100,6 +104,8 @@ namespace eosiosystem {
       // calculate the price base on base and quote symbol and price point
       auto itr = datapoints.begin();
       uint64_t median_price = 0;
+
+      // take first median price
       if (itr != datapoints.end()){
         median_price = itr->median;
       }else{
@@ -117,7 +123,7 @@ namespace eosiosystem {
         price_average = (price_average * (price_average_days - 1) + current_price_rate) / price_average_days;
       }
       _gstate4.last_average_price = price_average;
-      _gstate4.last_price_update = current_time_point();
+      _gstate4.last_price_update = ct;
    }
    
    void system_contract::update_standby_share(){

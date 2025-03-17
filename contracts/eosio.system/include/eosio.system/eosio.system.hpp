@@ -1650,7 +1650,7 @@ namespace eosiosystem {
          bool is_disallow_standby( name account );
          void update_standby_share();
          void update_standby_producers(const std::vector<eosio::name>& standby_producers);
-         uint128_t get_wax_price();
+         uint64_t get_wax_price();
          void update_delphi_price();
    };
 

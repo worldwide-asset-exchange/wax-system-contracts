@@ -106,8 +106,8 @@ namespace eosiosystem {
 
 
 
-   uint128_t system_contract::get_wax_price(){
-      uint128_t priceRate = 100; // testing price
+   uint64_t system_contract::get_wax_price(){
+      uint64_t priceRate = _gstate4.last_average_price;
       return priceRate;
    }
 
@@ -119,7 +119,7 @@ namespace eosiosystem {
       if (_gstate4.enable_dynamic_bp){
          const asset token_supply   = eosio::token::get_supply(token_account, core_symbol().code() );
 
-         uint128_t waxPriceRate = get_wax_price();
+         uint64_t waxPriceRate = get_wax_price();
          eosio::print("waxPriceRate: ", waxPriceRate, "\n");
 
          // calculate wax need for current rate
