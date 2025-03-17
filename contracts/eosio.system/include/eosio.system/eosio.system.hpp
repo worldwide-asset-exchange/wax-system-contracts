@@ -16,6 +16,7 @@
 #include <string>
 #include <type_traits>
 
+#include <eosio.system/delphioracle-interface.hpp>
 
 namespace eosiosystem {
 
@@ -88,6 +89,9 @@ namespace eosiosystem {
    static constexpr int64_t  default_votepay_factor        = 40000;   // per-block pay share = 10000 / 40000 = 25% of the producer pay
 
    static const     uint64_t STANDBY_PAY_RATIO_DENOMINATOR = 10000;   // base for standby pay ratio
+
+   // delphi price oracle
+   static constexpr uint64_t RATE_DECIMAL = 10000;
 
 #ifdef SYSTEM_BLOCKCHAIN_PARAMETERS
    struct blockchain_parameters_v1 : eosio::blockchain_parameters
@@ -730,8 +734,8 @@ namespace eosiosystem {
       name              delphi_pair;
       uint32_t          price_average_days; // 30 days
       uint64_t          last_average_price; 
-      uint64_t          last_average_price_update;
-      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_pay_ratio_numerator)(num_standby_slots)(usd_per_bp)(min_bps)(max_bps)(standby_offset)(enable_dynamic_bp)(delphi_pair)(price_average_days)(last_average_price)(last_average_price_update) )
+      time_point          last_price_update;
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_pay_ratio_numerator)(num_standby_slots)(usd_per_bp)(min_bps)(max_bps)(standby_offset)(enable_dynamic_bp)(delphi_pair)(price_average_days)(last_average_price)(last_price_update) )
    };
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 
@@ -1467,7 +1471,7 @@ namespace eosiosystem {
 
          /** set delphi oracle parameters (delphi_pair and price_average_days) */
          [[eosio::action]]
-         void setdelphiprm( const name delphi_pair, uint32_t price_average_days );
+         void setdelphipr( const name delphi_pair, uint32_t price_average_days );
 
        /**
         * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
@@ -1554,7 +1558,7 @@ namespace eosiosystem {
        using set_usd_bp_action = eosio::action_wrapper<"setusdbp"_n, &system_contract::setusdbp>;
        using set_bps_params_action = eosio::action_wrapper<"setbpsparams"_n, &system_contract::setbpsparams>;
        using enable_dynamic_bp_action = eosio::action_wrapper<"enabledynbp"_n, &system_contract::enabledynbp>;
-       using set_delphi_params_action = eosio::action_wrapper<"setdelphiprm"_n, &system_contract::setdelphiprm>;
+       using set_delphi_params_action = eosio::action_wrapper<"setdelphipr"_n, &system_contract::setdelphipr>;
       private:
          // WAX specifics
 
@@ -1647,6 +1651,7 @@ namespace eosiosystem {
          void update_standby_share();
          void update_standby_producers(const std::vector<eosio::name>& standby_producers);
          uint128_t get_wax_price();
+         void update_delphi_price();
    };
 
    double stake2vote( int64_t staked );

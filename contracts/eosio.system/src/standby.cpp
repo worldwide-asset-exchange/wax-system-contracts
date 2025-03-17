@@ -80,13 +80,44 @@ namespace eosiosystem {
       _gstate4.enable_dynamic_bp = enable_dynamic_bp;
    }
    
-   void system_contract::setdelphiprm( const name delphi_pair, uint32_t price_average_days ) {
+   void system_contract::setdelphipr( const name delphi_pair, uint32_t price_average_days ) {
       require_auth( get_self() );
       check(delphi_pair != name(), "delphi_pair must be a valid name");
       check(price_average_days > 0, "price_average_days must be greater than 0");
-      
+
+      auto delphi_pair_itr = delphioracle::get_pairs().require_find(delphi_pair.value,
+                                                            "pair name does not exist in the delphi oracle contract");    
       _gstate4.delphi_pair = delphi_pair;
       _gstate4.price_average_days = price_average_days;
+   }
+
+   void system_contract::update_delphi_price(){
+      const auto ct = current_time_point();
+
+      auto delphi_pair_name = _gstate4.delphi_pair;
+      delphioracle::datapoints_t datapoints = delphioracle::get_datapoints(delphi_pair_name);
+      auto delphi_pair_itr = delphioracle::get_pairs().require_find(delphi_pair_name.value, "delphi pair does not exist");
+      // calculate the price base on base and quote symbol and price point
+      auto itr = datapoints.begin();
+      uint64_t median_price = 0;
+      if (itr != datapoints.end()){
+        median_price = itr->median;
+      }else{
+        return;
+      }
+    
+      uint64_t current_price_rate = median_price * RATE_DECIMAL / delphi_pair_itr->quoted_precision;
+      
+      // rolling update the average price in _gstate4.price_average_days
+      uint64_t price_average_days = _gstate4.price_average_days;
+      uint64_t price_average = _gstate4.last_average_price;
+      if (price_average == 0){
+        price_average = current_price_rate;
+      }else{
+        price_average = (price_average * (price_average_days - 1) + current_price_rate) / price_average_days;
+      }
+      _gstate4.last_average_price = price_average;
+      _gstate4.last_price_update = current_time_point();
    }
    
    void system_contract::update_standby_share(){

@@ -105,7 +105,6 @@ namespace eosiosystem {
    }
 
 
-   const uint64_t RATE_DECIMAL = 10000; // real price = priceRate / RATE_DECIMAL
 
    uint128_t system_contract::get_wax_price(){
       uint128_t priceRate = 100; // testing price
