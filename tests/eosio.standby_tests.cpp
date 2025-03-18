@@ -11,9 +11,9 @@
 
 #include "eosio.system_tester.hpp"
 
-inline const auto alice = "alice1111111"_n;
-inline const auto bob = "bob111111111"_n;
-
+inline const auto alice = "alice"_n;
+inline const auto bob = "bob"_n;
+inline const auto DELPHI_ORACLE = "delphioracle"_n;
 
 // bool within_error(int64_t a, int64_t b, int64_t err) { return std::abs(a - b) <= err; };
 // bool within_one(int64_t a, int64_t b) { return within_error(a, b, 1); }
@@ -28,6 +28,17 @@ struct standby_producer_state {
 };
 
 FC_REFLECT(standby_producer_state, (owner)(standby_share)(last_standby_share_update)(last_claim_time)(is_active))
+
+struct delphioracle_datapoint {
+      uint64_t id;
+      name owner;
+      uint64_t value;
+      uint64_t median;
+      time_point timestamp;
+
+};
+
+FC_REFLECT(delphioracle_datapoint, (id)(owner)(value)(median)(timestamp))
 
 struct standby_disallow_state {
   name            owner;
@@ -46,7 +57,179 @@ bool within_and_gte(int64_t a, int64_t b, int64_t w) { return a - b <= w && a >=
 
 
 struct eosio_standby_tester : eosio_system_tester {
-  eosio_standby_tester() {  }
+  
+  abi_serializer delphioracle_abi_ser;
+  eosio_standby_tester() { 
+    const asset net = core_sym::from_string("800.0000");
+    const asset cpu = core_sym::from_string("800.0000");
+    const std::vector<account_name> accounts = { DELPHI_ORACLE,  };
+    for (const auto& v: accounts) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("100.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, core_sym::from_string("100000000.0000"), config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, core_sym::from_string("30000000.0000"), core_sym::from_string("30000000.0000")) );
+    }
+
+    produce_blocks( 2 );
+
+    // fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+
+    set_code( DELPHI_ORACLE, contracts::util::delphioracle_wasm() );
+    set_abi( DELPHI_ORACLE, contracts::util::delphioracle_abi().data() );
+
+    {
+      const auto& accnt = control->db().get<account_object,by_name>( DELPHI_ORACLE );
+      abi_def abi;
+      BOOST_REQUIRE_EQUAL(abi_serializer::to_abi(accnt.abi, abi), true);
+      delphioracle_abi_ser.set_abi(abi, abi_serializer::create_yield_function(abi_serializer_max_time));
+    }
+
+
+     base_tester::push_action(config::system_account_name, updateauth::get_name(), DELPHI_ORACLE, mvo()
+      ("account", DELPHI_ORACLE.to_string())
+      ("permission", name(config::active_name).to_string())
+      ("parent", name(config::owner_name).to_string())
+      ("auth",  authority(1, {key_weight{get_public_key(DELPHI_ORACLE, "active" ), 1}}, {
+            // permission_level_weight{{config::system_account_name, config::eosio_code_name}, 1},
+            permission_level_weight{{DELPHI_ORACLE, config::eosio_code_name}, 1}
+        }
+      ))
+    );
+
+    create_accounts_with_resources({alice, bob}); 
+    
+  }
+
+  void init_delphioracle_prices() {
+    /**
+     * delphiAccount.contract.action.newbounty(
+      {
+        proposer: delphiAccount.name,
+        pair: {
+          name: "waxpusd",
+          base_symbol: "8,WAXP",
+          base_type: 4,
+          base_contract: "",
+          quote_symbol: "2,USD",
+          quote_type: 1,
+          quote_contract: "",
+          quoted_precision: 4,
+        },
+      },
+      getActivePermission([delphiAccount.name]),
+    );
+     */
+
+    base_tester::push_action(DELPHI_ORACLE, "newbounty"_n, DELPHI_ORACLE, mvo()
+      ("proposer", DELPHI_ORACLE)
+      ("pair", mvo()
+        ("name", "waxpusd")
+        ("base_symbol", "8,WAXP")
+        ("base_type", 4)
+        ("base_contract", "")
+        ("quote_symbol", "2,USD")
+        ("quote_type", 1)
+        ("quote_contract", "")
+        ("quoted_precision", 4)
+      )
+    );
+
+
+    /**
+     *  async insert(scopeRowsData: { [key: string]: object[] }) {
+    if (!this.account.contract.action.eosinsert) {
+      throw new Error("Contract does not allow to insert data");
+    }
+
+    const actionData = [];
+    for (const scope of Object.keys(scopeRowsData)) {
+      for (const rows of scopeRowsData[scope]) {
+        const buffer = new SerialBuffer({
+          textEncoder: new TextEncoder(),
+          textDecoder: new TextDecoder(),
+        });
+        this.serializer.serialize(buffer, rows);
+        actionData.push({
+          table_name: this.name,
+          scope,
+          row_data: buffer.asUint8Array(),
+        });
+      }
+    }
+
+    return this.account.contract.action.eosinsert(
+      {
+        payload: actionData,
+      },
+      [
+        {
+          actor: "eosio",
+          permission: "active",
+        },
+      ]
+    );
+  }
+     */
+
+    /**sample data to insert 
+     * waxpusd: [
+        {
+          id: 21,
+          owner: "pink.gg",
+          value: 3090,
+          median: 3064,
+          timestamp: "2021-09-12T13:29:43.500",
+        },
+        {
+          id: 22,
+          owner: "wizardsguild",
+          value: 3075,
+          median: 3075,
+          timestamp: "2021-09-12T13:30:01.000",
+        },
+        ]
+     */
+
+     // Correct implementation to insert delphioracle datapoints in tests
+     // This matches the JavaScript eosinsert function structure
+     std::vector<fc::variant> payload_items;
+     
+     auto now = control->head_block_time();
+
+     // Create and populate the first datapoint
+     delphioracle_datapoint dp1;
+     dp1.id = 21;
+     dp1.owner = "pink.gg"_n;
+     dp1.value = 3090;
+     dp1.median = 3064;
+     dp1.timestamp = now - fc::seconds(120);
+     
+     // Create and populate the second datapoint
+     delphioracle_datapoint dp2;
+     dp2.id = 22;
+     dp2.owner = "wizardsguild"_n;
+     dp2.value = 3075;
+     dp2.median = 3075;
+     dp2.timestamp = now - fc::seconds(60);
+     
+     // Add each datapoint to the payload items
+     payload_items.push_back(mvo()
+        ("table_name", "datapoints"_n)
+        ("scope", "waxpusd"_n)
+        ("row_data", fc::raw::pack(dp1))
+     );
+     
+     payload_items.push_back(mvo()
+        ("table_name", "datapoints"_n)
+        ("scope", "waxpusd"_n)
+        ("row_data", fc::raw::pack(dp2))
+     );
+     
+     BOOST_REQUIRE_EQUAL(success(), push_action(DELPHI_ORACLE, "eosinsert"_n, config::system_account_name, mvo()
+        ("payload", payload_items)
+     ));
+
+  }
 
   standby_producer_state get_standby_producer_state(name acc) {
    vector<char> data = get_row_by_account(config::system_account_name, config::system_account_name, "standbys"_n, acc);
@@ -622,6 +805,14 @@ BOOST_FIXTURE_TEST_CASE(standby_producer_pay, eosio_standby_tester,  * boost::un
 
   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);
 
+}
+FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(dynamic_bp_number_test, eosio_standby_tester) try {
+  init_delphioracle_prices();
+
+  produce_blocks(100);
 }
 FC_LOG_AND_RETHROW()
 
