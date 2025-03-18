@@ -1,5 +1,6 @@
 #include <eosio.system/eosio.system.hpp>
 #include <eosio.token/eosio.token.hpp>
+#include <math.h>
 
 namespace eosiosystem {
 
@@ -89,6 +90,9 @@ namespace eosiosystem {
                                                             "pair name does not exist in the delphi oracle contract");    
       _gstate4.delphi_pair = delphi_pair;
       _gstate4.price_average_days = price_average_days;
+
+      // update delphi price
+      update_delphi_price();
    }
 
    void system_contract::update_delphi_price(){
@@ -99,24 +103,30 @@ namespace eosiosystem {
       }
 
       auto delphi_pair_name = _gstate4.delphi_pair;
+      eosio::print("delphi_pair_name: ", delphi_pair_name);
       delphioracle::datapoints_t datapoints = delphioracle::get_datapoints(delphi_pair_name);
       auto delphi_pair_itr = delphioracle::get_pairs().require_find(delphi_pair_name.value, "delphi pair does not exist");
       // calculate the price base on base and quote symbol and price point
-      auto itr = datapoints.begin();
       uint64_t median_price = 0;
-
-      // take first median price
-      if (itr != datapoints.end()){
-        median_price = itr->median;
-      }else{
-        return;
+      for (auto itr = datapoints.begin(); itr != datapoints.end(); itr++) {
+         eosio::print("datapoint: ", itr->id, " ", itr->value, " ", itr->owner, " ", itr->median, "\n");
+         // take first median price
+         if (itr->median > 0){
+            median_price = itr->median;
+            break;
+         }
       }
-    
-      uint64_t current_price_rate = median_price * RATE_DECIMAL / delphi_pair_itr->quoted_precision;
-      
+      if (median_price == 0){
+         return;
+      }
+
+      eosio::print("median_price: ", median_price, "\n");
+      uint64_t current_price_rate = median_price * RATE_DECIMAL / pow(10, delphi_pair_itr->quoted_precision);
+      eosio::print("current_price_rate: ", current_price_rate, "\n");
       // rolling update the average price in _gstate4.price_average_days
       uint64_t price_average_days = _gstate4.price_average_days;
       uint64_t price_average = _gstate4.last_average_price;
+      eosio::print("old price average: ", price_average, "\n");
       if (price_average == 0){
         price_average = current_price_rate;
       }else{
@@ -124,6 +134,7 @@ namespace eosiosystem {
       }
       _gstate4.last_average_price = price_average;
       _gstate4.last_price_update = ct;
+      eosio::print("new price average: ", price_average, "\n");
    }
    
    void system_contract::update_standby_share(){

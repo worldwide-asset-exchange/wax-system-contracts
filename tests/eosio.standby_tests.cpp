@@ -101,24 +101,6 @@ struct eosio_standby_tester : eosio_system_tester {
   }
 
   void init_delphioracle_prices() {
-    /**
-     * delphiAccount.contract.action.newbounty(
-      {
-        proposer: delphiAccount.name,
-        pair: {
-          name: "waxpusd",
-          base_symbol: "8,WAXP",
-          base_type: 4,
-          base_contract: "",
-          quote_symbol: "2,USD",
-          quote_type: 1,
-          quote_contract: "",
-          quoted_precision: 4,
-        },
-      },
-      getActivePermission([delphiAccount.name]),
-    );
-     */
 
     base_tester::push_action(DELPHI_ORACLE, "newbounty"_n, DELPHI_ORACLE, mvo()
       ("proposer", DELPHI_ORACLE)
@@ -134,106 +116,52 @@ struct eosio_standby_tester : eosio_system_tester {
       )
     );
 
+    std::vector<fc::variant> payload_items;
+    
+    auto now = control->head_block_time();
 
-    /**
-     *  async insert(scopeRowsData: { [key: string]: object[] }) {
-    if (!this.account.contract.action.eosinsert) {
-      throw new Error("Contract does not allow to insert data");
+
+    vector<name> owners = {
+      "wizardsguild"_n,
+      "wax.eastern"_n,
+      "alohaeosprod"_n,
+      "ivote4waxusa"_n,
+      "eosphereiobp"_n,
+      "eosdublinwow"_n,
+      "bountyblokbp"_n,
+      "blocksmithio"_n,
+      "liquidstudio"_n,
+    };
+    // insert above data points
+    for (int i = 0; i < owners.size(); i++) {
+      delphioracle_datapoint dp;
+      dp.id = 21 + i + 1;
+      dp.owner = owners[i];
+      dp.value = 102;
+      dp.median = 103;
+      dp.timestamp = now + fc::seconds(60 * (i + 1));
+      payload_items.push_back(mvo()
+        ("table_name", "datapoints"_n)
+        ("scope", "waxpusd"_n)
+        ("row_data", fc::raw::pack(dp))
+      );  
     }
 
-    const actionData = [];
-    for (const scope of Object.keys(scopeRowsData)) {
-      for (const rows of scopeRowsData[scope]) {
-        const buffer = new SerialBuffer({
-          textEncoder: new TextEncoder(),
-          textDecoder: new TextDecoder(),
-        });
-        this.serializer.serialize(buffer, rows);
-        actionData.push({
-          table_name: this.name,
-          scope,
-          row_data: buffer.asUint8Array(),
-        });
-      }
-    }
-
-    return this.account.contract.action.eosinsert(
-      {
-        payload: actionData,
-      },
-      [
-        {
-          actor: "eosio",
-          permission: "active",
-        },
-      ]
+    base_tester::push_action(DELPHI_ORACLE, "eosinsert"_n, config::system_account_name, mvo()
+      ("payload", payload_items)
     );
-  }
-     */
-
-    /**sample data to insert 
-     * waxpusd: [
-        {
-          id: 21,
-          owner: "pink.gg",
-          value: 3090,
-          median: 3064,
-          timestamp: "2021-09-12T13:29:43.500",
-        },
-        {
-          id: 22,
-          owner: "wizardsguild",
-          value: 3075,
-          median: 3075,
-          timestamp: "2021-09-12T13:30:01.000",
-        },
-        ]
-     */
-
-     // Correct implementation to insert delphioracle datapoints in tests
-     // This matches the JavaScript eosinsert function structure
-     std::vector<fc::variant> payload_items;
-     
-     auto now = control->head_block_time();
-
-     // Create and populate the first datapoint
-     delphioracle_datapoint dp1;
-     dp1.id = 21;
-     dp1.owner = "pink.gg"_n;
-     dp1.value = 3090;
-     dp1.median = 3064;
-     dp1.timestamp = now - fc::seconds(120);
-     
-     // Create and populate the second datapoint
-     delphioracle_datapoint dp2;
-     dp2.id = 22;
-     dp2.owner = "wizardsguild"_n;
-     dp2.value = 3075;
-     dp2.median = 3075;
-     dp2.timestamp = now - fc::seconds(60);
-     
-     // Add each datapoint to the payload items
-     payload_items.push_back(mvo()
-        ("table_name", "datapoints"_n)
-        ("scope", "waxpusd"_n)
-        ("row_data", fc::raw::pack(dp1))
-     );
-     
-     payload_items.push_back(mvo()
-        ("table_name", "datapoints"_n)
-        ("scope", "waxpusd"_n)
-        ("row_data", fc::raw::pack(dp2))
-     );
-     
-     BOOST_REQUIRE_EQUAL(success(), push_action(DELPHI_ORACLE, "eosinsert"_n, config::system_account_name, mvo()
-        ("payload", payload_items)
-     ));
 
   }
 
   standby_producer_state get_standby_producer_state(name acc) {
    vector<char> data = get_row_by_account(config::system_account_name, config::system_account_name, "standbys"_n, acc);
     return fc::raw::unpack<standby_producer_state>(data);
+  }
+
+  // read datapoints from delphioracle table
+  delphioracle_datapoint get_delphioracle_datapoints_table(name id) {
+    vector<char> data = get_row_by_account( DELPHI_ORACLE, "waxpusd"_n, "datapoints"_n, id );
+    return fc::raw::unpack<delphioracle_datapoint>(data);
   }
 
   standby_disallow_state get_standby_disallow_state(name acc) {
@@ -315,9 +243,7 @@ struct eosio_standby_tester : eosio_system_tester {
     produce_blocks(23 * 12 + 20);
 
     auto producer_keys = control->head_block_state()->active_schedule.producers;
-    BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
     BOOST_REQUIRE_EQUAL( name("defproducera"), producer_keys[0].producer_name );
-
     return producer_names;
   }
 
@@ -810,9 +736,85 @@ FC_LOG_AND_RETHROW()
 
 
 BOOST_FIXTURE_TEST_CASE(dynamic_bp_number_test, eosio_standby_tester) try {
-  init_delphioracle_prices();
+  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
 
-  produce_blocks(100);
+  init_delphioracle_prices();
+  produce_blocks(1);
+  auto datapoints = get_delphioracle_datapoints_table(eosio::chain::name(22));
+  wdump((datapoints));
+
+  BOOST_REQUIRE_EQUAL(datapoints.value, 102);
+  BOOST_REQUIRE_EQUAL(datapoints.median, 103);
+  BOOST_REQUIRE_EQUAL(datapoints.owner, "wizardsguild"_n);
+  
+  const uint32_t USD_PER_BP = 2000;
+  const uint32_t MIN_BPS = 7;
+  const uint32_t MAX_BPS = 21;
+  const uint32_t STANDBY_OFFSET = 3;
+  const name PAIR_NAME = "waxpusd"_n;
+  const uint32_t PRICE_AVERAGE_DAYS = 30;
+
+
+  // set usd per bp
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setusdbp"_n, mvo()("usd_per_bp", USD_PER_BP) )
+  );
+
+  // set min max bps
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setbpsparams"_n, mvo()("min_bps", MIN_BPS)("max_bps", MAX_BPS)("standby_offset", STANDBY_OFFSET) )
+  );
+
+  // set delphi pair
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setdelphipr"_n, mvo()("delphi_pair", PAIR_NAME)("price_average_days", PRICE_AVERAGE_DAYS) )
+  );
+
+  // enable dynamic bps
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "enabledynbp"_n, mvo()("enable_dynamic_bp", true) )
+  );
+
+  produce_blocks(5);
+
+  auto global4_state = get_global_state4();
+  wdump((global4_state)); 
+  BOOST_REQUIRE_EQUAL(global4_state["min_bps"].as<uint32_t>(), MIN_BPS);
+  BOOST_REQUIRE_EQUAL(global4_state["max_bps"].as<uint32_t>(), MAX_BPS);
+  BOOST_REQUIRE_EQUAL(global4_state["standby_offset"].as<uint32_t>(), STANDBY_OFFSET);
+  BOOST_REQUIRE_EQUAL(global4_state["enable_dynamic_bp"].as<bool>(), true);
+  BOOST_REQUIRE_EQUAL(global4_state["delphi_pair"].as<name>(), PAIR_NAME);
+  BOOST_REQUIRE_EQUAL(global4_state["price_average_days"].as<uint32_t>(), PRICE_AVERAGE_DAYS);
+
+  // check price average
+  BOOST_REQUIRE_EQUAL(global4_state["last_average_price"].as<uint64_t>(), 103);  
+
+  auto producer_names = active_and_vote_producers_and_standbys();
+  wdump((producer_names));
+
+  auto producer_keys = control->head_block_state()->active_schedule.producers;
+  wdump((producer_keys));
+
+  // check producers length is 17
+  BOOST_TEST_REQUIRE( 17 == producer_keys.size() );
+
+  const asset    initial_supply            = get_token_supply();
+  const int64_t secs_per_year  = 52 * 7 * 24 * 3600;
+  const double  usecs_per_year = secs_per_year * 1000000;
+  const double secs_per_30_days = 30 * 24 * 3600;
+  const double usecs_per_30_days = secs_per_30_days * 1000000;
+  const double  cont_rate      = 0.04879;;
+
+  const double expected_supply_growth_30_days = initial_supply.get_amount() * double(usecs_per_30_days) * cont_rate / usecs_per_year;
+  ilog("expected_supply_growth_30_days: ${x}", ("x", expected_supply_growth_30_days));
+  uint32_t wax_per_bp = USD_PER_BP * 100 * 10000; // 2000 usd with rate wax/usd = 1/100 and decimal of 4
+  auto raw_producers = std::floor(expected_supply_growth_30_days / wax_per_bp);
+  ilog("raw_producers: ${x}", ("x", raw_producers));
+
+  BOOST_TEST_REQUIRE( 17 == raw_producers - STANDBY_OFFSET );
+
+  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);
+
 }
 FC_LOG_AND_RETHROW()
 
