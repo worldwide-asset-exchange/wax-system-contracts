@@ -70,7 +70,7 @@ namespace eosiosystem {
             }
          }
       }
-      update_delphi_price();
+      // update_delphi_price();
    }
 
    using namespace eosio;
@@ -90,7 +90,9 @@ namespace eosiosystem {
          auto to_savings       = distribute_tokens - (to_voters + to_per_block_pay);
 
          auto producer_size    =  _gstate.last_producer_schedule_size;
-
+         if (producer_size == 0) {
+            producer_size = 21;
+         }
          auto to_producers_pay = to_per_block_pay * producer_size * STANDBY_PAY_RATIO_DENOMINATOR / ( _gstate4.standby_pay_ratio_numerator * _gstate4.num_standby_slots + producer_size * STANDBY_PAY_RATIO_DENOMINATOR);
          auto to_standby_pay   = to_per_block_pay - to_producers_pay;
          {
@@ -132,6 +134,7 @@ namespace eosiosystem {
    // as_gbm is deprecated and maintained only for backwards compatibility with existing actions
    void system_contract::claim_producer_rewards( const name owner, bool as_gbm ) {
       require_auth( owner );
+    
 
       const auto& prod = _producers.get( owner.value );
       check( prod.active(), "producer does not have an active key" );
@@ -140,10 +143,12 @@ namespace eosiosystem {
                     "cannot claim rewards until the chain is activated (at least 15% of all tokens participate in voting)" );
 
       const auto ct = current_time_point();
-
       check( ct - prod.last_claim_time > microseconds(useconds_per_day), "already claimed rewards within past day" );
 
+      eosio::print("claim_producer_rewards\n");
+
       fill_buckets();
+      eosio::print("fill_buckets\n");
 
       auto prod2 = _producers2.find( owner.value );
 

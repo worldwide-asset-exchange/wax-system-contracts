@@ -11,8 +11,6 @@
 
 #include "eosio.system_tester.hpp"
 
-inline const auto alice = "alice"_n;
-inline const auto bob = "bob"_n;
 inline const auto DELPHI_ORACLE = "delphioracle"_n;
 
 // bool within_error(int64_t a, int64_t b, int64_t err) { return std::abs(a - b) <= err; };
@@ -96,7 +94,6 @@ struct eosio_standby_tester : eosio_system_tester {
       ))
     );
 
-    create_accounts_with_resources({alice, bob}); 
     
   }
 
@@ -291,6 +288,7 @@ FC_LOG_AND_RETHROW()
 
 
 BOOST_FIXTURE_TEST_CASE(standby_disallow_tests, eosio_standby_tester ) try {
+  const name alice = "alice1111112"_n;
   BOOST_REQUIRE_EQUAL( 
     success(), push_action( config::system_account_name, "disallowsb"_n, mvo()("account", alice) )
   );
