@@ -791,7 +791,6 @@ FC_LOG_AND_RETHROW()
 
 
 BOOST_FIXTURE_TEST_CASE(dynamic_bp_number_test, eosio_standby_tester) try {
-  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
 
   init_delphioracle_prices();
   produce_blocks(1);
@@ -867,6 +866,115 @@ BOOST_FIXTURE_TEST_CASE(dynamic_bp_number_test, eosio_standby_tester) try {
   ilog("raw_producers: ${x}", ("x", raw_producers));
 
   BOOST_TEST_REQUIRE( 17 == raw_producers - STANDBY_OFFSET );
+
+}
+FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(dynamic_bp_number_with_standby_test, eosio_standby_tester) try {
+  fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+  init_delphioracle_prices();
+  produce_blocks(1);
+  auto datapoints = get_delphioracle_datapoints_table(eosio::chain::name(22));
+  wdump((datapoints));
+
+  BOOST_REQUIRE_EQUAL(datapoints.value, 102);
+  BOOST_REQUIRE_EQUAL(datapoints.median, 103);
+  BOOST_REQUIRE_EQUAL(datapoints.owner, "wizardsguild"_n);
+  
+  const uint32_t USD_PER_BP = 2000;
+  const uint32_t MIN_BPS = 7;
+  const uint32_t MAX_BPS = 21;
+  const uint32_t STANDBY_OFFSET = 3;
+  const name PAIR_NAME = "waxpusd"_n;
+  const uint32_t PRICE_AVERAGE_DAYS = 30;
+
+  const u_int64_t SB_RATIO = 5000;
+  const u_int32_t SB_SLOTS = 5;
+
+
+
+  // set usd per bp
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setusdbp"_n, mvo()("usd_per_bp", USD_PER_BP) )
+  );
+
+  // set min max bps
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setbpsparams"_n, mvo()("min_bps", MIN_BPS)("max_bps", MAX_BPS)("standby_offset", STANDBY_OFFSET) )
+  );
+
+  // set delphi pair
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setdelphipr"_n, mvo()("delphi_pair", PAIR_NAME)("price_average_days", PRICE_AVERAGE_DAYS) )
+  );
+
+  // enable dynamic bps
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "enabledynbp"_n, mvo()("enable_dynamic_bp", true) )
+  );
+
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", SB_RATIO) )
+  );
+
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setsbslot"_n, mvo()("num_slots", SB_SLOTS) )
+  );
+
+  produce_blocks(5);
+
+  auto global4_state = get_global_state4();
+  wdump((global4_state)); 
+  BOOST_REQUIRE_EQUAL(global4_state["min_bps"].as<uint32_t>(), MIN_BPS);
+  BOOST_REQUIRE_EQUAL(global4_state["max_bps"].as<uint32_t>(), MAX_BPS);
+  BOOST_REQUIRE_EQUAL(global4_state["standby_offset"].as<uint32_t>(), STANDBY_OFFSET);
+  BOOST_REQUIRE_EQUAL(global4_state["enable_dynamic_bp"].as<bool>(), true);
+  BOOST_REQUIRE_EQUAL(global4_state["delphi_pair"].as<name>(), PAIR_NAME);
+  BOOST_REQUIRE_EQUAL(global4_state["price_average_days"].as<uint32_t>(), PRICE_AVERAGE_DAYS);
+
+  // check price average
+  BOOST_REQUIRE_EQUAL(global4_state["last_average_price"].as<uint64_t>(), 103);  
+
+  auto producer_names = active_and_vote_producers_and_standbys();
+  wdump((producer_names));
+
+  auto producer_keys = control->head_block_state()->active_schedule.producers;
+  wdump((producer_keys));
+
+  // check producers length is 17
+  BOOST_TEST_REQUIRE( 17 == producer_keys.size() );
+
+  const asset    initial_supply            = get_token_supply();
+  const int64_t secs_per_year  = 52 * 7 * 24 * 3600;
+  const double  usecs_per_year = secs_per_year * 1000000;
+  const double secs_per_30_days = 30 * 24 * 3600;
+  const double usecs_per_30_days = secs_per_30_days * 1000000;
+  const double  cont_rate      = 0.04879;;
+
+  const double expected_supply_growth_30_days = initial_supply.get_amount() * double(usecs_per_30_days) * cont_rate / usecs_per_year;
+  ilog("expected_supply_growth_30_days: ${x}", ("x", expected_supply_growth_30_days));
+  uint32_t wax_per_bp = USD_PER_BP * 100 * 10000; // 2000 usd with rate wax/usd = 1/100 and decimal of 4
+  auto raw_producers = std::floor(expected_supply_growth_30_days / wax_per_bp);
+  ilog("raw_producers: ${x}", ("x", raw_producers));
+
+  BOOST_TEST_REQUIRE( 17 == raw_producers - STANDBY_OFFSET );
+
+   const auto& gs4 = get_global_state4();
+  BOOST_TEST_REQUIRE( 5000 == gs4["standby_pay_ratio_numerator"].as_uint64() );
+  BOOST_TEST_REQUIRE( 5 == gs4["num_standby_slots"].as_uint64() );
+  BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_uint64() );
+
+  auto standby_producers = get_standby_table();
+  wdump((standby_producers));
+  BOOST_TEST_REQUIRE( 5 == standby_producers.size() );
+  // producers: a-q, standbys: r-v
+  BOOST_TEST_REQUIRE( name("defproducerr") == standby_producers[0].owner );
+  BOOST_TEST_REQUIRE( name("defproducers") == standby_producers[1].owner );
+  BOOST_TEST_REQUIRE( name("defproducert") == standby_producers[2].owner );
+  BOOST_TEST_REQUIRE( name("defproduceru") == standby_producers[3].owner );
+  BOOST_TEST_REQUIRE( name("defproducerv") == standby_producers[4].owner );
 
   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);
 
