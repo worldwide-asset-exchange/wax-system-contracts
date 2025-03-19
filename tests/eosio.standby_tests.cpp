@@ -733,6 +733,63 @@ BOOST_FIXTURE_TEST_CASE(standby_producer_pay, eosio_standby_tester,  * boost::un
 FC_LOG_AND_RETHROW()
 
 
+
+BOOST_FIXTURE_TEST_CASE(enable_dynamic_bp_test, eosio_standby_tester) try {
+
+  const uint32_t USD_PER_BP = 2000;
+  const uint32_t MIN_BPS = 7;
+  const uint32_t MAX_BPS = 21;
+  const uint32_t STANDBY_OFFSET = 3;
+
+
+  // set usd per bp
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setusdbp"_n, mvo()("usd_per_bp", USD_PER_BP) )
+  );
+
+  // set min max bps
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setbpsparams"_n, mvo()("min_bps", MIN_BPS)("max_bps", MAX_BPS)("standby_offset", STANDBY_OFFSET) )
+  );
+
+  // Check initial state is false
+  auto global4_state = get_global_state4();
+  BOOST_REQUIRE_EQUAL(global4_state["enable_dynamic_bp"].as<bool>(), false);
+
+  // check fail if not set pair
+  BOOST_REQUIRE_EQUAL(
+    wasm_assert_msg("delphi_pair must be set"),
+    push_action(config::system_account_name, "enabledynbp"_n, mvo()("enable_dynamic_bp", true))
+  );
+
+  init_delphioracle_prices();
+  // set delphi pair
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "setdelphipr"_n, mvo()("delphi_pair", "waxpusd"_n)("price_average_days", 30) )
+  );
+
+  // Enable dynamic BP
+  BOOST_REQUIRE_EQUAL( 
+    success(), push_action( config::system_account_name, "enabledynbp"_n, mvo()("enable_dynamic_bp", true) )
+  );
+
+  // Verify enabled
+  global4_state = get_global_state4();
+  BOOST_REQUIRE_EQUAL(global4_state["enable_dynamic_bp"].as<bool>(), true);
+
+  // Disable dynamic BP
+  BOOST_REQUIRE_EQUAL(
+    success(), push_action( config::system_account_name, "enabledynbp"_n, mvo()("enable_dynamic_bp", false) )
+  );
+
+  // Verify disabled
+  global4_state = get_global_state4();
+  BOOST_REQUIRE_EQUAL(global4_state["enable_dynamic_bp"].as<bool>(), false);
+
+}
+FC_LOG_AND_RETHROW()
+
+
 BOOST_FIXTURE_TEST_CASE(dynamic_bp_number_test, eosio_standby_tester) try {
   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
 
