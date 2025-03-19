@@ -70,6 +70,7 @@ namespace eosiosystem {
             }
          }
       }
+      update_delphi_price();
    }
 
    using namespace eosio;

@@ -76,6 +76,9 @@ namespace eosiosystem {
             check(_gstate4.usd_per_bp > 0, "usd_per_bp must be set");
             check(_gstate4.min_bps > 0, "min_bps must be set");
             check(_gstate4.max_bps > 0, "max_bps must be set");
+            check(_gstate4.delphi_pair != name(), "delphi_pair must be set");
+            check(_gstate4.price_average_days > 0, "price_average_days must be set");
+            check(_gstate4.last_average_price > 0, "last_average_price must > 0");
             // TODO: check more for delphioracle value here
       }
       _gstate4.enable_dynamic_bp = enable_dynamic_bp;
@@ -101,6 +104,11 @@ namespace eosiosystem {
       if (ct - _gstate4.last_price_update < microseconds(useconds_per_day)){
         return;
       }
+
+      // check if delphi pair is set
+      if (_gstate4.delphi_pair == name()){
+        return;
+      } 
 
       auto delphi_pair_name = _gstate4.delphi_pair;
       eosio::print("delphi_pair_name: ", delphi_pair_name);
