@@ -41,8 +41,8 @@ namespace eosiosystem {
 
    void system_contract::setsbratio( uint64_t ratio ){
       require_auth( get_self() );
-      check(ratio >= 0 && ratio <= STANDBY_PAY_RATIO_DENOMINATOR, "ratio must be between 0 and RATIO_DENOMINATOR");
-      _gstate4.standby_pay_ratio_numerator = ratio;
+      check(ratio >= 0 && ratio <= PAY_SPLIT_SCALE, "ratio must be between 0 and RATIO_DENOMINATOR");
+      _gstate4.standby_slot_weight = ratio;
    }
 
    void system_contract::setsbslot( uint32_t num_slots ){

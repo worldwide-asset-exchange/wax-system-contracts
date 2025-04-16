@@ -145,7 +145,7 @@ BOOST_AUTO_TEST_SUITE(eosio_standby_tests)
 
 BOOST_FIXTURE_TEST_CASE(standby_config_tests, eosio_standby_tester ) try {
   const auto& gs4 = get_global_state4();
-  BOOST_TEST_REQUIRE( 0 == gs4["standby_pay_ratio_numerator"].as_uint64() );
+  BOOST_TEST_REQUIRE( 0 == gs4["standby_slot_weight"].as_uint64() );
   BOOST_TEST_REQUIRE( 0 == gs4["num_standby_slots"].as_uint64() );
   BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_uint64() );
 
@@ -167,7 +167,7 @@ BOOST_FIXTURE_TEST_CASE(standby_config_tests, eosio_standby_tester ) try {
   );
 
   const auto& gs42 = get_global_state4();
-  BOOST_TEST_REQUIRE( 5000 == gs42["standby_pay_ratio_numerator"].as_uint64() );
+  BOOST_TEST_REQUIRE( 5000 == gs42["standby_slot_weight"].as_uint64() );
 
 
   BOOST_REQUIRE_EQUAL( 
@@ -213,7 +213,7 @@ BOOST_FIXTURE_TEST_CASE(standby_list, eosio_standby_tester ) try {
   wdump((producer_keys));
 
   const auto& gs4 = get_global_state4();
-  BOOST_TEST_REQUIRE( 5000 == gs4["standby_pay_ratio_numerator"].as_uint64() );
+  BOOST_TEST_REQUIRE( 5000 == gs4["standby_slot_weight"].as_uint64() );
   BOOST_TEST_REQUIRE( 5 == gs4["num_standby_slots"].as_uint64() );
   BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_uint64() );
 
@@ -250,7 +250,7 @@ BOOST_FIXTURE_TEST_CASE(standby_claims, eosio_standby_tester ) try {
   wdump((producer_keys));
 
   const auto& gs4 = get_global_state4();
-  BOOST_TEST_REQUIRE( 5000 == gs4["standby_pay_ratio_numerator"].as_uint64() );
+  BOOST_TEST_REQUIRE( 5000 == gs4["standby_slot_weight"].as_uint64() );
   BOOST_TEST_REQUIRE( 5 == gs4["num_standby_slots"].as_uint64() );
   BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_uint64() );
 
