@@ -156,9 +156,9 @@ namespace eosiosystem {
 
       if( set_proposed_producers( producers ) >= 0 ) {
          _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
-         if (standby_producers.size() > 0) {
-            update_standby_producers( standby_producers );
-         }
+      }
+      if (standby_producers.size() > 0) {
+         update_standby_producers( standby_producers );
       }
    }
 
