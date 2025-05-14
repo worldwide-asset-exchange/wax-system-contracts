@@ -76,33 +76,42 @@ namespace eosiosystem {
    }
 
    void system_contract::update_standby_producers(const std::vector<eosio::name>& standby_producers) {
-      update_standby_share();
       // disable _standbys active record if not in standby_producers
       auto idx = _standbys.get_index<"byactive"_n>();
-      double total_standby_time_share_increase = 0;
+      const auto ct = current_time_point();
+
       std::vector<eosio::name> remove_standby_producers;
       remove_standby_producers.reserve(standby_producers.size());
       for ( auto itr = idx.begin(); itr != idx.end(); itr++ ) {
-            if(itr->is_active){
-                if(std::find(standby_producers.begin(), standby_producers.end(), itr->owner) == standby_producers.end()){
-                    remove_standby_producers.push_back(itr->owner);
-                }
-            }else{
-                // sort by active so break if not active
-                break;
+        if(itr->is_active){
+            if(std::find(standby_producers.begin(), standby_producers.end(), itr->owner) == standby_producers.end()){
+                remove_standby_producers.push_back(itr->owner);
             }
+        }else{
+            // sort by active so break if not active
+            break;
         }
-
-        for(auto& name : remove_standby_producers){
-            auto itr = _standbys.find( name.value );
-            if( itr != _standbys.end() ) {
-                _standbys.modify( itr, same_payer, [&](auto& row) {
-                    row.is_active = false;
-                });
-            }
+      }
+      uint64_t total_standby_time_share_increase = 0;
+      for(auto& name : remove_standby_producers){
+        auto itr = _standbys.find( name.value );
+        time_point last_update = itr->last_standby_share_update;
+        uint64_t share_increase = (ct - last_update).count();
+        uint64_t new_account_share = itr->standby_share + share_increase;
+        total_standby_time_share_increase += share_increase;
+        if( itr != _standbys.end() ) {
+            _standbys.modify( itr, same_payer, [&](auto& row) {
+                row.is_active = false;
+                row.standby_share = new_account_share;
+                row.last_standby_share_update = ct;
+            });
         }
+      }
+      if (total_standby_time_share_increase > 0){
+        _gstate4.last_standby_state_update = ct;
+        _gstate4.total_standby_share += total_standby_time_share_increase;  
+      }
 
-      auto ct = current_time_point();
       for(auto& producer: standby_producers){
          // check if record is in _standbys
           auto itr = _standbys.find( producer.value );
