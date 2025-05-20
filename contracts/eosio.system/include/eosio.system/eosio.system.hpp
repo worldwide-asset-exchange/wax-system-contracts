@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <type_traits>
+#include <eosio.system/rng.hpp>
 
 
 namespace eosiosystem {
@@ -197,6 +198,15 @@ namespace eosiosystem {
       double            total_vpay_share_change_rate = 0;
 
       EOSLIB_SERIALIZE( eosio_global_state3, (last_vpay_state_update)(total_vpay_share_change_rate) )
+   };
+
+   // Defines new global state parameters added after version 1.3.0
+   struct [[eosio::table("global5"), eosio::contract("eosio.system")]] eosio_global_state5 {
+      eosio_global_state5() { }
+      uint64_t          rng_rate = 0;
+      uint64_t          max_pool_rng = 0;
+
+      EOSLIB_SERIALIZE( eosio_global_state5, (rng_rate)(max_pool_rng) )
    };
 
    inline eosio::block_signing_authority convert_to_block_signing_authority( const eosio::public_key& producer_key ) {
@@ -494,6 +504,8 @@ namespace eosiosystem {
 
    typedef eosio::singleton< "global3"_n, eosio_global_state3 > global_state3_singleton;
 
+   typedef eosio::singleton< "global5"_n, eosio_global_state5 > global_state5_singleton;
+
    struct [[eosio::table, eosio::contract("eosio.system")]] user_resources {
       name          owner;
       asset         net_weight;
@@ -774,10 +786,12 @@ namespace eosiosystem {
          global_state2_singleton _global2;
          global_state3_singleton _global3;
          global_state4_singleton _global4;
+         global_state5_singleton _global5;
          eosio_global_state      _gstate;
          eosio_global_state2     _gstate2;
          eosio_global_state3     _gstate3;
          eosio_global_state4     _gstate4;
+         eosio_global_state5     _gstate5;
          standby_disallow_table  _standby_disallow;
          standby_table           _standbys;
          rammarket               _rammarket;
@@ -825,7 +839,7 @@ namespace eosiosystem {
           * - version is 0 and
           * - symbol is found and
           * - system token supply is greater than 0,
-          * - and system contract wasn’t already been initialized.
+          * - and system contract wasn't already been initialized.
           *
           * @param version - the version, has to be 0,
           * @param core - the system symbol.
@@ -1261,7 +1275,7 @@ namespace eosiosystem {
           * @param revision - it has to be incremented by 1 compared with current revision.
           *
           * @pre Current revision can not be higher than 254, and has to be smaller
-          * than or equal 1 (“set upper bound to greatest revision supported in the code”).
+          * than or equal 1 (“set upper bound to greatest revision supported in the code").
           */
          [[eosio::action]]
          void updtrevision( uint8_t revision );
@@ -1459,6 +1473,15 @@ namespace eosiosystem {
        [[eosio::action]]
        void limitauthchg( const name& account, const std::vector<name>& allow_perms, const std::vector<name>& disallow_perms );
 
+         /**
+          * Set RNG rate action, configures the RNG parameters in the system
+          *
+          * @param rng_rate - the rate to set for RNG generation
+          * @param max_pool_rng - the maximum pool size for RNG
+          */
+         [[eosio::action]]
+         void setrngrate( double rng_rate, uint64_t max_pool_rng );
+
          using init_action = eosio::action_wrapper<"init"_n, &system_contract::init>;
          using setacctram_action = eosio::action_wrapper<"setacctram"_n, &system_contract::setacctram>;
          using setacctnet_action = eosio::action_wrapper<"setacctnet"_n, &system_contract::setacctnet>;
@@ -1523,6 +1546,7 @@ namespace eosiosystem {
        using set_standby_slots_action = eosio::action_wrapper<"setsbslot"_n, &system_contract::setsbslot>;
        using add_standby_block_action = eosio::action_wrapper<"disallowsb"_n, &system_contract::disallowsb>;
        using rm_standby_block_action = eosio::action_wrapper<"allowsb"_n, &system_contract::allowsb>;
+       using setrngrate_action = eosio::action_wrapper<"setrngrate"_n, &system_contract::setrngrate>;
 
       private:
          // WAX specifics
