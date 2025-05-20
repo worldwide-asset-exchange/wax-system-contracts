@@ -87,7 +87,8 @@ namespace eosiosystem {
    static constexpr int64_t  default_votepay_factor        = 40000;   // per-block pay share = 10000 / 40000 = 25% of the producer pay
 
    static const     uint64_t PAY_SPLIT_SCALE = 10000;    // produce base weight for payout scaling
-
+   static constexpr int64_t  RATE_DENOMINATOR              = 10000;   // 4 decimals
+   
 #ifdef SYSTEM_BLOCKCHAIN_PARAMETERS
    struct blockchain_parameters_v1 : eosio::blockchain_parameters
    {
