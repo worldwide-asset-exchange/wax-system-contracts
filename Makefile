@@ -3,6 +3,7 @@ DEV_DOCKER_IMAGE=waxteam/waxdev:$(DEV_VERSION)
 DEV_DOCKER_CONTAINER=contracts-development
 DEV_DOCKER_COMMON=-v `pwd`:/opt/contracts \
 			--name $(DEV_DOCKER_CONTAINER) -w /opt/contracts $(DEV_DOCKER_IMAGE)
+PARALLEL ?= $(shell nproc 2>/dev/null || echo 2)
 
 get-latest:
 	docker pull $(DEV_DOCKER_IMAGE)
@@ -13,7 +14,7 @@ build:
 
 .PHONY: compile
 compile: build
-	cd build && make -j $(nproc)
+	cd build && make -j $(PARALLEL)
 
 .PHONY: clean
 clean:
