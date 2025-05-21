@@ -77,7 +77,7 @@ namespace eosiosystem {
       const asset token_supply   = eosio::token::get_supply(token_account, core_symbol().code() );
       const auto ct = current_time_point();
       const auto usecs_since_last_fill = (ct - _gstate.last_pervote_bucket_fill).count();
-
+      eosio::print("usecs_since_last_fill: ", usecs_since_last_fill);
       if( usecs_since_last_fill > 0 && _gstate.last_pervote_bucket_fill > time_point() ) {
          auto current_fees =  eosio::token::get_balance(token_account, fees_account, core_symbol().code() );
          auto distribute_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
@@ -87,7 +87,7 @@ namespace eosiosystem {
          // add logic to calculate rng amount from issue_tokens, then subtract to get per_block_pay
          auto rng_amount = issue_tokens * _gstate5.rng_rate / RATE_DENOMINATOR;
          auto token_for_producers = distribute_tokens - rng_amount;
-
+         eosio::print("rng_amount: ", rng_amount);
          auto to_per_block_pay = token_for_producers / 5;
          auto to_voters        = 2 * to_per_block_pay;
          auto to_savings       = token_for_producers - (to_voters + to_per_block_pay);
@@ -107,7 +107,7 @@ namespace eosiosystem {
             }
             if (rng_amount > 0) {
                token::transfer_action transfer_act{ token_account, { {get_self(), active_permission} } };
-               transfer_act.send( get_self(), rng::RNG_ACCOUNT, asset(rng_amount, core_symbol()), "fund rng bucket" );
+               transfer_act.send( get_self(), rng::RNG_ACCOUNT, asset(rng_amount, core_symbol()), "treasury" );
             }
          }
          {

@@ -26,6 +26,11 @@ struct contracts {
       static std::vector<char>    msig_abi_old() { return read_abi("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/old_versions/v1.2.1/eosio.msig/eosio.msig.abi"); }
       static std::vector<uint8_t> system_wasm_v3_1() { return read_wasm("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/old_versions/v3.1.0/eosio.system/eosio.system.wasm"); }
       static std::vector<char>    system_abi_v3_1() { return read_abi("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/old_versions/v3.1.0/eosio.system/eosio.system.abi"); }
+
+       //add contract for rng
+       // a custom contract does not check for WAXP symbol to support testing
+      static std::vector<uint8_t> rng_wasm() { return read_wasm("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/wax.orng.wasm"); }
+      static std::vector<char>    rng_abi() { return read_abi("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/wax.orng.abi"); }
    };
 };
 
