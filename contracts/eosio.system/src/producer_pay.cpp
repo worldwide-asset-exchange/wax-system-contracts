@@ -86,8 +86,16 @@ namespace eosiosystem {
          // needs to be 2/5 Savings, 2/5 Voters, 1/5 producers
          // add logic to calculate rng amount from issue_tokens, then subtract to get per_block_pay
          auto rng_amount = issue_tokens * _gstate5.rng_rate / RATE_DENOMINATOR;
-         auto token_for_producers = distribute_tokens - rng_amount;
          eosio::print("rng_amount: ", rng_amount);
+
+         // get the treasury balance from rng contract
+         auto treasury_balance = rng::get_rng_balance();
+         // clamp the treasury balance to the max treasury balance
+         auto remaining_max_treasury_balance = _gstate5.max_pool_rng - treasury_balance;
+         auto rng_deposit = std::min(rng_amount, remaining_max_treasury_balance);
+         eosio::print("rng_deposit: ", rng_deposit);
+
+         auto token_for_producers = distribute_tokens - rng_deposit;
          auto to_per_block_pay = token_for_producers / 5;
          auto to_voters        = 2 * to_per_block_pay;
          auto to_savings       = token_for_producers - (to_voters + to_per_block_pay);
@@ -105,9 +113,9 @@ namespace eosiosystem {
                token::transfer_action transfer_act{ token_account, { {fees_account, active_permission} } };
                transfer_act.send( fees_account, get_self(), asset(fees_to_use, core_symbol()), "collect tokenomic fees" );
             }
-            if (rng_amount > 0) {
+            if (rng_deposit > 0) {
                token::transfer_action transfer_act{ token_account, { {get_self(), active_permission} } };
-               transfer_act.send( get_self(), rng::RNG_ACCOUNT, asset(rng_amount, core_symbol()), "treasury" );
+               transfer_act.send( get_self(), rng::RNG_ACCOUNT, asset(rng_deposit, core_symbol()), "treasury" );
             }
          }
          {
