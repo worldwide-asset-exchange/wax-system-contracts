@@ -314,6 +314,7 @@ BOOST_FIXTURE_TEST_CASE(rng_deposit_max_balance, eosio_rng_tester, * boost::unit
       
       // deposit max pool rng
       BOOST_REQUIRE_EQUAL(max_pool_rng, treasury_balance.pool_balance);
+      BOOST_REQUIRE_EQUAL(true, rng_deposit < expected_rng_deposit);
 
       BOOST_REQUIRE_EQUAL(new_tokens_org, supply.get_amount() - initial_supply.get_amount());
       BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 3), savings - initial_savings);
