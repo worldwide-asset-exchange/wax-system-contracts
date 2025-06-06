@@ -22,6 +22,23 @@ void token::create( const name&   issuer,
     });
 }
 
+void token::updatemaxsup( const asset&  maximum_supply )
+{
+    require_auth( get_self() );
+
+    auto sym = maximum_supply.symbol;
+    check( maximum_supply.is_valid(), "invalid supply");
+    check( maximum_supply.amount > 0, "max-supply must be positive");
+
+    stats statstable( get_self(), sym.code().raw() );
+    auto existing = statstable.find( sym.code().raw() );
+    check( existing != statstable.end(), "token with symbol does not exist" );
+    check( maximum_supply.symbol == existing->max_supply.symbol, "symbol precision mismatch" );
+
+    statstable.modify( existing, same_payer, [&]( auto& s ) {
+       s.max_supply    = maximum_supply;
+    });
+}
 
 void token::issue( const name& to, const asset& quantity, const string& memo )
 {

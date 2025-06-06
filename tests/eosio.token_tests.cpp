@@ -70,6 +70,12 @@ public:
       );
    }
 
+   action_result updatemaxsup( asset maximum_supply ) {
+      return push_action( "eosio.token"_n, "updatemaxsup"_n, mvo()
+           ( "maximum_supply", maximum_supply)
+      );
+   }
+
    action_result issue( account_name issuer, asset quantity, string memo ) {
       return push_action( issuer, "issue"_n, mvo()
            ( "to", issuer)
@@ -204,6 +210,55 @@ BOOST_FIXTURE_TEST_CASE( create_max_decimals, eosio_token_tester ) try {
    BOOST_CHECK_EXCEPTION( create( "alice"_n, max) , asset_type_exception, [](const asset_type_exception& e) {
       return expect_assert_message(e, "magnitude of asset amount must be less than 2^62");
    });
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( update_max_supply_tests, eosio_token_tester ) try {
+
+   auto token = create( "alice"_n, asset::from_string("1000.000 TKN"));
+   auto stats = get_stats("3,TKN");
+   REQUIRE_MATCHING_OBJECT( stats, mvo()
+      ("supply", "0.000 TKN")
+      ("max_supply", "1000.000 TKN")
+      ("issuer", "alice")
+   );
+   produce_blocks(1);
+
+   updatemaxsup( asset::from_string("2987.654 TKN"));
+
+   auto updated_stats = get_stats("3,TKN");
+   REQUIRE_MATCHING_OBJECT( updated_stats, mvo()
+      ("supply", "0.000 TKN")
+      ("max_supply", "2987.654 TKN")
+      ("issuer", "alice")
+   );
+
+   produce_blocks(1);
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( update_negative_max_supply, eosio_token_tester ) try {
+
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg( "max-supply must be positive" ),
+      updatemaxsup( asset::from_string("-1000.000 TKN"))
+   );
+
+   produce_blocks(1);
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( update_symbol_not_already_exists, eosio_token_tester ) try {
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg( "token with symbol does not exist" ),
+                        updatemaxsup( asset::from_string("100 TKN"))
+   );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( update_symbol_precision_mismatch, eosio_token_tester ) try {
+   create( "alice"_n, asset::from_string("1000.000 TKN"));
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg( "symbol precision mismatch" ),
+                        updatemaxsup( asset::from_string("100.000000 TKN"))
+   );
 
 } FC_LOG_AND_RETHROW()
 

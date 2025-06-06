@@ -41,6 +41,18 @@ namespace eosio {
          void create( const name&   issuer,
                       const asset&  maximum_supply);
          /**
+          * Allows `issuer` account to update the maximum supply of the token. Just tempory action to update the maximum supply of the token.
+          *
+          * @param maximum_supply - the maximum supply set for the token created.
+          *
+          * @pre Token symbol has to be valid,
+          * @pre Token symbol must already created,
+          * @pre maximum_supply has to be smaller than the maximum supply allowed by the system: 1^62 - 1.
+          * @pre Maximum supply must be positive;
+          */
+         [[eosio::action]]
+         void updatemaxsup( const asset&  maximum_supply);
+         /**
           *  This action issues to `to` account a `quantity` of tokens.
           *
           * @param to - the account to issue tokens to, it must be the same as the issuer,
