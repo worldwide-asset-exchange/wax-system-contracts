@@ -77,7 +77,6 @@ namespace eosiosystem {
       const asset token_supply   = eosio::token::get_supply(token_account, core_symbol().code() );
       const auto ct = current_time_point();
       const auto usecs_since_last_fill = (ct - _gstate.last_pervote_bucket_fill).count();
-      eosio::print("usecs_since_last_fill: ", usecs_since_last_fill);
       if( usecs_since_last_fill > 0 && _gstate.last_pervote_bucket_fill > time_point() ) {
          auto current_fees =  eosio::token::get_balance(token_account, fees_account, core_symbol().code() );
          auto distribute_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
@@ -85,15 +84,13 @@ namespace eosiosystem {
          auto issue_tokens = distribute_tokens - fees_to_use;
          // needs to be 2/5 Savings, 2/5 Voters, 1/5 producers
          // add logic to calculate rng amount from issue_tokens, then subtract to get per_block_pay
-         auto rng_amount = issue_tokens * _gstate5.rng_rate / RATE_DENOMINATOR;
-         eosio::print("rng_amount: ", rng_amount);
+         auto rng_amount = distribute_tokens * _gstate5.rng_rate / RATE_DENOMINATOR;
 
          // get the treasury balance from rng contract
          auto treasury_balance = rng::get_rng_balance();
          // clamp the treasury balance to the max treasury balance
          auto remaining_max_treasury_balance = _gstate5.max_pool_rng - treasury_balance;
          auto rng_deposit = std::min(rng_amount, remaining_max_treasury_balance);
-         eosio::print("rng_deposit: ", rng_deposit);
 
          auto token_for_producers = distribute_tokens - rng_deposit;
          auto to_per_block_pay = token_for_producers / 5;
