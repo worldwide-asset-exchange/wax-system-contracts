@@ -27,9 +27,9 @@ FC_REFLECT(rng_treasury_data, (pool_balance))
 // FC_REFLECT(rng_treasury_data2, (asset_balance))
 
 
-bool within_error(int64_t a, int64_t b, int64_t err) { return std::abs(a - b) <= err; };
-bool within_one(int64_t a, int64_t b) { return within_error(a, b, 1); }
-bool within_and_gte(int64_t a, int64_t b, int64_t w) { return a - b <= w && a >= b; }
+// bool within_error(int64_t a, int64_t b, int64_t err) { return std::abs(a - b) <= err; };
+// bool within_one(int64_t a, int64_t b) { return within_error(a, b, 1); }
+// bool within_and_gte(int64_t a, int64_t b, int64_t w) { return a - b <= w && a >= b; }
 
 using namespace eosio_system;
 
