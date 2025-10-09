@@ -36,7 +36,6 @@ namespace eosiosystem {
       _gstate2 = _global2.exists() ? _global2.get() : eosio_global_state2{};
       _gstate3 = _global3.exists() ? _global3.get() : eosio_global_state3{};
       _gstate4 = _global4.exists() ? _global4.get() : eosio_global_state4{};
-      _gstate5 = _global5.exists() ? _global5.get() : eosio_global_state5{};
    }
 
    eosio_global_state system_contract::get_default_parameters() {
@@ -492,13 +491,7 @@ namespace eosiosystem {
       });
    }
 
-   void system_contract::setrngrate( uint64_t rng_rate, uint64_t max_pool_rng ) {
-      require_auth( get_self() );
-      check( rng_rate >= 0 && rng_rate < 10000, "rng_rate must be between 0 and 10000");
-      _gstate5.rng_rate = rng_rate;
-      _gstate5.max_pool_rng = max_pool_rng;
-      
-      _global5.set( _gstate5, get_self() );
+
    }
 
 } /// eosio.system
