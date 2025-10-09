@@ -23,6 +23,7 @@ namespace eosiosystem {
     _global2(get_self(), get_self().value),
     _global3(get_self(), get_self().value),
     _global4(get_self(), get_self().value),
+    _global5(get_self(), get_self().value),
     _rammarket(get_self(), get_self().value),
     _proposers(get_self(), get_self().value),
     _proposals(get_self(), get_self().value),
@@ -35,6 +36,7 @@ namespace eosiosystem {
       _gstate2 = _global2.exists() ? _global2.get() : eosio_global_state2{};
       _gstate3 = _global3.exists() ? _global3.get() : eosio_global_state3{};
       _gstate4 = _global4.exists() ? _global4.get() : eosio_global_state4{};
+      _gstate5 = _global5.exists() ? _global5.get() : eosio_global_state5{};
    }
 
    eosio_global_state system_contract::get_default_parameters() {
@@ -54,6 +56,7 @@ namespace eosiosystem {
       _global2.set( _gstate2, get_self() );
       _global3.set( _gstate3, get_self() );
       _global4.set( _gstate4, get_self() );
+      _global5.set( _gstate5, get_self() );
    }
 
    void system_contract::setram( uint64_t max_ram_size ) {
@@ -487,6 +490,23 @@ namespace eosiosystem {
          m.quote.balance.amount = system_token_supply.amount / 1000;
          m.quote.balance.symbol = core;
       });
+   }
+
+   void system_contract::setguildcont( const name& contract ) {
+      require_auth( get_self() );
+      check( is_account( contract ), "guild contract account does not exist" );
+      _gstate5.guilds_contract = contract;
+   }
+
+   void system_contract::setbpscale( uint32_t scaling_factor ) {
+      require_auth( get_self() );
+      check( scaling_factor > 0, "scaling factor must be greater than 0" );
+      _gstate5.bp_score_scaling_factor = scaling_factor;
+   }
+
+   void system_contract::setbpdefscore( uint32_t default_score ) {
+      require_auth( get_self() );
+      _gstate5.bp_default_score = default_score;
    }
 
 } /// eosio.system

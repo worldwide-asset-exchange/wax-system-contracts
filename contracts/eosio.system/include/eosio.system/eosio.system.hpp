@@ -10,6 +10,7 @@
 
 #include <eosio.system/exchange_state.hpp>
 #include <eosio.system/native.hpp>
+#include <eosio.system/guilds.oig.hpp>
 
 #include <deque>
 #include <optional>
@@ -723,6 +724,17 @@ namespace eosiosystem {
    };
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 
+   // Defines new global state parameters for BP weighted voting
+   struct [[eosio::table("global5"), eosio::contract("eosio.system")]] eosio_global_state5 {
+      eosio_global_state5() { }
+      name     guilds_contract = "guilds.oig"_n;          // Guild contract name
+      uint32_t bp_score_scaling_factor = 1000;            // Divisor for score (1000 = 1.0x multiplier)
+      uint32_t bp_default_score = 1000;                   // Default score for unacknowledged BPs
+
+      EOSLIB_SERIALIZE( eosio_global_state5, (guilds_contract)(bp_score_scaling_factor)(bp_default_score) )
+   };
+   typedef eosio::singleton< "global5"_n, eosio_global_state5 > global_state5_singleton;
+
    // Defines new standby producer info structure
    struct [[eosio::table, eosio::contract("eosio.system")]] standby_producer_info {
       name            owner;
@@ -774,10 +786,12 @@ namespace eosiosystem {
          global_state2_singleton _global2;
          global_state3_singleton _global3;
          global_state4_singleton _global4;
+         global_state5_singleton _global5;
          eosio_global_state      _gstate;
          eosio_global_state2     _gstate2;
          eosio_global_state3     _gstate3;
          eosio_global_state4     _gstate4;
+         eosio_global_state5     _gstate5;
          standby_disallow_table  _standby_disallow;
          standby_table           _standbys;
          rammarket               _rammarket;
@@ -1439,7 +1453,19 @@ namespace eosiosystem {
 
          /** claim standby reward */
          [[eosio::action]]
-         void claimstandby(const name owner);  
+         void claimstandby(const name owner);
+
+         /** set guilds contract name for BP weighted voting */
+         [[eosio::action]]
+         void setguildcont( const name& contract );
+
+         /** set BP score scaling factor for weighted voting */
+         [[eosio::action]]
+         void setbpscale( uint32_t scaling_factor );
+
+         /** set default BP score for unacknowledged producers */
+         [[eosio::action]]
+         void setbpdefscore( uint32_t default_score );  
 
        /**
         * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
@@ -1523,6 +1549,9 @@ namespace eosiosystem {
        using set_standby_slots_action = eosio::action_wrapper<"setsbslot"_n, &system_contract::setsbslot>;
        using add_standby_block_action = eosio::action_wrapper<"disallowsb"_n, &system_contract::disallowsb>;
        using rm_standby_block_action = eosio::action_wrapper<"allowsb"_n, &system_contract::allowsb>;
+       using setguildcont_action = eosio::action_wrapper<"setguildcont"_n, &system_contract::setguildcont>;
+       using setbpscale_action = eosio::action_wrapper<"setbpscale"_n, &system_contract::setbpscale>;
+       using setbpdefscore_action = eosio::action_wrapper<"setbpdefscore"_n, &system_contract::setbpdefscore>;
 
       private:
          // WAX specifics
@@ -1570,6 +1599,7 @@ namespace eosiosystem {
                                                double shares_rate, bool reset_to_zero = false );
          double update_total_votepay_share( const time_point& ct,
                                             double additional_shares_delta = 0.0, double shares_rate_delta = 0.0 );
+         double get_bp_weight_multiplier( const name& producer ) const;
 
          template <auto system_contract::*...Ptrs>
          class registration {

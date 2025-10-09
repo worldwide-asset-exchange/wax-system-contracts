@@ -110,28 +110,58 @@ namespace eosiosystem {
       auto idx = _producers.get_index<"prototalvote"_n>();
 
       using value_type = std::pair<eosio::producer_authority, uint16_t>;
-      std::vector< value_type > top_producers;
-      top_producers.reserve(21);
       const uint32_t num_standby_slots = _gstate4.num_standby_slots;
 
-      std::vector<eosio::name> standby_producers;
-      standby_producers.reserve(num_standby_slots);
-      auto current_it = idx.cbegin();
-      for( auto it = idx.cbegin(); it != idx.cend() && top_producers.size() < 21 && 0 < it->total_votes && it->active(); ++it ) {
-         top_producers.emplace_back(
+      // Create vector to hold producers with their weighted votes
+      struct weighted_producer {
+         eosio::producer_authority authority;
+         uint16_t location;
+         double weighted_votes;
+         name producer_name;
+      };
+      std::vector<weighted_producer> weighted_producers;
+
+      // Calculate weighted votes for all active producers with votes
+      for( auto it = idx.cbegin(); it != idx.cend() && it->active() && it->total_votes > 0; ++it ) {
+         double multiplier = get_bp_weight_multiplier( it->owner );
+         double weighted_votes = it->total_votes * multiplier;
+
+         weighted_producers.push_back({
             eosio::producer_authority{
                .producer_name = it->owner,
                .authority     = it->get_producer_authority()
             },
-            it->location
-         );
-         current_it = it;
+            it->location,
+            weighted_votes,
+            it->owner
+         });
       }
 
-      for( auto it = ++current_it; it != idx.cend() && standby_producers.size() < num_standby_slots && 0 < it->total_votes && it->active(); ++it ) {
-         // check if producer is not on standbyblock list
-         if( !is_disallow_standby( it->owner ) ){
-            standby_producers.emplace_back( it->owner );
+      // Sort by weighted votes (descending)
+      std::sort( weighted_producers.begin(), weighted_producers.end(),
+         [](const weighted_producer& a, const weighted_producer& b) {
+            return a.weighted_votes > b.weighted_votes;
+         });
+
+      // Select top 21 and standbys based on weighted votes
+      std::vector<value_type> top_producers;
+      top_producers.reserve(21);
+      std::vector<eosio::name> standby_producers;
+      standby_producers.reserve(num_standby_slots);
+
+      for( size_t i = 0; i < weighted_producers.size(); ++i ) {
+         if( i < 21 ) {
+            top_producers.emplace_back(
+               std::move(weighted_producers[i].authority),
+               weighted_producers[i].location
+            );
+         } else if( standby_producers.size() < num_standby_slots ) {
+            // check if producer is not on standbyblock list
+            if( !is_disallow_standby( weighted_producers[i].producer_name ) ) {
+               standby_producers.emplace_back( weighted_producers[i].producer_name );
+            }
+         } else {
+            break;
          }
       }
 
@@ -504,6 +534,24 @@ namespace eosiosystem {
             v.last_vote_weight = new_weight;
          }
       );
+   }
+
+   double system_contract::get_bp_weight_multiplier( const name& producer ) const {
+      // Return 1.0 if scaling factor is 0 to avoid division by zero
+      if( _gstate5.bp_score_scaling_factor == 0 ) {
+         return 1.0;
+      }
+
+      // Try to read from guilds contract using helper function
+      auto guilds = guildsoig::get_guilds( _gstate5.guilds_contract );
+      auto guild_itr = guilds.find( producer.value );
+
+      uint32_t score = _gstate5.bp_default_score;
+      if( guild_itr != guilds.end() ) {
+         score = guild_itr->score;
+      }
+
+      return static_cast<double>(score) / static_cast<double>(_gstate5.bp_score_scaling_factor);
    }
 
 } /// namespace eosiosystem
