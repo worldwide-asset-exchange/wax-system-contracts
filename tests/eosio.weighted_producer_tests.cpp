@@ -15,6 +15,17 @@ inline const auto alice = "alice1111111"_n;
 inline const auto bob = "bob111111111"_n;
 inline const auto GUILDS_OIG = "guilds.oig"_n;
 
+struct guild {
+    name producer;
+    uint32_t score;
+    uint32_t prv_score;
+    asset balance;
+    asset eligibility;
+    bool autopay;
+    bool retired;
+};
+
+FC_REFLECT(guild, (producer)(score)(prv_score)(balance)(eligibility)(autopay)(retired))
 
 using namespace eosio_system;
 
@@ -52,6 +63,12 @@ struct eosio_weighted_producer_tester : eosio_system_tester {
   fc::variant get_global_state4() {
     vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global4"_n, "global4"_n );
     return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state4", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
+  }
+
+  // read guild data from guilds.oig contract
+  guild get_guild_table(name producer) {
+    vector<char> data = get_row_by_account( GUILDS_OIG, GUILDS_OIG, "guild"_n, producer );
+    return fc::raw::unpack<guild>(data);
   }
 
   vector<name> active_and_vote_producers() {
