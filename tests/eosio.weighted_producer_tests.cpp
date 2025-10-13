@@ -65,6 +65,11 @@ struct eosio_weighted_producer_tester : eosio_system_tester {
     return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state4", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
   }
 
+  fc::variant get_global_state5() {
+    vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global5"_n, "global5"_n );
+    return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state5", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
+  }
+
   // read guild data from guilds.oig contract
   guild get_guild_table(name producer) {
     vector<char> data = get_row_by_account( GUILDS_OIG, GUILDS_OIG, "guild"_n, producer );
@@ -122,6 +127,50 @@ struct eosio_weighted_producer_tester : eosio_system_tester {
 
 BOOST_AUTO_TEST_SUITE(eosio_weighted_producer_tests)
 
-// Test cases will be added here
+BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester) try {
+   // Test setting and getting weighted producer config values
+
+   // Get initial global state 5
+   fc::variant initial_state = get_global_state5();
+
+   // Test 1: Set guilds contract name
+   const name new_guilds_contract = GUILDS_OIG;
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", new_guilds_contract)
+   ));
+   produce_blocks(1);
+
+   // Verify guilds contract was set
+   fc::variant state_after_guild = get_global_state5();
+   BOOST_REQUIRE_EQUAL(state_after_guild["guilds_contract"].as<name>(), new_guilds_contract);
+
+   // Test 2: Set BP score scaling factor
+   const uint32_t new_scaling_factor = 2000; // 2.0x multiplier
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
+      ("scaling_factor", new_scaling_factor)
+   ));
+   produce_blocks(1);
+
+   // Verify scaling factor was set
+   fc::variant state_after_scale = get_global_state5();
+   BOOST_REQUIRE_EQUAL(state_after_scale["bp_score_scaling_factor"].as<uint32_t>(), new_scaling_factor);
+
+   // Test 3: Set default BP score
+   const uint32_t new_default_score = 1500; // 1.5x default
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
+      ("default_score", new_default_score)
+   ));
+   produce_blocks(1);
+
+   // Verify default score was set
+   fc::variant final_state = get_global_state5();
+   BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), new_default_score);
+
+   // Verify all settings persist together
+   BOOST_REQUIRE_EQUAL(final_state["guilds_contract"].as<name>(), new_guilds_contract);
+   BOOST_REQUIRE_EQUAL(final_state["bp_score_scaling_factor"].as<uint32_t>(), new_scaling_factor);
+   BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), new_default_score);
+
+} FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
