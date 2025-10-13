@@ -76,6 +76,18 @@ struct eosio_weighted_producer_tester : eosio_system_tester {
     return fc::raw::unpack<guild>(data);
   }
 
+  // push action to guilds contract
+  action_result push_guild_action( const account_name& signer, const action_name &name, const variant_object &data, bool auth = true ) {
+      string action_type_name = guilds_abi_ser.get_action_type(name);
+
+      action act;
+      act.account = GUILDS_OIG;
+      act.name = name;
+      act.data = guilds_abi_ser.variant_to_binary( action_type_name, data, abi_serializer::create_yield_function(abi_serializer_max_time) );
+
+      return base_tester::push_action( std::move(act), (auth ? signer : signer == "bob111111111"_n ? "alice1111111"_n : "bob111111111"_n).to_uint64_t() );
+  }
+
   vector<name> active_and_vote_producers() {
     //stake more than 15% of total EOS supply to activate chain
     const asset net = core_sym::from_string("80.0000");
@@ -170,6 +182,65 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester)
    BOOST_REQUIRE_EQUAL(final_state["guilds_contract"].as<name>(), new_guilds_contract);
    BOOST_REQUIRE_EQUAL(final_state["bp_score_scaling_factor"].as<uint32_t>(), new_scaling_factor);
    BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), new_default_score);
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_config_and_guild_score, eosio_weighted_producer_tester) try {
+   // Test setting config and inserting guild scores
+
+   // Step 1: Set guilds contract name
+   const name guilds_contract = GUILDS_OIG;
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", guilds_contract)
+   ));
+   produce_blocks(1);
+
+   // Verify guilds contract was set
+   fc::variant state = get_global_state5();
+   BOOST_REQUIRE_EQUAL(state["guilds_contract"].as<name>(), guilds_contract);
+
+   // Step 2: Set BP score scaling factor
+   const uint32_t scaling_factor = 1500; // 1.5x multiplier
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
+      ("scaling_factor", scaling_factor)
+   ));
+   produce_blocks(1);
+
+   // Step 3: Set default BP score
+   const uint32_t default_score = 1000; // 1.0x default
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
+      ("default_score", default_score)
+   ));
+   produce_blocks(1);
+
+   // Step 4: Insert guild score for a producer
+   const name test_producer = "defproducera"_n;
+   const uint32_t producer_score = 2000; // 2.0x score
+
+   // First create and register the producer account
+   create_account_with_resources(test_producer, config::system_account_name, core_sym::from_string("1.0000"), false);
+   transfer(config::system_account_name, test_producer, core_sym::from_string("10000.0000"), config::system_account_name);
+   BOOST_REQUIRE_EQUAL(success(), stake(test_producer, core_sym::from_string("1000.0000"), core_sym::from_string("1000.0000")));
+   BOOST_REQUIRE_EQUAL(success(), regproducer(test_producer));
+   produce_blocks(1);
+
+   // Insert guild data using the insertguild action
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", test_producer)
+      ("score", producer_score)
+   ));
+   produce_blocks(1);
+
+   // Step 5: Verify the guild data was inserted correctly
+   guild guild_data = get_guild_table(test_producer);
+   BOOST_REQUIRE_EQUAL(guild_data.producer, test_producer);
+   BOOST_REQUIRE_EQUAL(guild_data.score, producer_score);
+
+   // Verify the config values persist
+   fc::variant final_state = get_global_state5();
+   BOOST_REQUIRE_EQUAL(final_state["guilds_contract"].as<name>(), guilds_contract);
+   BOOST_REQUIRE_EQUAL(final_state["bp_score_scaling_factor"].as<uint32_t>(), scaling_factor);
+   BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), default_score);
 
 } FC_LOG_AND_RETHROW()
 
