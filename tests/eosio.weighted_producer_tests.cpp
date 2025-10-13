@@ -244,4 +244,203 @@ BOOST_FIXTURE_TEST_CASE(test_config_and_guild_score, eosio_weighted_producer_tes
 
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(test_producer_sorting_with_votes_and_scores, eosio_weighted_producer_tester) try {
+   // Test that producers are correctly sorted by weighted votes (votes * score)
+   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+   // Step 1: Set up configuration
+   const name guilds_contract = GUILDS_OIG;
+   const uint32_t scaling_factor = 1000; // 1.0x multiplier
+   const uint32_t default_score = 1000; // 1.0x default
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", guilds_contract)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
+      ("scaling_factor", scaling_factor)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
+      ("default_score", default_score)
+   ));
+   produce_blocks(1);
+
+   // Verify configuration was set correctly
+   fc::variant state = get_global_state5();
+   ilog( "=== Configuration ===" );
+   ilog( "guilds_contract: ${guilds}", ("guilds", state["guilds_contract"].as<name>()) );
+   ilog( "bp_score_scaling_factor: ${scale}", ("scale", state["bp_score_scaling_factor"].as<uint32_t>()) );
+   ilog( "bp_default_score: ${default}", ("default", state["bp_default_score"].as<uint32_t>()) );
+
+   // Step 2: Create voters with significant stake to activate chain
+   // Need to stake more than 15% of total supply to activate
+   // Using multiple voters but they will all vote for the same producers
+   // This means all producers get EQUAL raw votes - differences are ONLY from scores!
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> voters = { "voter1111111"_n, "voter2222222"_n, "voter3333333"_n, "voter4444444"_n };
+   for (const auto& v: voters) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, core_sym::from_string("100000000.0000"), config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, core_sym::from_string("30000000.0000"), core_sym::from_string("30000000.0000")) );
+   }
+
+   // Step 3: Create 26 producers (a-z) to test weighted selection
+   // With 26 producers competing for 21 slots, we can verify that
+   // low-score producers get excluded while high-score ones are selected
+   std::vector<account_name> producer_names;
+   const std::string root("producer");
+
+   // Create producers: a-z (26 producers total)
+   for ( char c = 'a'; c <= 'z'; ++c ) {
+      producer_names.emplace_back(root + std::string(1, c));
+   }
+
+   setup_producer_accounts(producer_names);
+   for (const auto& p: producer_names) {
+      BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+      produce_blocks(1);
+   }
+
+   ilog( "=== Created 26 producers (a->z) ===" );
+   ilog( "Total producers: ${count}", ("count", producer_names.size()) );
+
+   // Step 4: Set different scores for different producers
+   // Group 1: LOW score (0.5x) - producers a-e (5 producers) - should be EXCLUDED
+   ilog( "=== Setting Scores ===" );
+   ilog( "Group 1 (a-e): LOW score 0.5x - these 5 should be EXCLUDED from top 21" );
+   for (size_t i = 0; i < 5; ++i) {
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+         ("producer", producer_names[i])
+         ("score", 500) // 0.5x - LOW - should be excluded!
+      ));
+   }
+
+   // Group 2: Medium score (1.5x) - producers f-p (11 producers)
+   ilog( "Group 2 (f-p): MEDIUM score 1.5x" );
+   for (size_t i = 5; i < 16; ++i) {
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+         ("producer", producer_names[i])
+         ("score", 1500) // 1.5x - MEDIUM
+      ));
+   }
+
+   // Group 3: HIGH score (2.0x) - producers q-z (10 producers)
+   ilog( "Group 3 (q-z): HIGH score 2.0x - these should be selected" );
+   for (size_t i = 16; i < 26; ++i) {
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+         ("producer", producer_names[i])
+         ("score", 2000) // 2.0x - HIGH
+      ));
+   }
+   produce_blocks(1);
+
+   // Verify scores were inserted correctly
+   ilog( "=== Verifying Guild Scores ===" );
+   ilog( "Low score group (a-e, score=500):" );
+   for (size_t i = 0; i < 5; ++i) {
+      guild g = get_guild_table(producer_names[i]);
+      ilog( "  ${name}: score=${score}", ("name", producer_names[i])("score", g.score) );
+   }
+   ilog( "Medium score group (f-p, score=1500):" );
+   for (size_t i = 5; i < 16; ++i) {
+      guild g = get_guild_table(producer_names[i]);
+      ilog( "  ${name}: score=${score}", ("name", producer_names[i])("score", g.score) );
+   }
+   ilog( "High score group (q-z, score=2000):" );
+   for (size_t i = 16; i < 26; ++i) {
+      guild g = get_guild_table(producer_names[i]);
+      ilog( "  ${name}: score=${score}", ("name", producer_names[i])("score", g.score) );
+   }
+
+   // Wait 24 hours before voting
+   produce_block( fc::hours(24) );
+
+   // Step 5: All voters vote for ALL 26 producers
+   // This gives ALL producers EQUAL raw votes
+   // The ONLY difference in rankings will be from their SCORES!
+   ilog( "=== Voting for all 26 producers ===" );
+   for (const auto& v: voters) {
+      BOOST_REQUIRE_EQUAL(success(), vote(v, producer_names));
+   }
+
+   // Wait for producer schedule to update
+   produce_blocks(250);
+
+   // Step 6: Get the active producer schedule
+   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
+
+   // Step 7: Verify the selection is based on weighted votes
+   // ALL producers have EQUAL raw votes (all voters voting for all 26)
+   // Expected weighted votes calculation:
+   // Group 1 (a-e, 5 producers): score 0.5x = LOWEST weighted votes - should be EXCLUDED
+   // Group 2 (f-p, 11 producers): score 1.5x = MEDIUM weighted votes - should be INCLUDED
+   // Group 3 (q-z, 10 producers): score 2.0x = HIGHEST weighted votes - should be INCLUDED
+   //
+   // Since raw votes are IDENTICAL, the top 21 should be: f-z (11 medium + 10 high = 21)
+   // Producers a-e should be EXCLUDED due to low scores!
+
+   ilog( "=== Active Producer Schedule (21 selected from 26 total) ===" );
+   ilog( "Expected: f-z should be selected, a-e should be EXCLUDED" );
+
+   std::set<name> active_producers;
+   for (size_t i = 0; i < producer_keys.size(); ++i) {
+      active_producers.insert(producer_keys[i].producer_name);
+      ilog( "${idx}: ${name}", ("idx", i)("name", producer_keys[i].producer_name) );
+   }
+
+   // CRITICAL TEST: Verify that low-score producers (a-e) are NOT in the top 21
+   ilog( "=== Verifying Low-Score Producers Exclusion ===" );
+   int excluded_count = 0;
+   for (size_t i = 0; i < 5; ++i) {
+      name low_score_producer = producer_names[i]; // a-e
+      if (active_producers.find(low_score_producer) == active_producers.end()) {
+         ilog( "✓ ${name} (low score 0.5x) is EXCLUDED - CORRECT!", ("name", low_score_producer) );
+         excluded_count++;
+      } else {
+         ilog( "✗ ${name} (low score 0.5x) is INCLUDED - WRONG!", ("name", low_score_producer) );
+      }
+   }
+
+   ilog( "Excluded low-score producers: ${count}/5", ("count", excluded_count) );
+   BOOST_REQUIRE_EQUAL(excluded_count, 5); // ALL 5 low-score producers should be excluded!
+
+   // Verify that medium and high-score producers ARE in the top 21
+   ilog( "=== Verifying Medium/High-Score Producers Inclusion ===" );
+   int included_count = 0;
+   for (size_t i = 5; i < 26; ++i) { // f-z
+      name producer = producer_names[i];
+      if (active_producers.find(producer) != active_producers.end()) {
+         included_count++;
+      }
+   }
+
+   ilog( "Included medium/high-score producers: ${count}/21", ("count", included_count) );
+   BOOST_REQUIRE_EQUAL(included_count, 21); // All 21 slots should be filled with f-z
+
+   ilog( "SUCCESS: Weighted voting correctly selected top 21 by score!" );
+   ilog( "Low-score producers (a-e) were EXCLUDED despite having equal votes!" );
+
+   // Verify individual producer weighted votes
+   ilog( "=== Producer Vote Details ===" );
+   for (const auto& p : producer_names) {
+      fc::variant producer_info = get_producer_info(p);
+      double total_votes = producer_info["total_votes"].as<double>();
+
+      // Get the score for this producer
+      guild guild_data = get_guild_table(p);
+      uint32_t score = guild_data.score;
+
+      // Calculate weighted votes
+      double weighted_votes = total_votes * score / 1000.0;
+
+      ilog( "${name}: votes=${votes}, score=${score}, weighted=${weighted}",
+            ("name", p)
+            ("votes", total_votes)
+            ("score", score)
+            ("weighted", weighted_votes) );
+   }
+
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()
