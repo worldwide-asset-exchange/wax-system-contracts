@@ -27,6 +27,16 @@ struct guild {
 
 FC_REFLECT(guild, (producer)(score)(prv_score)(balance)(eligibility)(autopay)(retired))
 
+struct standby_producer_state {
+  name            owner;
+  u_int64_t       standby_share = 0;
+  time_point      last_standby_share_update;
+  time_point      last_claim_time;
+  bool            is_active = true;
+};
+
+FC_REFLECT(standby_producer_state, (owner)(standby_share)(last_standby_share_update)(last_claim_time)(is_active))
+
 using namespace eosio_system;
 
 
@@ -86,6 +96,37 @@ struct eosio_weighted_producer_tester : eosio_system_tester {
       act.data = guilds_abi_ser.variant_to_binary( action_type_name, data, abi_serializer::create_yield_function(abi_serializer_max_time) );
 
       return base_tester::push_action( std::move(act), (auth ? signer : signer == "bob111111111"_n ? "alice1111111"_n : "bob111111111"_n).to_uint64_t() );
+  }
+
+  // read standby producer state
+  standby_producer_state get_standby_producer_state(name acc) {
+    vector<char> data = get_row_by_account(config::system_account_name, config::system_account_name, "standbys"_n, acc);
+    return fc::raw::unpack<standby_producer_state>(data);
+  }
+
+  // get all standby producers
+  std::vector<standby_producer_state> get_standby_table() {
+    std::vector<standby_producer_state> result;
+
+    const auto* table_id_itr = control->db().find<eosio::chain::table_id_object, eosio::chain::by_code_scope_table>(
+      boost::make_tuple(eosio::chain::config::system_account_name, eosio::chain::config::system_account_name, "standbys"_n));
+
+    if (!table_id_itr) {
+      return result;
+    }
+
+    const auto& idx = control->db().get_index<eosio::chain::key_value_index, eosio::chain::by_scope_primary>();
+    auto table_id = table_id_itr->id;
+
+    standby_producer_state r;
+
+    auto lower = idx.lower_bound(boost::make_tuple(table_id, 0));
+    for (auto itr = lower; itr->t_id == table_id && itr != idx.end(); ++itr){
+         fc::datastream<const char*> ds(itr->value.data(), itr->value.size());
+         fc::raw::unpack(ds, r);
+         result.push_back(r);
+    }
+    return result;
   }
 
   vector<name> active_and_vote_producers() {
@@ -440,6 +481,257 @@ BOOST_FIXTURE_TEST_CASE(test_producer_sorting_with_votes_and_scores, eosio_weigh
             ("score", score)
             ("weighted", weighted_votes) );
    }
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_weighted_producer_with_standby_selection, eosio_weighted_producer_tester) try {
+   // Test that weighted voting affects both active (top 21) and standby producer selection
+   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+   // Step 1: Configure weighted voting system
+   const name guilds_contract = GUILDS_OIG;
+   const uint32_t scaling_factor = 1000; // 1.0x multiplier
+   const uint32_t default_score = 1000; // 1.0x default
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", guilds_contract)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
+      ("scaling_factor", scaling_factor)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
+      ("default_score", default_score)
+   ));
+   produce_blocks(1);
+
+   ilog( "=== Weighted Voting Configuration ===" );
+   fc::variant state5 = get_global_state5();
+   ilog( "guilds_contract: ${guilds}", ("guilds", state5["guilds_contract"].as<name>()) );
+   ilog( "bp_score_scaling_factor: ${scale}", ("scale", state5["bp_score_scaling_factor"].as<uint32_t>()) );
+   ilog( "bp_default_score: ${default}", ("default", state5["bp_default_score"].as<uint32_t>()) );
+
+   // Step 2: Configure standby system
+   const uint32_t standby_slots = 5;
+   const uint32_t standby_ratio = 5000; // 0.5 weight
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setsbslot"_n, mvo()
+      ("num_slots", standby_slots)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setsbratio"_n, mvo()
+      ("ratio", standby_ratio)
+   ));
+   produce_blocks(1);
+
+   ilog( "=== Standby Configuration ===" );
+   fc::variant state4 = get_global_state4();
+   ilog( "num_standby_slots: ${slots}", ("slots", state4["num_standby_slots"].as<uint32_t>()) );
+   ilog( "standby_slot_weight: ${weight}", ("weight", state4["standby_slot_weight"].as<uint32_t>()) );
+
+   // Step 3: Create voters with significant stake
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> voters = { "voter1111111"_n, "voter2222222"_n, "voter3333333"_n, "voter4444444"_n };
+   for (const auto& v: voters) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, core_sym::from_string("100000000.0000"), config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, core_sym::from_string("30000000.0000"), core_sym::from_string("30000000.0000")) );
+   }
+
+   // Step 4: Create 30 producers to test both active and standby selection
+   // We need: 21 active + 5 standby = 26 slots, plus extras to test exclusion
+   // Use EOSIO-compliant names: 12 chars max, a-z and 1-5 only
+   std::vector<account_name> producer_names;
+
+   // Create prода111111aa through prod111111ad (30 producers)
+   // Using pattern: prod111111aa, prod111111ab, ..., prod111111az,
+   //                prod111111ba, prod111111bb, prod111111bc, prod111111bd
+   const std::string root("prod111111");
+   const std::vector<std::string> suffixes = {
+      "aa", "ab", "ac", "ad", "ae", "af", "ag", "ah", "ai", "aj",  // 10
+      "ak", "al", "am", "an", "ao", "ap", "aq", "ar", "as", "at",  // 20
+      "au", "av", "aw", "ax", "ay", "az", "ba", "bb", "bc", "bd"   // 30
+   };
+
+   for (const auto& suffix : suffixes) {
+      producer_names.emplace_back(root + suffix);
+   }
+
+   // Names are already sorted since we created them in alphabetical order
+   setup_producer_accounts(producer_names);
+   for (const auto& p: producer_names) {
+      BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+      produce_blocks(1);
+   }
+
+   ilog( "=== Created ${count} producers ===" , ("count", producer_names.size()));
+   ilog( "First producer: ${first}, Last producer: ${last}",
+         ("first", producer_names.front())("last", producer_names.back()) );
+
+   // Step 5: Assign weighted scores to producers
+   // We have: prod111111aa, prod111111ab, ..., prod111111bd (30 producers in alphabetical order)
+   // Group 1 (indices 0-3): VERY LOW score 0.3x - should be EXCLUDED from all (4 producers: aa-ad)
+   // Group 2 (indices 4-7): LOW score 0.8x - may be in standby or excluded (4 producers: ae-ah)
+   // Group 3 (indices 8-21): MEDIUM score 1.5x - should be in active slots (14 producers: ai-av)
+   // Group 4 (indices 22-29): HIGH score 2.5x - should be in active slots (8 producers: aw-bd)
+
+   ilog( "=== Setting Producer Scores ===" );
+
+   ilog( "Group 1 (indices 0-3, prod111111aa-ad): VERY LOW score 0.3x - should be EXCLUDED" );
+   for (size_t i = 0; i < 4; ++i) {
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+         ("producer", producer_names[i])
+         ("score", 300) // 0.3x - VERY LOW
+      ));
+      ilog( "  ${name}: score=300", ("name", producer_names[i]) );
+   }
+
+   ilog( "Group 2 (indices 4-7, prod111111ae-ah): LOW score 0.8x - may be standby or excluded" );
+   for (size_t i = 4; i < 8; ++i) {
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+         ("producer", producer_names[i])
+         ("score", 800) // 0.8x - LOW
+      ));
+      ilog( "  ${name}: score=800", ("name", producer_names[i]) );
+   }
+
+   ilog( "Group 3 (indices 8-21, prod111111ai-av): MEDIUM score 1.5x - should be in active" );
+   for (size_t i = 8; i < 22; ++i) {
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+         ("producer", producer_names[i])
+         ("score", 1500) // 1.5x - MEDIUM
+      ));
+   }
+
+   ilog( "Group 4 (indices 22-29, prod111111aw-bd): HIGH score 2.5x - should be in active" );
+   for (size_t i = 22; i < 30; ++i) {
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+         ("producer", producer_names[i])
+         ("score", 2500) // 2.5x - HIGH
+      ));
+   }
+   produce_blocks(1);
+
+   // Step 6: All voters vote for ALL producers (equal raw votes)
+   produce_block( fc::hours(24) );
+
+   ilog( "=== Voting for all ${count} producers ===" , ("count", producer_names.size()));
+   for (const auto& v: voters) {
+      BOOST_REQUIRE_EQUAL(success(), vote(v, producer_names));
+   }
+
+   // Wait for schedule to update
+   produce_blocks(250);
+
+   // Step 7: Verify active producer selection (top 21)
+   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
+
+   ilog( "=== Active Producers (Top 21 by weighted votes) ===" );
+   std::set<name> active_producers;
+   for (size_t i = 0; i < producer_keys.size(); ++i) {
+      active_producers.insert(producer_keys[i].producer_name);
+      ilog( "${idx}: ${name}", ("idx", i)("name", producer_keys[i].producer_name) );
+   }
+
+   // Step 8: Verify standby producer selection
+   auto standby_producers = get_standby_table();
+   ilog( "=== Standby Producers (Next ${count} by weighted votes) ===" , ("count", standby_producers.size()));
+
+   std::set<name> standby_producer_names;
+   for (size_t i = 0; i < standby_producers.size(); ++i) {
+      standby_producer_names.insert(standby_producers[i].owner);
+      ilog( "${idx}: ${name} (active=${active})",
+            ("idx", i)
+            ("name", standby_producers[i].owner)
+            ("active", standby_producers[i].is_active) );
+   }
+
+   // Step 9: Verification - Check that weighted voting affected both lists
+
+   // Verify VERY LOW score producers (prod111111aa-ad) are EXCLUDED from BOTH active and standby
+   ilog( "=== Verifying VERY LOW Score Producers (prod111111aa-ad) Exclusion ===" );
+   int excluded_from_both = 0;
+   for (size_t i = 0; i < 4; ++i) {
+      name producer = producer_names[i];
+      bool in_active = active_producers.find(producer) != active_producers.end();
+      bool in_standby = standby_producer_names.find(producer) != standby_producer_names.end();
+
+      if (!in_active && !in_standby) {
+         ilog( "✓ ${name} (score 0.3x) EXCLUDED from both - CORRECT!", ("name", producer) );
+         excluded_from_both++;
+      } else {
+         ilog( "✗ ${name} (score 0.3x) found in ${where} - WRONG!",
+               ("name", producer)
+               ("where", in_active ? "active" : "standby") );
+      }
+   }
+   BOOST_REQUIRE_EQUAL(excluded_from_both, 4); // All 4 very low score producers excluded
+
+   // Verify HIGH score producers (prod111111aw-bd) are in ACTIVE (not standby)
+   ilog( "=== Verifying HIGH Score Producers (prod111111aw-bd) in Active ===" );
+   int high_score_in_active = 0;
+   for (size_t i = 22; i < 30; ++i) {
+      name producer = producer_names[i];
+      bool in_active = active_producers.find(producer) != active_producers.end();
+
+      if (in_active) {
+         high_score_in_active++;
+         ilog( "✓ ${name} (score 2.5x) in ACTIVE - CORRECT!", ("name", producer) );
+      } else {
+         ilog( "✗ ${name} (score 2.5x) NOT in active - checking standby...", ("name", producer) );
+      }
+   }
+
+   // At least most high-score producers should be in active
+   BOOST_REQUIRE(high_score_in_active >= 6); // At least 6 of 8 high-score producers in active
+
+   // Verify standby count matches configuration
+   BOOST_REQUIRE_EQUAL(standby_producers.size(), standby_slots);
+
+   // Verify no overlap between active and standby
+   ilog( "=== Verifying No Overlap Between Active and Standby ===" );
+   int overlap_count = 0;
+   for (const auto& sp : standby_producer_names) {
+      if (active_producers.find(sp) != active_producers.end()) {
+         ilog( "✗ ${name} found in BOTH active and standby!", ("name", sp) );
+         overlap_count++;
+      }
+   }
+   BOOST_REQUIRE_EQUAL(overlap_count, 0); // No producer should be in both lists
+
+   // Step 10: Log detailed weighted votes for analysis
+   ilog( "=== Producer Weighted Vote Details ===" );
+   for (const auto& p : producer_names) {
+      fc::variant producer_info = get_producer_info(p);
+      double total_votes = producer_info["total_votes"].as<double>();
+
+      guild guild_data = get_guild_table(p);
+      uint32_t score = guild_data.score;
+      double weighted_votes = total_votes * score / 1000.0;
+
+      bool in_active = active_producers.find(p) != active_producers.end();
+      bool in_standby = standby_producer_names.find(p) != standby_producer_names.end();
+      std::string status = in_active ? "ACTIVE" : (in_standby ? "STANDBY" : "EXCLUDED");
+
+      ilog( "${name}: votes=${votes}, score=${score}, weighted=${weighted}, status=${status}",
+            ("name", p)
+            ("votes", total_votes)
+            ("score", score)
+            ("weighted", weighted_votes)
+            ("status", status) );
+   }
+
+   ilog( "=== TEST SUMMARY ===" );
+   ilog( "✓ Active producers: ${active} (expected 21)", ("active", producer_keys.size()) );
+   ilog( "✓ Standby producers: ${standby} (expected ${expected})",
+         ("standby", standby_producers.size())
+         ("expected", standby_slots) );
+   ilog( "✓ Very low score producers excluded: ${excluded}/4", ("excluded", excluded_from_both) );
+   ilog( "✓ High score producers in active: ${high}/${total}",
+         ("high", high_score_in_active)
+         ("total", 8) );
+   ilog( "✓ No overlap between active and standby" );
+   ilog( "SUCCESS: Weighted voting correctly affects both active and standby selection!" );
 
 } FC_LOG_AND_RETHROW()
 
