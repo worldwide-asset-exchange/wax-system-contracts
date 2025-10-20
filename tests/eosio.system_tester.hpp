@@ -1084,12 +1084,12 @@ public:
          ("ram_reserve_ratio", 100 + n);
    }
 
-   action_result regproducer( const account_name& acnt, int params_fixture = 1 ) {
+   action_result regproducer( const account_name& acnt, int params_fixture = 1, int location = 0 ) {
       action_result r = push_action( acnt, "regproducer"_n, mvo()
                           ("producer",  acnt )
                           ("producer_key", get_public_key( acnt, "active" ) )
                           ("url", "" )
-                          ("location", 0 )
+                          ("location", location )
       );
       BOOST_REQUIRE_EQUAL( success(), r);
       return r;
