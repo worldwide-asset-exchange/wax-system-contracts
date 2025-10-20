@@ -735,4 +735,636 @@ BOOST_FIXTURE_TEST_CASE(test_weighted_producer_with_standby_selection, eosio_wei
 
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(test_guild_hash_verification_disabled_by_default, eosio_weighted_producer_tester) try {
+   // Test that weighted voting is disabled by default when hash list is empty
+   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+   ilog( "=== Test: Hash Verification Disabled by Default ===" );
+
+   // Step 1: Configure weighted voting system WITHOUT adding any hashes
+   const name guilds_contract = GUILDS_OIG;
+   const uint32_t scaling_factor = 1000;
+   const uint32_t default_score = 1000;
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", guilds_contract)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
+      ("scaling_factor", scaling_factor)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
+      ("default_score", default_score)
+   ));
+   produce_blocks(1);
+
+   // Step 2: Verify that hash list is empty and weighted voting is enabled (but ineffective)
+   fc::variant state5 = get_global_state5();
+   BOOST_REQUIRE_EQUAL(state5["enable_weighted_voting"].as<bool>(), true);
+   BOOST_REQUIRE_EQUAL(state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>().size(), 0);
+   ilog( "✓ Hash list is empty, enable_weighted_voting=true" );
+
+   // Step 3: Create voters and producers
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> voters = { "voter1111111"_n, "voter2222222"_n };
+   for (const auto& v: voters) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, core_sym::from_string("100000000.0000"), config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, core_sym::from_string("30000000.0000"), core_sym::from_string("30000000.0000")) );
+   }
+
+   // Create 3 producers
+   std::vector<account_name> producer_names = { "producera111"_n, "producerb111"_n, "producerc111"_n };
+   setup_producer_accounts(producer_names);
+   for (const auto& p: producer_names) {
+      BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+      produce_blocks(1);
+   }
+
+   // Step 4: Set different scores for producers in guilds contract
+   // Producer A: 2.0x (high score)
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[0])
+      ("score", 2000)
+   ));
+   // Producer B: 1.0x (default score)
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[1])
+      ("score", 1000)
+   ));
+   // Producer C: 0.5x (low score)
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[2])
+      ("score", 500)
+   ));
+   produce_blocks(1);
+
+   // Step 5: Vote and check weighted votes
+   produce_block( fc::hours(24) );
+   for (const auto& v: voters) {
+      BOOST_REQUIRE_EQUAL(success(), vote(v, producer_names));
+   }
+   produce_blocks(10);
+
+   // Step 6: Verify that all producers have EQUAL weighted votes (1.0x multiplier)
+   // Because hash verification fails (empty hash list), get_bp_weight_multiplier() returns 1.0
+   ilog( "=== Verifying Weighted Votes (should all be equal) ===" );
+   fc::variant producer_a_info = get_producer_info(producer_names[0]);
+   fc::variant producer_b_info = get_producer_info(producer_names[1]);
+   fc::variant producer_c_info = get_producer_info(producer_names[2]);
+
+   double votes_a = producer_a_info["total_votes"].as<double>();
+   double votes_b = producer_b_info["total_votes"].as<double>();
+   double votes_c = producer_c_info["total_votes"].as<double>();
+
+   ilog( "Producer A (guild score 2.0x): votes=${votes}", ("votes", votes_a) );
+   ilog( "Producer B (guild score 1.0x): votes=${votes}", ("votes", votes_b) );
+   ilog( "Producer C (guild score 0.5x): votes=${votes}", ("votes", votes_c) );
+
+   // All votes should be equal because hash verification fails → 1.0x multiplier for all
+   BOOST_REQUIRE_EQUAL(votes_a, votes_b);
+   BOOST_REQUIRE_EQUAL(votes_b, votes_c);
+
+   ilog( "✓ SUCCESS: Empty hash list disables weighted voting (all producers have equal votes)" );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_guild_hash_verification_with_correct_hash, eosio_weighted_producer_tester) try {
+   // Test that weighted voting works when correct hash is added
+   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+   ilog( "=== Test: Hash Verification with Correct Hash ===" );
+
+   // Step 1: Configure weighted voting system
+   const name guilds_contract = GUILDS_OIG;
+   const uint32_t scaling_factor = 1000;
+   const uint32_t default_score = 1000;
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", guilds_contract)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
+      ("scaling_factor", scaling_factor)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
+      ("default_score", default_score)
+   ));
+   produce_blocks(1);
+
+   // Step 2: Get the code hash of the deployed guilds contract
+   eosio::checksum256 guilds_hash = control->get_code_hash(guilds_contract);
+   ilog( "Guilds contract hash: ${hash}", ("hash", guilds_hash) );
+
+   // Step 3: Add the correct hash to approved list
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
+      ("hash", guilds_hash)
+   ));
+   produce_blocks(1);
+
+   // Verify hash was added
+   fc::variant state5 = get_global_state5();
+   auto hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
+   BOOST_REQUIRE(hash_list[0] == guilds_hash);
+   ilog( "✓ Correct hash added to approved list" );
+
+   // Step 4: Create voters and producers
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> voters = { "voter1111111"_n, "voter2222222"_n };
+   for (const auto& v: voters) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, core_sym::from_string("100000000.0000"), config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, core_sym::from_string("30000000.0000"), core_sym::from_string("30000000.0000")) );
+   }
+
+   // Create 3 producers
+   std::vector<account_name> producer_names = { "producera111"_n, "producerb111"_n, "producerc111"_n };
+   setup_producer_accounts(producer_names);
+   for (const auto& p: producer_names) {
+      BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+      produce_blocks(1);
+   }
+
+   // Step 5: Set different scores for producers in guilds contract
+   // Producer A: 2.0x (high score)
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[0])
+      ("score", 2000)
+   ));
+   // Producer B: 1.0x (default score)
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[1])
+      ("score", 1000)
+   ));
+   // Producer C: 0.5x (low score)
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[2])
+      ("score", 500)
+   ));
+   produce_blocks(1);
+
+   // Step 6: Vote and check weighted votes
+   produce_block( fc::hours(24) );
+   for (const auto& v: voters) {
+      BOOST_REQUIRE_EQUAL(success(), vote(v, producer_names));
+   }
+   produce_blocks(10);
+
+   // Step 7: Verify that weighted voting is working (votes are different based on scores)
+   ilog( "=== Verifying Weighted Votes (should be different) ===" );
+   fc::variant producer_a_info = get_producer_info(producer_names[0]);
+   fc::variant producer_b_info = get_producer_info(producer_names[1]);
+   fc::variant producer_c_info = get_producer_info(producer_names[2]);
+
+   double votes_a = producer_a_info["total_votes"].as<double>();
+   double votes_b = producer_b_info["total_votes"].as<double>();
+   double votes_c = producer_c_info["total_votes"].as<double>();
+
+   ilog( "Producer A (guild score 2.0x): votes=${votes}", ("votes", votes_a) );
+   ilog( "Producer B (guild score 1.0x): votes=${votes}", ("votes", votes_b) );
+   ilog( "Producer C (guild score 0.5x): votes=${votes}", ("votes", votes_c) );
+
+   // Verify weighted voting relationships: A > B > C
+   BOOST_REQUIRE(votes_a > votes_b);
+   BOOST_REQUIRE(votes_b > votes_c);
+
+   // Verify approximate ratios (allowing for small floating point differences)
+   double ratio_a_b = votes_a / votes_b;
+   double ratio_b_c = votes_b / votes_c;
+   BOOST_REQUIRE(ratio_a_b > 1.9 && ratio_a_b < 2.1); // ~2.0x
+   BOOST_REQUIRE(ratio_b_c > 1.9 && ratio_b_c < 2.1); // ~2.0x
+
+   ilog( "✓ SUCCESS: Correct hash enables weighted voting (votes scaled by guild scores)" );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_guild_hash_verification_with_wrong_hash, eosio_weighted_producer_tester) try {
+   // Test that weighted voting is disabled when wrong hash is in the list
+   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+   ilog( "=== Test: Hash Verification with Wrong Hash ===" );
+
+   // Step 1: Configure weighted voting system
+   const name guilds_contract = GUILDS_OIG;
+   const uint32_t scaling_factor = 1000;
+   const uint32_t default_score = 1000;
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", guilds_contract)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
+      ("scaling_factor", scaling_factor)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
+      ("default_score", default_score)
+   ));
+   produce_blocks(1);
+
+   // Step 2: Add a WRONG hash (not matching deployed contract)
+   eosio::checksum256 wrong_hash;
+   // Create a fake hash by setting all bytes to 0xFF
+   memset(wrong_hash.data(), 0xFF, 32);
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
+      ("hash", wrong_hash)
+   ));
+   produce_blocks(1);
+
+   // Verify wrong hash was added
+   fc::variant state5 = get_global_state5();
+   auto hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
+   ilog( "✓ Wrong hash added to approved list" );
+
+   // Step 3: Create voters and producers
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> voters = { "voter1111111"_n, "voter2222222"_n };
+   for (const auto& v: voters) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, core_sym::from_string("100000000.0000"), config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, core_sym::from_string("30000000.0000"), core_sym::from_string("30000000.0000")) );
+   }
+
+   // Create 3 producers
+   std::vector<account_name> producer_names = { "producera111"_n, "producerb111"_n, "producerc111"_n };
+   setup_producer_accounts(producer_names);
+   for (const auto& p: producer_names) {
+      BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+      produce_blocks(1);
+   }
+
+   // Step 4: Set different scores for producers in guilds contract
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[0])
+      ("score", 2000)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[1])
+      ("score", 1000)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[2])
+      ("score", 500)
+   ));
+   produce_blocks(1);
+
+   // Step 5: Vote and check weighted votes
+   produce_block( fc::hours(24) );
+   for (const auto& v: voters) {
+      BOOST_REQUIRE_EQUAL(success(), vote(v, producer_names));
+   }
+   produce_blocks(10);
+
+   // Step 6: Verify that all producers have EQUAL weighted votes (1.0x multiplier)
+   // Because hash verification fails (wrong hash), get_bp_weight_multiplier() returns 1.0
+   ilog( "=== Verifying Weighted Votes (should all be equal) ===" );
+   fc::variant producer_a_info = get_producer_info(producer_names[0]);
+   fc::variant producer_b_info = get_producer_info(producer_names[1]);
+   fc::variant producer_c_info = get_producer_info(producer_names[2]);
+
+   double votes_a = producer_a_info["total_votes"].as<double>();
+   double votes_b = producer_b_info["total_votes"].as<double>();
+   double votes_c = producer_c_info["total_votes"].as<double>();
+
+   ilog( "Producer A (guild score 2.0x): votes=${votes}", ("votes", votes_a) );
+   ilog( "Producer B (guild score 1.0x): votes=${votes}", ("votes", votes_b) );
+   ilog( "Producer C (guild score 0.5x): votes=${votes}", ("votes", votes_c) );
+
+   // All votes should be equal because hash verification fails → 1.0x multiplier for all
+   BOOST_REQUIRE_EQUAL(votes_a, votes_b);
+   BOOST_REQUIRE_EQUAL(votes_b, votes_c);
+
+   ilog( "✓ SUCCESS: Wrong hash disables weighted voting (all producers have equal votes)" );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_guild_hash_kill_switch, eosio_weighted_producer_tester) try {
+   // Test that setenablewv kill switch disables weighted voting
+   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+   ilog( "=== Test: Kill Switch Disables Weighted Voting ===" );
+
+   // Step 1: Configure weighted voting system with correct hash
+   const name guilds_contract = GUILDS_OIG;
+   const uint32_t scaling_factor = 1000;
+   const uint32_t default_score = 1000;
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", guilds_contract)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
+      ("scaling_factor", scaling_factor)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
+      ("default_score", default_score)
+   ));
+
+   // Add correct hash
+   eosio::checksum256 guilds_hash = control->get_code_hash(guilds_contract);
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
+      ("hash", guilds_hash)
+   ));
+   produce_blocks(1);
+
+   // Step 2: Disable weighted voting with kill switch
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setenablewv"_n, mvo()
+      ("enable", false)
+   ));
+   produce_blocks(1);
+
+   // Verify kill switch is off
+   fc::variant state5 = get_global_state5();
+   BOOST_REQUIRE_EQUAL(state5["enable_weighted_voting"].as<bool>(), false);
+   ilog( "✓ Kill switch disabled (enable_weighted_voting=false)" );
+
+   // Step 3: Create voters and producers
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> voters = { "voter1111111"_n, "voter2222222"_n };
+   for (const auto& v: voters) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, core_sym::from_string("100000000.0000"), config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, core_sym::from_string("30000000.0000"), core_sym::from_string("30000000.0000")) );
+   }
+
+   std::vector<account_name> producer_names = { "producera111"_n, "producerb111"_n, "producerc111"_n };
+   setup_producer_accounts(producer_names);
+   for (const auto& p: producer_names) {
+      BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+      produce_blocks(1);
+   }
+
+   // Step 4: Set different scores
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[0])
+      ("score", 2000)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[1])
+      ("score", 1000)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[2])
+      ("score", 500)
+   ));
+   produce_blocks(1);
+
+   // Step 5: Vote
+   produce_block( fc::hours(24) );
+   for (const auto& v: voters) {
+      BOOST_REQUIRE_EQUAL(success(), vote(v, producer_names));
+   }
+   produce_blocks(10);
+
+   // Step 6: Verify all votes are equal (kill switch disabled weighted voting)
+   fc::variant producer_a_info = get_producer_info(producer_names[0]);
+   fc::variant producer_b_info = get_producer_info(producer_names[1]);
+   fc::variant producer_c_info = get_producer_info(producer_names[2]);
+
+   double votes_a = producer_a_info["total_votes"].as<double>();
+   double votes_b = producer_b_info["total_votes"].as<double>();
+   double votes_c = producer_c_info["total_votes"].as<double>();
+
+   BOOST_REQUIRE_EQUAL(votes_a, votes_b);
+   BOOST_REQUIRE_EQUAL(votes_b, votes_c);
+   ilog( "✓ Kill switch disabled weighted voting (all votes equal)" );
+
+   // Step 7: Re-enable weighted voting
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setenablewv"_n, mvo()
+      ("enable", true)
+   ));
+   produce_blocks(1);
+
+   state5 = get_global_state5();
+   BOOST_REQUIRE_EQUAL(state5["enable_weighted_voting"].as<bool>(), true);
+   ilog( "✓ Kill switch re-enabled (enable_weighted_voting=true)" );
+
+   // Step 8: Vote again and verify weighted voting is working
+   for (const auto& v: voters) {
+      BOOST_REQUIRE_EQUAL(success(), vote(v, producer_names));
+   }
+   produce_blocks(10);
+
+   producer_a_info = get_producer_info(producer_names[0]);
+   producer_b_info = get_producer_info(producer_names[1]);
+   producer_c_info = get_producer_info(producer_names[2]);
+
+   votes_a = producer_a_info["total_votes"].as<double>();
+   votes_b = producer_b_info["total_votes"].as<double>();
+   votes_c = producer_c_info["total_votes"].as<double>();
+
+   // Verify weighted voting is working again
+   BOOST_REQUIRE(votes_a > votes_b);
+   BOOST_REQUIRE(votes_b > votes_c);
+   ilog( "✓ SUCCESS: Kill switch successfully controls weighted voting" );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_guild_hash_multiple_hashes_upgrade, eosio_weighted_producer_tester) try {
+   // Test upgrade scenario with multiple approved hashes
+   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+   ilog( "=== Test: Multiple Hashes for Seamless Upgrade ===" );
+
+   // Step 1: Configure weighted voting system
+   const name guilds_contract = GUILDS_OIG;
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", guilds_contract)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
+      ("scaling_factor", 1000)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
+      ("default_score", 1000)
+   ));
+   produce_blocks(1);
+
+   // Step 2: Get current hash and add it
+   eosio::checksum256 current_hash = control->get_code_hash(guilds_contract);
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
+      ("hash", current_hash)
+   ));
+   produce_blocks(1);
+
+   fc::variant state5 = get_global_state5();
+   auto hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
+   ilog( "✓ Current hash added (list size: 1)" );
+
+   // Step 3: Simulate upgrade by adding a second hash (future version)
+   eosio::checksum256 future_hash;
+   memset(future_hash.data(), 0xAB, 32); // Fake future hash
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
+      ("hash", future_hash)
+   ));
+   produce_blocks(1);
+
+   state5 = get_global_state5();
+   hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   BOOST_REQUIRE_EQUAL(hash_list.size(), 2);
+   ilog( "✓ Future hash added (list size: 2) - both hashes approved simultaneously" );
+
+   // Step 4: Verify current contract still works with multiple hashes
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const std::vector<account_name> voters = { "voter1111111"_n };
+   for (const auto& v: voters) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, core_sym::from_string("100000000.0000"), config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, core_sym::from_string("30000000.0000"), core_sym::from_string("30000000.0000")) );
+   }
+
+   std::vector<account_name> producer_names = { "producera111"_n, "producerb111"_n };
+   setup_producer_accounts(producer_names);
+   for (const auto& p: producer_names) {
+      BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+      produce_blocks(1);
+   }
+
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[0])
+      ("score", 2000)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      ("producer", producer_names[1])
+      ("score", 1000)
+   ));
+   produce_blocks(1);
+
+   produce_block( fc::hours(24) );
+   BOOST_REQUIRE_EQUAL(success(), vote(voters[0], producer_names));
+   produce_blocks(10);
+
+   // Verify weighted voting works (current hash matches one in the list)
+   fc::variant producer_a_info = get_producer_info(producer_names[0]);
+   fc::variant producer_b_info = get_producer_info(producer_names[1]);
+   double votes_a = producer_a_info["total_votes"].as<double>();
+   double votes_b = producer_b_info["total_votes"].as<double>();
+
+   BOOST_REQUIRE(votes_a > votes_b);
+   ilog( "✓ Weighted voting works with multiple hashes (current hash matched)" );
+
+   // Step 5: Remove old hash (simulating post-upgrade cleanup)
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "rmguildhash"_n, mvo()
+      ("hash", future_hash)
+   ));
+   produce_blocks(1);
+
+   state5 = get_global_state5();
+   hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
+   BOOST_REQUIRE(hash_list[0] == current_hash);
+   ilog( "✓ Removed future hash (list size: 1)" );
+
+   // Step 6: Verify weighted voting still works with single hash
+   BOOST_REQUIRE_EQUAL(success(), vote(voters[0], producer_names));
+   produce_blocks(10);
+
+   producer_a_info = get_producer_info(producer_names[0]);
+   producer_b_info = get_producer_info(producer_names[1]);
+   votes_a = producer_a_info["total_votes"].as<double>();
+   votes_b = producer_b_info["total_votes"].as<double>();
+
+   BOOST_REQUIRE(votes_a > votes_b);
+   ilog( "✓ SUCCESS: Multiple hash upgrade workflow completed successfully" );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_guild_hash_add_remove_operations, eosio_weighted_producer_tester) try {
+   // Test addguildhash and rmguildhash operations
+   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+   ilog( "=== Test: Add/Remove Hash Operations ===" );
+
+   // Step 1: Try to add duplicate hash (should fail)
+   eosio::checksum256 test_hash;
+   memset(test_hash.data(), 0x01, 32);
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
+      ("hash", test_hash)
+   ));
+   produce_blocks(1);
+
+   fc::variant state5 = get_global_state5();
+   auto hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
+   ilog( "✓ First hash added successfully" );
+
+   // Try to add same hash again (should fail)
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("hash already exists in approved list"),
+      push_action(config::system_account_name, "addguildhash"_n, mvo()
+         ("hash", test_hash)
+      )
+   );
+   ilog( "✓ Duplicate hash rejected as expected" );
+
+   // Step 2: Add second hash
+   eosio::checksum256 test_hash2;
+   memset(test_hash2.data(), 0x02, 32);
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
+      ("hash", test_hash2)
+   ));
+   produce_blocks(1);
+
+   state5 = get_global_state5();
+   hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   BOOST_REQUIRE_EQUAL(hash_list.size(), 2);
+   ilog( "✓ Second hash added successfully (total: 2)" );
+
+   // Step 3: Remove first hash
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "rmguildhash"_n, mvo()
+      ("hash", test_hash)
+   ));
+   produce_blocks(1);
+
+   state5 = get_global_state5();
+   hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
+   BOOST_REQUIRE(hash_list[0] == test_hash2);
+   ilog( "✓ First hash removed successfully (total: 1)" );
+
+   // Step 4: Try to remove non-existent hash (should fail)
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("hash not found in approved list"),
+      push_action(config::system_account_name, "rmguildhash"_n, mvo()
+         ("hash", test_hash)
+      )
+   );
+   ilog( "✓ Non-existent hash removal rejected as expected" );
+
+   // Step 5: Remove last hash
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "rmguildhash"_n, mvo()
+      ("hash", test_hash2)
+   ));
+   produce_blocks(1);
+
+   state5 = get_global_state5();
+   hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   BOOST_REQUIRE_EQUAL(hash_list.size(), 0);
+   ilog( "✓ Last hash removed successfully (total: 0)" );
+
+   // Step 6: Verify that only eosio can call these actions
+   create_account_with_resources("attacker1111"_n, config::system_account_name, core_sym::from_string("1.0000"), false);
+
+   BOOST_REQUIRE_EQUAL(error("missing authority of eosio"),
+      push_action("attacker1111"_n, "addguildhash"_n, mvo()
+         ("hash", test_hash)
+      )
+   );
+   ilog( "✓ Non-eosio account cannot add hash" );
+
+   BOOST_REQUIRE_EQUAL(error("missing authority of eosio"),
+      push_action("attacker1111"_n, "setenablewv"_n, mvo()
+         ("enable", false)
+      )
+   );
+   ilog( "✓ Non-eosio account cannot toggle kill switch" );
+
+   ilog( "✓ SUCCESS: All add/remove operations work correctly" );
+
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()
