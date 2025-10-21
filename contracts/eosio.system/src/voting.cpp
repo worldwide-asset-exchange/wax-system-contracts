@@ -553,7 +553,7 @@ namespace eosiosystem {
       }
 
       // Get deployed contract hash
-      eosio::checksum256 deployed_hash = eosio::internal_use_do_not_use::get_code_hash( _gstate5.guilds_contract );
+      eosio::checksum256 deployed_hash = eosio::get_code_hash( _gstate5.guilds_contract );
 
       // Empty hash means no code deployed
       if( deployed_hash == eosio::checksum256() ) {

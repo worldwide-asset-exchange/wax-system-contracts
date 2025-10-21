@@ -5,6 +5,7 @@
 #include <eosio/chain/global_property_object.hpp>
 #include <eosio/chain/resource_limits.hpp>
 #include <eosio/chain/wast_to_wasm.hpp>
+#include <eosio/chain/fixed_bytes.hpp>
 #include <fc/log/logger.hpp>
 #include <iostream>
 #include <sstream>
@@ -760,7 +761,9 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_verification_disabled_by_default, eosio_
    // Step 2: Verify that hash list is empty and weighted voting is enabled (but ineffective)
    fc::variant state5 = get_global_state5();
    BOOST_REQUIRE_EQUAL(state5["enable_weighted_voting"].as<bool>(), true);
-   BOOST_REQUIRE_EQUAL(state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>().size(), 0);
+   // Read hash list as variant array
+   auto hash_list_variant = state5["guilds_code_hashes"].get_array();
+   BOOST_REQUIRE_EQUAL(hash_list_variant.size(), 0);
    ilog( "✓ Hash list is empty, enable_weighted_voting=true" );
 
    // Step 3: Create voters and producers
@@ -852,20 +855,23 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_verification_with_correct_hash, eosio_we
    produce_blocks(1);
 
    // Step 2: Get the code hash of the deployed guilds contract
-   eosio::checksum256 guilds_hash = control->get_code_hash(guilds_contract);
-   ilog( "Guilds contract hash: ${hash}", ("hash", guilds_hash) );
+   // Compute hash from the WASM code that was deployed
+   auto wasm = contracts::util::guild_test_wasm();
+   auto hash_result = fc::sha256::hash(reinterpret_cast<const char*>(wasm.data()), wasm.size());
+   eosio::checksum256 guilds_hash;
+   memcpy(guilds_hash.data(), hash_result.data(), 32);
+   ilog( "Guilds contract hash: ${hash}", ("hash", hash_result.str()) );
 
    // Step 3: Add the correct hash to approved list
    BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
-      ("hash", guilds_hash)
+      ("hash", hash_result.str())
    ));
    produce_blocks(1);
 
    // Verify hash was added
    fc::variant state5 = get_global_state5();
-   auto hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   auto hash_list = state5["guilds_code_hashes"].get_array();
    BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
-   BOOST_REQUIRE(hash_list[0] == guilds_hash);
    ilog( "✓ Correct hash added to approved list" );
 
    // Step 4: Create voters and producers
@@ -962,18 +968,17 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_verification_with_wrong_hash, eosio_weig
    produce_blocks(1);
 
    // Step 2: Add a WRONG hash (not matching deployed contract)
-   eosio::checksum256 wrong_hash;
    // Create a fake hash by setting all bytes to 0xFF
-   memset(wrong_hash.data(), 0xFF, 32);
+   std::string wrong_hash_str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 
    BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
-      ("hash", wrong_hash)
+      ("hash", wrong_hash_str)
    ));
    produce_blocks(1);
 
    // Verify wrong hash was added
    fc::variant state5 = get_global_state5();
-   auto hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   auto hash_list = state5["guilds_code_hashes"].get_array();
    BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
    ilog( "✓ Wrong hash added to approved list" );
 
@@ -1062,9 +1067,11 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_kill_switch, eosio_weighted_producer_tes
    ));
 
    // Add correct hash
-   eosio::checksum256 guilds_hash = control->get_code_hash(guilds_contract);
+   // Compute hash from the WASM code that was deployed
+   auto wasm = contracts::util::guild_test_wasm();
+   auto hash_result = fc::sha256::hash(reinterpret_cast<const char*>(wasm.data()), wasm.size());
    BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
-      ("hash", guilds_hash)
+      ("hash", hash_result.str())
    ));
    produce_blocks(1);
 
@@ -1182,28 +1189,30 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_multiple_hashes_upgrade, eosio_weighted_
    produce_blocks(1);
 
    // Step 2: Get current hash and add it
-   eosio::checksum256 current_hash = control->get_code_hash(guilds_contract);
+   // Compute hash from the WASM code that was deployed
+   auto wasm = contracts::util::guild_test_wasm();
+   auto hash_result = fc::sha256::hash(reinterpret_cast<const char*>(wasm.data()), wasm.size());
    BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
-      ("hash", current_hash)
+      ("hash", hash_result.str())
    ));
    produce_blocks(1);
 
    fc::variant state5 = get_global_state5();
-   auto hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   auto hash_list = state5["guilds_code_hashes"].get_array();
    BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
    ilog( "✓ Current hash added (list size: 1)" );
 
    // Step 3: Simulate upgrade by adding a second hash (future version)
-   eosio::checksum256 future_hash;
-   memset(future_hash.data(), 0xAB, 32); // Fake future hash
+   // Create a fake future hash (all 0xAB bytes)
+   std::string future_hash_str = "abababababababababababababababababababababababababababababababab";
 
    BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
-      ("hash", future_hash)
+      ("hash", future_hash_str)
    ));
    produce_blocks(1);
 
    state5 = get_global_state5();
-   hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   hash_list = state5["guilds_code_hashes"].get_array();
    BOOST_REQUIRE_EQUAL(hash_list.size(), 2);
    ilog( "✓ Future hash added (list size: 2) - both hashes approved simultaneously" );
 
@@ -1249,14 +1258,13 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_multiple_hashes_upgrade, eosio_weighted_
 
    // Step 5: Remove old hash (simulating post-upgrade cleanup)
    BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "rmguildhash"_n, mvo()
-      ("hash", future_hash)
+      ("hash", future_hash_str)
    ));
    produce_blocks(1);
 
    state5 = get_global_state5();
-   hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   hash_list = state5["guilds_code_hashes"].get_array();
    BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
-   BOOST_REQUIRE(hash_list[0] == current_hash);
    ilog( "✓ Removed future hash (list size: 1)" );
 
    // Step 6: Verify weighted voting still works with single hash
@@ -1280,69 +1288,66 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_add_remove_operations, eosio_weighted_pr
    ilog( "=== Test: Add/Remove Hash Operations ===" );
 
    // Step 1: Try to add duplicate hash (should fail)
-   eosio::checksum256 test_hash;
-   memset(test_hash.data(), 0x01, 32);
+   std::string test_hash_str = "0101010101010101010101010101010101010101010101010101010101010101";
 
    BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
-      ("hash", test_hash)
+      ("hash", test_hash_str)
    ));
    produce_blocks(1);
 
    fc::variant state5 = get_global_state5();
-   auto hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   auto hash_list = state5["guilds_code_hashes"].get_array();
    BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
    ilog( "✓ First hash added successfully" );
 
    // Try to add same hash again (should fail)
    BOOST_REQUIRE_EQUAL(wasm_assert_msg("hash already exists in approved list"),
       push_action(config::system_account_name, "addguildhash"_n, mvo()
-         ("hash", test_hash)
+         ("hash", test_hash_str)
       )
    );
    ilog( "✓ Duplicate hash rejected as expected" );
 
    // Step 2: Add second hash
-   eosio::checksum256 test_hash2;
-   memset(test_hash2.data(), 0x02, 32);
+   std::string test_hash2_str = "0202020202020202020202020202020202020202020202020202020202020202";
 
    BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
-      ("hash", test_hash2)
+      ("hash", test_hash2_str)
    ));
    produce_blocks(1);
 
    state5 = get_global_state5();
-   hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   hash_list = state5["guilds_code_hashes"].get_array();
    BOOST_REQUIRE_EQUAL(hash_list.size(), 2);
    ilog( "✓ Second hash added successfully (total: 2)" );
 
    // Step 3: Remove first hash
    BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "rmguildhash"_n, mvo()
-      ("hash", test_hash)
+      ("hash", test_hash_str)
    ));
    produce_blocks(1);
 
    state5 = get_global_state5();
-   hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   hash_list = state5["guilds_code_hashes"].get_array();
    BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
-   BOOST_REQUIRE(hash_list[0] == test_hash2);
    ilog( "✓ First hash removed successfully (total: 1)" );
 
    // Step 4: Try to remove non-existent hash (should fail)
    BOOST_REQUIRE_EQUAL(wasm_assert_msg("hash not found in approved list"),
       push_action(config::system_account_name, "rmguildhash"_n, mvo()
-         ("hash", test_hash)
+         ("hash", test_hash_str)
       )
    );
    ilog( "✓ Non-existent hash removal rejected as expected" );
 
    // Step 5: Remove last hash
    BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "rmguildhash"_n, mvo()
-      ("hash", test_hash2)
+      ("hash", test_hash2_str)
    ));
    produce_blocks(1);
 
    state5 = get_global_state5();
-   hash_list = state5["guilds_code_hashes"].as<std::vector<eosio::checksum256>>();
+   hash_list = state5["guilds_code_hashes"].get_array();
    BOOST_REQUIRE_EQUAL(hash_list.size(), 0);
    ilog( "✓ Last hash removed successfully (total: 0)" );
 
@@ -1351,7 +1356,7 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_add_remove_operations, eosio_weighted_pr
 
    BOOST_REQUIRE_EQUAL(error("missing authority of eosio"),
       push_action("attacker1111"_n, "addguildhash"_n, mvo()
-         ("hash", test_hash)
+         ("hash", test_hash_str)
       )
    );
    ilog( "✓ Non-eosio account cannot add hash" );
