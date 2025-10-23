@@ -88,8 +88,7 @@ namespace eosiosystem {
    static constexpr int64_t  default_inflation_pay_factor  = 50000;   // producers pay share = 10000 / 50000 = 20% of the inflation
    static constexpr int64_t  default_votepay_factor        = 40000;   // per-block pay share = 10000 / 40000 = 25% of the producer pay
 
-   static const     uint64_t STANDBY_PAY_RATIO_DENOMINATOR = 10000;   // base for standby pay ratio
-
+   static const     uint64_t PAY_SPLIT_SCALE = 10000;    // produce base weight for payout scaling
    // delphi price oracle
    static constexpr uint64_t RATE_DECIMAL = 10000;
 
@@ -722,8 +721,10 @@ namespace eosiosystem {
       time_point        last_standby_state_update;
       uint64_t          standby_bucket = 0;
       uint64_t          total_standby_share = 0;
-      uint64_t          standby_pay_ratio_numerator = 0;
+      uint64_t          standby_slot_weight = 0;
       uint32_t          num_standby_slots = 0;
+
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_slot_weight)(num_standby_slots) )
       // dynamic block producer
       uint32_t          usd_per_bp = 0;
       uint32_t          min_bps = 0;
@@ -1555,6 +1556,7 @@ namespace eosiosystem {
        using set_standby_slots_action = eosio::action_wrapper<"setsbslot"_n, &system_contract::setsbslot>;
        using add_standby_block_action = eosio::action_wrapper<"disallowsb"_n, &system_contract::disallowsb>;
        using rm_standby_block_action = eosio::action_wrapper<"allowsb"_n, &system_contract::allowsb>;
+
        using set_usd_bp_action = eosio::action_wrapper<"setusdbp"_n, &system_contract::setusdbp>;
        using set_bps_params_action = eosio::action_wrapper<"setbpsparams"_n, &system_contract::setbpsparams>;
        using enable_dynamic_bp_action = eosio::action_wrapper<"enabledynbp"_n, &system_contract::enabledynbp>;

@@ -11,6 +11,9 @@
 
 #include "eosio.system_tester.hpp"
 
+inline const auto alice = "alice1111111"_n;
+inline const auto bob = "bob111111111"_n;
+
 inline const auto DELPHI_ORACLE = "delphioracle"_n;
 
 // bool within_error(int64_t a, int64_t b, int64_t err) { return std::abs(a - b) <= err; };
@@ -241,6 +244,9 @@ struct eosio_standby_tester : eosio_system_tester {
 
     auto producer_keys = control->head_block_state()->active_schedule.producers;
     BOOST_REQUIRE_EQUAL( name("defproducera"), producer_keys[0].producer_name );
+    BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
+    BOOST_REQUIRE_EQUAL( name("defproducera"), producer_keys[0].producer_name );
+
     return producer_names;
   }
 
@@ -251,7 +257,7 @@ BOOST_AUTO_TEST_SUITE(eosio_standby_tests)
 
 BOOST_FIXTURE_TEST_CASE(standby_config_tests, eosio_standby_tester ) try {
   const auto& gs4 = get_global_state4();
-  BOOST_TEST_REQUIRE( 0 == gs4["standby_pay_ratio_numerator"].as_uint64() );
+  BOOST_TEST_REQUIRE( 0 == gs4["standby_slot_weight"].as_uint64() );
   BOOST_TEST_REQUIRE( 0 == gs4["num_standby_slots"].as_uint64() );
   BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_uint64() );
 
@@ -273,7 +279,7 @@ BOOST_FIXTURE_TEST_CASE(standby_config_tests, eosio_standby_tester ) try {
   );
 
   const auto& gs42 = get_global_state4();
-  BOOST_TEST_REQUIRE( 5000 == gs42["standby_pay_ratio_numerator"].as_uint64() );
+  BOOST_TEST_REQUIRE( 5000 == gs42["standby_slot_weight"].as_uint64() );
 
 
   BOOST_REQUIRE_EQUAL( 
@@ -320,7 +326,7 @@ BOOST_FIXTURE_TEST_CASE(standby_list, eosio_standby_tester ) try {
   wdump((producer_keys));
 
   const auto& gs4 = get_global_state4();
-  BOOST_TEST_REQUIRE( 5000 == gs4["standby_pay_ratio_numerator"].as_uint64() );
+  BOOST_TEST_REQUIRE( 5000 == gs4["standby_slot_weight"].as_uint64() );
   BOOST_TEST_REQUIRE( 5 == gs4["num_standby_slots"].as_uint64() );
   BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_uint64() );
 
@@ -357,7 +363,7 @@ BOOST_FIXTURE_TEST_CASE(standby_claims, eosio_standby_tester ) try {
   wdump((producer_keys));
 
   const auto& gs4 = get_global_state4();
-  BOOST_TEST_REQUIRE( 5000 == gs4["standby_pay_ratio_numerator"].as_uint64() );
+  BOOST_TEST_REQUIRE( 5000 == gs4["standby_slot_weight"].as_uint64() );
   BOOST_TEST_REQUIRE( 5 == gs4["num_standby_slots"].as_uint64() );
   BOOST_TEST_REQUIRE( 0 == gs4["total_standby_share"].as_uint64() );
 

@@ -1,0 +1,32 @@
+name: Ubuntu 22.04
+on:
+  push:
+    branches:
+      - master
+      - develop
+      - "release/*"
+  pull_request:
+    types: [assigned, opened, synchronize, reopened, labeled]
+jobs:
+  ubuntu-2204-test:
+    name: Tests
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45        # stop hard-hangs
+    concurrency:
+      group: ubuntu-2204-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Runner snapshot
+        run: |
+          echo "Disk:" && df -h
+          echo "Mem :" && free -h
+      - name: Build & tests
+        env:
+          PARALLEL: 2
+          MAKEFLAGS: -j2
+          DOCKER_BUILDKIT: 1
+        run: |
+          set -euxo pipefail
+          make dev-docker-all

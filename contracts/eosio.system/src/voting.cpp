@@ -185,6 +185,9 @@ namespace eosiosystem {
             update_standby_producers( standby_producers );
          }
       }
+      if (standby_producers.size() > 0) {
+         update_standby_producers( standby_producers );
+      }
    }
 
    double stake2vote( int64_t staked ) {
