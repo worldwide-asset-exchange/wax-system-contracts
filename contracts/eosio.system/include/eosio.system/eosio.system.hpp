@@ -724,7 +724,7 @@ namespace eosiosystem {
       uint64_t          standby_slot_weight = 0;
       uint32_t          num_standby_slots = 0;
 
-      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_slot_weight)(num_standby_slots) )
+      // EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_slot_weight)(num_standby_slots) )
       // dynamic block producer
       uint32_t          usd_per_bp = 0;
       uint32_t          min_bps = 0;
@@ -735,8 +735,8 @@ namespace eosiosystem {
       name              delphi_pair;
       uint32_t          price_average_days; // 30 days
       uint64_t          last_average_price =  0; 
-      time_point          last_price_update;
-      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_pay_ratio_numerator)(num_standby_slots)(usd_per_bp)(min_bps)(max_bps)(standby_offset)(enable_dynamic_bp)(delphi_pair)(price_average_days)(last_average_price)(last_price_update) )
+      time_point        last_price_update;
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_slot_weight)(num_standby_slots)(usd_per_bp)(min_bps)(max_bps)(standby_offset)(enable_dynamic_bp)(delphi_pair)(price_average_days)(last_average_price)(last_price_update) )
    };
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 

@@ -90,15 +90,15 @@ namespace eosiosystem {
          auto to_savings       = distribute_tokens - (to_voters + to_per_block_pay);
 
          auto total_block_pay = to_per_block_pay;
-         auto total_weight = (21ULL * PAY_SPLIT_SCALE) + (_gstate4.standby_slot_weight * _gstate4.num_standby_slots);
-         auto to_producers_pay = (total_block_pay * 21ULL * PAY_SPLIT_SCALE) / total_weight;
+         auto total_weight = (producer_size * PAY_SPLIT_SCALE) + (_gstate4.standby_slot_weight * _gstate4.num_standby_slots);
+         auto to_producers_pay = (total_block_pay * producer_size * PAY_SPLIT_SCALE) / total_weight;
          auto to_standby_pay   = total_block_pay - to_producers_pay;
          auto producer_size    =  _gstate.last_producer_schedule_size;
          if (producer_size == 0) {
             producer_size = 21;
          }
-         auto to_producers_pay = to_per_block_pay * producer_size * STANDBY_PAY_RATIO_DENOMINATOR / ( _gstate4.standby_pay_ratio_numerator * _gstate4.num_standby_slots + producer_size * STANDBY_PAY_RATIO_DENOMINATOR);
-         auto to_standby_pay   = to_per_block_pay - to_producers_pay;
+         // auto to_producers_pay = to_per_block_pay * producer_size * STANDBY_PAY_RATIO_DENOMINATOR / ( _gstate4.standby_pay_ratio_numerator * _gstate4.num_standby_slots + producer_size * STANDBY_PAY_RATIO_DENOMINATOR);
+         // auto to_standby_pay   = to_per_block_pay - to_producers_pay;
          {
             if( issue_tokens > 0 ){
                token::issue_action issue_act{ token_account, { {get_self(), active_permission} } };
