@@ -761,8 +761,8 @@ BOOST_FIXTURE_TEST_CASE(enable_dynamic_bp_test, eosio_standby_tester) try {
   );
 
   // Check initial state is false
-  auto global4_state = get_global_state5();
-  BOOST_REQUIRE_EQUAL(global4_state["enable_dynamic_bp"].as<bool>(), false);
+  auto global5_state = get_global_state5();
+  BOOST_REQUIRE_EQUAL(global5_state["enable_dynamic_bp"].as<bool>(), false);
 
   // check fail if not set pair
   BOOST_REQUIRE_EQUAL(
@@ -782,8 +782,8 @@ BOOST_FIXTURE_TEST_CASE(enable_dynamic_bp_test, eosio_standby_tester) try {
   );
 
   // Verify enabled
-  global4_state = get_global_state5();
-  BOOST_REQUIRE_EQUAL(global4_state["enable_dynamic_bp"].as<bool>(), true);
+  global5_state = get_global_state5();
+  BOOST_REQUIRE_EQUAL(global5_state["enable_dynamic_bp"].as<bool>(), true);
 
   // Disable dynamic BP
   BOOST_REQUIRE_EQUAL(
@@ -791,8 +791,8 @@ BOOST_FIXTURE_TEST_CASE(enable_dynamic_bp_test, eosio_standby_tester) try {
   );
 
   // Verify disabled
-  global4_state = get_global_state5();
-  BOOST_REQUIRE_EQUAL(global4_state["enable_dynamic_bp"].as<bool>(), false);
+  global5_state = get_global_state5();
+  BOOST_REQUIRE_EQUAL(global5_state["enable_dynamic_bp"].as<bool>(), false);
 
 }
 FC_LOG_AND_RETHROW()
@@ -839,17 +839,17 @@ BOOST_FIXTURE_TEST_CASE(dynamic_bp_number_test, eosio_standby_tester) try {
 
   produce_blocks(5);
 
-  auto global4_state = get_global_state5();
-  wdump((global4_state)); 
-  BOOST_REQUIRE_EQUAL(global4_state["min_bps"].as<uint32_t>(), MIN_BPS);
-  BOOST_REQUIRE_EQUAL(global4_state["max_bps"].as<uint32_t>(), MAX_BPS);
-  BOOST_REQUIRE_EQUAL(global4_state["standby_offset"].as<uint32_t>(), STANDBY_OFFSET);
-  BOOST_REQUIRE_EQUAL(global4_state["enable_dynamic_bp"].as<bool>(), true);
-  BOOST_REQUIRE_EQUAL(global4_state["delphi_pair"].as<name>(), PAIR_NAME);
-  BOOST_REQUIRE_EQUAL(global4_state["price_average_days"].as<uint32_t>(), PRICE_AVERAGE_DAYS);
+  auto global5_state = get_global_state5();
+  wdump((global5_state)); 
+  BOOST_REQUIRE_EQUAL(global5_state["min_bps"].as<uint32_t>(), MIN_BPS);
+  BOOST_REQUIRE_EQUAL(global5_state["max_bps"].as<uint32_t>(), MAX_BPS);
+  BOOST_REQUIRE_EQUAL(global5_state["standby_offset"].as<uint32_t>(), STANDBY_OFFSET);
+  BOOST_REQUIRE_EQUAL(global5_state["enable_dynamic_bp"].as<bool>(), true);
+  BOOST_REQUIRE_EQUAL(global5_state["delphi_pair"].as<name>(), PAIR_NAME);
+  BOOST_REQUIRE_EQUAL(global5_state["price_average_days"].as<uint32_t>(), PRICE_AVERAGE_DAYS);
 
   // check price average
-  BOOST_REQUIRE_EQUAL(global4_state["last_average_price"].as<uint64_t>(), 103);  
+  BOOST_REQUIRE_EQUAL(global5_state["last_average_price"].as<uint64_t>(), 103);  
 
   auto producer_names = active_and_vote_producers_and_standbys();
   wdump((producer_names));
@@ -932,17 +932,17 @@ BOOST_FIXTURE_TEST_CASE(dynamic_bp_number_with_standby_test, eosio_standby_teste
 
   produce_blocks(5);
 
-  auto global4_state = get_global_state5();
-  wdump((global4_state)); 
-  BOOST_REQUIRE_EQUAL(global4_state["min_bps"].as<uint32_t>(), MIN_BPS);
-  BOOST_REQUIRE_EQUAL(global4_state["max_bps"].as<uint32_t>(), MAX_BPS);
-  BOOST_REQUIRE_EQUAL(global4_state["standby_offset"].as<uint32_t>(), STANDBY_OFFSET);
-  BOOST_REQUIRE_EQUAL(global4_state["enable_dynamic_bp"].as<bool>(), true);
-  BOOST_REQUIRE_EQUAL(global4_state["delphi_pair"].as<name>(), PAIR_NAME);
-  BOOST_REQUIRE_EQUAL(global4_state["price_average_days"].as<uint32_t>(), PRICE_AVERAGE_DAYS);
+  auto global5_state = get_global_state5();
+  wdump((global5_state)); 
+  BOOST_REQUIRE_EQUAL(global5_state["min_bps"].as<uint32_t>(), MIN_BPS);
+  BOOST_REQUIRE_EQUAL(global5_state["max_bps"].as<uint32_t>(), MAX_BPS);
+  BOOST_REQUIRE_EQUAL(global5_state["standby_offset"].as<uint32_t>(), STANDBY_OFFSET);
+  BOOST_REQUIRE_EQUAL(global5_state["enable_dynamic_bp"].as<bool>(), true);
+  BOOST_REQUIRE_EQUAL(global5_state["delphi_pair"].as<name>(), PAIR_NAME);
+  BOOST_REQUIRE_EQUAL(global5_state["price_average_days"].as<uint32_t>(), PRICE_AVERAGE_DAYS);
 
   // check price average
-  BOOST_REQUIRE_EQUAL(global4_state["last_average_price"].as<uint64_t>(), 103);  
+  BOOST_REQUIRE_EQUAL(global5_state["last_average_price"].as<uint64_t>(), 103);  
 
   auto producer_names = active_and_vote_producers_and_standbys();
   wdump((producer_names));
