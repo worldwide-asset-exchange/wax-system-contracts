@@ -105,7 +105,7 @@ namespace eosiosystem {
    }
 
    uint64_t system_contract::get_wax_price(){
-      uint64_t priceRate = _gstate4.last_average_price;
+      uint64_t priceRate = _gstate5.last_average_price;
       return priceRate;
    }
 
@@ -114,22 +114,22 @@ namespace eosiosystem {
 
       uint32_t num_producers = 21;
 
-      if (_gstate4.enable_dynamic_bp){
+      if (_gstate5.enable_dynamic_bp){
          const asset token_supply   = eosio::token::get_supply(token_account, core_symbol().code() );
 
          uint64_t waxPriceRate = get_wax_price();
 
          // calculate wax need for current rate
-         uint32_t usd_per_bp = _gstate4.usd_per_bp; // usd without decimal
+         uint32_t usd_per_bp = _gstate5.usd_per_bp; // usd without decimal
          uint32_t wax_per_bp = static_cast<uint32_t>(usd_per_bp * RATE_DECIMAL * std::pow(10, core_symbol().precision()) / waxPriceRate); // wax with decimal precision
 
-         
+
          auto wax_inflation_30_days = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(useconds_per_30_days)) / double(useconds_per_year) );
 
 
          uint32_t raw_producers = wax_inflation_30_days / wax_per_bp;
-         uint32_t adjusted_producers = raw_producers - _gstate4.standby_offset;
-         num_producers = std::max(_gstate4.min_bps, std::min(adjusted_producers, _gstate4.max_bps));
+         uint32_t adjusted_producers = raw_producers - _gstate5.standby_offset;
+         num_producers = std::max(_gstate5.min_bps, std::min(adjusted_producers, _gstate5.max_bps));
       }
 
       auto idx = _producers.get_index<"prototalvote"_n>();

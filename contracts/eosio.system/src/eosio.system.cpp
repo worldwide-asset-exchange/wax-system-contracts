@@ -23,7 +23,7 @@ namespace eosiosystem {
     _global2(get_self(), get_self().value),
     _global3(get_self(), get_self().value),
     _global4(get_self(), get_self().value),
-    _global4a(get_self(), get_self().value),
+    _global5(get_self(), get_self().value),
     _rammarket(get_self(), get_self().value),
     _proposers(get_self(), get_self().value),
     _proposals(get_self(), get_self().value),
@@ -35,7 +35,8 @@ namespace eosiosystem {
       _gstate  = _global.exists() ? _global.get() : get_default_parameters();
       _gstate2 = _global2.exists() ? _global2.get() : eosio_global_state2{};
       _gstate3 = _global3.exists() ? _global3.get() : eosio_global_state3{};
-      _gstate4 = _global4a.exists() ? _global4a.get() : eosio_global_state4a{};
+      _gstate4 = _global4.exists() ? _global4.get() : eosio_global_state4{};
+      _gstate5 = _global5.exists() ? _global5.get() : eosio_global_state5{};
    }
 
    eosio_global_state system_contract::get_default_parameters() {
@@ -54,7 +55,8 @@ namespace eosiosystem {
       _global.set( _gstate, get_self() );
       _global2.set( _gstate2, get_self() );
       _global3.set( _gstate3, get_self() );
-      _global4a.set( _gstate4, get_self() );
+      _global4.set( _gstate4, get_self() );
+      _global5.set( _gstate5, get_self() );
    }
 
    void system_contract::setram( uint64_t max_ram_size ) {
@@ -488,35 +490,6 @@ namespace eosiosystem {
          m.quote.balance.amount = system_token_supply.amount / 1000;
          m.quote.balance.symbol = core;
       });
-   }
-
-   void system_contract::migrate4to4a() {
-      require_auth( get_self() );
-
-      // Check if old global4 table exists
-      check( _global4.exists(), "old global4 table does not exist" );
-
-      // Check if global4a table already has data
-      check( !_global4a.exists(), "global4a table already exists, migration already completed" );
-
-      // Read data from old global4 table
-      auto old_global4 = _global4.get();
-
-      // Create new global4a state with data from old global4
-      eosio_global_state4a new_global4a;
-      new_global4a.last_standby_state_update = old_global4.last_standby_state_update;
-      new_global4a.standby_bucket = old_global4.standby_bucket;
-      new_global4a.total_standby_share = old_global4.total_standby_share;
-      new_global4a.standby_slot_weight = old_global4.standby_slot_weight;
-      new_global4a.num_standby_slots = old_global4.num_standby_slots;
-
-      // New fields are already initialized to their default values in the constructor
-      // usd_per_bp = 0, min_bps = 0, max_bps = 0, standby_offset = 0
-      // enable_dynamic_bp = false, delphi_pair = name(), price_average_days = 0
-      // last_average_price = 0, last_price_update = time_point()
-
-      // Save to new global4a table
-      _global4a.set( new_global4a, get_self() );
    }
 
 } /// eosio.system

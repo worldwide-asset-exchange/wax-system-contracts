@@ -170,8 +170,13 @@ struct eosio_standby_tester : eosio_system_tester {
   }
 
   fc::variant get_global_state4() {
-    vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global4a"_n, "global4a"_n );
-    return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state4a", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
+    vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global4"_n, "global4"_n );
+    return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state4", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
+  }
+
+  fc::variant get_global_state5() {
+    vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global5"_n, "global5"_n );
+    return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state5", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
   }
 
   std::vector<standby_producer_state> get_standby_table()
@@ -756,7 +761,7 @@ BOOST_FIXTURE_TEST_CASE(enable_dynamic_bp_test, eosio_standby_tester) try {
   );
 
   // Check initial state is false
-  auto global4_state = get_global_state4();
+  auto global4_state = get_global_state5();
   BOOST_REQUIRE_EQUAL(global4_state["enable_dynamic_bp"].as<bool>(), false);
 
   // check fail if not set pair
@@ -777,7 +782,7 @@ BOOST_FIXTURE_TEST_CASE(enable_dynamic_bp_test, eosio_standby_tester) try {
   );
 
   // Verify enabled
-  global4_state = get_global_state4();
+  global4_state = get_global_state5();
   BOOST_REQUIRE_EQUAL(global4_state["enable_dynamic_bp"].as<bool>(), true);
 
   // Disable dynamic BP
@@ -786,7 +791,7 @@ BOOST_FIXTURE_TEST_CASE(enable_dynamic_bp_test, eosio_standby_tester) try {
   );
 
   // Verify disabled
-  global4_state = get_global_state4();
+  global4_state = get_global_state5();
   BOOST_REQUIRE_EQUAL(global4_state["enable_dynamic_bp"].as<bool>(), false);
 
 }
@@ -834,7 +839,7 @@ BOOST_FIXTURE_TEST_CASE(dynamic_bp_number_test, eosio_standby_tester) try {
 
   produce_blocks(5);
 
-  auto global4_state = get_global_state4();
+  auto global4_state = get_global_state5();
   wdump((global4_state)); 
   BOOST_REQUIRE_EQUAL(global4_state["min_bps"].as<uint32_t>(), MIN_BPS);
   BOOST_REQUIRE_EQUAL(global4_state["max_bps"].as<uint32_t>(), MAX_BPS);
@@ -927,7 +932,7 @@ BOOST_FIXTURE_TEST_CASE(dynamic_bp_number_with_standby_test, eosio_standby_teste
 
   produce_blocks(5);
 
-  auto global4_state = get_global_state4();
+  auto global4_state = get_global_state5();
   wdump((global4_state)); 
   BOOST_REQUIRE_EQUAL(global4_state["min_bps"].as<uint32_t>(), MIN_BPS);
   BOOST_REQUIRE_EQUAL(global4_state["max_bps"].as<uint32_t>(), MAX_BPS);
