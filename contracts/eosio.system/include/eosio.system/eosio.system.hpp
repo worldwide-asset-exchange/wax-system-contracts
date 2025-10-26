@@ -715,7 +715,7 @@ namespace eosiosystem {
                                indexed_by<"byexpires"_n, const_mem_fun<powerup_order, uint64_t, &powerup_order::by_expires>>
                                > powerup_order_table;
 
-   // Defines new global state parameters added after version 1.3.0
+   // Defines new global state parameters added after version 1.3.0 (original version)
    struct [[eosio::table("global4"), eosio::contract("eosio.system")]] eosio_global_state4 {
       eosio_global_state4() { }
       time_point        last_standby_state_update;
@@ -724,7 +724,19 @@ namespace eosiosystem {
       uint64_t          standby_slot_weight = 0;
       uint32_t          num_standby_slots = 0;
 
-      // EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_slot_weight)(num_standby_slots) )
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_slot_weight)(num_standby_slots) )
+   };
+   typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
+
+   // Defines extended global state parameters with dynamic BP and Delphi oracle support
+   struct [[eosio::table("global4a"), eosio::contract("eosio.system")]] eosio_global_state4a {
+      eosio_global_state4a() { }
+      time_point        last_standby_state_update;
+      uint64_t          standby_bucket = 0;
+      uint64_t          total_standby_share = 0;
+      uint64_t          standby_slot_weight = 0;
+      uint32_t          num_standby_slots = 0;
+
       // dynamic block producer
       uint32_t          usd_per_bp = 0;
       uint32_t          min_bps = 0;
@@ -734,11 +746,11 @@ namespace eosiosystem {
       // delphioracle
       name              delphi_pair;
       uint32_t          price_average_days; // 30 days
-      uint64_t          last_average_price =  0; 
+      uint64_t          last_average_price =  0;
       time_point        last_price_update;
-      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_slot_weight)(num_standby_slots)(usd_per_bp)(min_bps)(max_bps)(standby_offset)(enable_dynamic_bp)(delphi_pair)(price_average_days)(last_average_price)(last_price_update) )
+      EOSLIB_SERIALIZE( eosio_global_state4a, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_slot_weight)(num_standby_slots)(usd_per_bp)(min_bps)(max_bps)(standby_offset)(enable_dynamic_bp)(delphi_pair)(price_average_days)(last_average_price)(last_price_update) )
    };
-   typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
+   typedef eosio::singleton< "global4a"_n, eosio_global_state4a > global_state4a_singleton;
 
    // Defines new standby producer info structure
    struct [[eosio::table, eosio::contract("eosio.system")]] standby_producer_info {
@@ -791,10 +803,11 @@ namespace eosiosystem {
          global_state2_singleton _global2;
          global_state3_singleton _global3;
          global_state4_singleton _global4;
+         global_state4a_singleton _global4a;
          eosio_global_state      _gstate;
          eosio_global_state2     _gstate2;
          eosio_global_state3     _gstate3;
-         eosio_global_state4     _gstate4;
+         eosio_global_state4a    _gstate4;
          standby_disallow_table  _standby_disallow;
          standby_table           _standbys;
          rammarket               _rammarket;
@@ -1473,6 +1486,10 @@ namespace eosiosystem {
          /** set delphi oracle parameters (delphi_pair and price_average_days) */
          [[eosio::action]]
          void setdelphipr( const name delphi_pair, uint32_t price_average_days );
+
+         /** migrate data from old global4 table to new global4a table */
+         [[eosio::action]]
+         void migrate4to4a();
 
        /**
         * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.

@@ -170,8 +170,8 @@ struct eosio_standby_tester : eosio_system_tester {
   }
 
   fc::variant get_global_state4() {
-    vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global4"_n, "global4"_n );
-    return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state4", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
+    vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global4a"_n, "global4a"_n );
+    return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state4a", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
   }
 
   std::vector<standby_producer_state> get_standby_table()
