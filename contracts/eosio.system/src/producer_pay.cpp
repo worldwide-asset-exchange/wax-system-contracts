@@ -83,7 +83,7 @@ namespace eosiosystem {
          auto fees_to_use = std::min( distribute_tokens, current_fees.amount );
          auto issue_tokens = distribute_tokens - fees_to_use;
          // needs to be 2/5 Savings, 2/5 Voters, 1/5 producers
-         // add logic to calculate rng amount from issue_tokens, then subtract to get per_block_pay
+         // calculate rng amount from distribute_tokens, then subtract to get tokens for producers and savings/voters split
          auto rng_amount = distribute_tokens * _gstate5.rng_rate / RATE_DENOMINATOR;
 
          // get the treasury balance from rng contract
