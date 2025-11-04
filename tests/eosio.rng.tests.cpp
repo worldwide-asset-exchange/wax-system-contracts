@@ -545,7 +545,7 @@ BOOST_FIXTURE_TEST_CASE(treasury_exceeds_max_pool, eosio_rng_tester, * boost::un
 
   // Now simulate treasury exceeding max by directly depositing more
   // Transfer tokens to treasury to exceed the max
-  transfer( config::system_account_name, RNG_CONTRACT, core_sym::from_string("100.0000"), "direct deposit exceeding max");
+  transfer( config::system_account_name, RNG_CONTRACT, core_sym::from_string("100.0000"), config::system_account_name);
 
   // Call the RNG contract's deposit action to update treasury balance
   base_tester::push_action(RNG_CONTRACT, "deposit"_n, RNG_CONTRACT, mvo()
