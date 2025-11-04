@@ -82,9 +82,9 @@ namespace eosiosystem {
          auto distribute_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
          auto fees_to_use = std::min( distribute_tokens, current_fees.amount );
          auto issue_tokens = distribute_tokens - fees_to_use;
+ 
          // calculate rng amount from distribute_tokens, then subtract to get tokens for producers and savings/voters split
          auto rng_amount = distribute_tokens * _gstate5.rng_rate / RATE_DENOMINATOR;
-
          // get the treasury balance from rng contract
          auto treasury_balance = rng::get_rng_balance();
          // clamp the treasury balance to the max treasury balance
