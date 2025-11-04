@@ -536,7 +536,7 @@ BOOST_FIXTURE_TEST_CASE(treasury_exceeds_max_pool, eosio_rng_tester, * boost::un
   BOOST_REQUIRE_EQUAL(success(), vote( "producvotera"_n, { "defproducera"_n }));
 
   // First claim to fill up the treasury to the initial max
-  produce_blocks(50);
+  produce_blocks(200);
   BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
 
   auto treasury_balance_after_first = get_treasury_balance();
@@ -560,6 +560,7 @@ BOOST_FIXTURE_TEST_CASE(treasury_exceeds_max_pool, eosio_rng_tester, * boost::un
 
   // Now claim again - should NOT deposit to RNG since treasury > max_pool_rng
   produce_blocks(50);
+  produce_block(fc::hours(24));
   BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
 
   const auto     global_state      = get_global_state();
