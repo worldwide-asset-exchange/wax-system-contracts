@@ -1,0 +1,12 @@
+---
+description: Rules for system contract development
+globs: 
+alwaysApply: false
+---
+
+# Code base rule
+
+- System contracts are contract on EOS network, using c++ language with support from eosio framework to develop contract that running on EOS, WAX blockchains.
+- Follow pattern in existing files like [eosio.system.hpp](mdc:contracts/eosio.system/include/eosio.system/eosio.system.hpp) and [eosio.system.cpp](mdc:contracts/eosio.system/src/eosio.system.cpp) to make new update
+- Follow pattern in existing test files like [eosio.system_tests.cpp](mdc:tests/eosio.system_tests.cpp) to make test case
+- API reference for eosio can be found at https://developers.eos.io/welcome/latest/reference/index

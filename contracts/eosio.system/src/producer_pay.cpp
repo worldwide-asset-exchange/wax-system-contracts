@@ -77,16 +77,25 @@ namespace eosiosystem {
       const asset token_supply   = eosio::token::get_supply(token_account, core_symbol().code() );
       const auto ct = current_time_point();
       const auto usecs_since_last_fill = (ct - _gstate.last_pervote_bucket_fill).count();
-
       if( usecs_since_last_fill > 0 && _gstate.last_pervote_bucket_fill > time_point() ) {
          auto current_fees =  eosio::token::get_balance(token_account, fees_account, core_symbol().code() );
          auto distribute_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
          auto fees_to_use = std::min( distribute_tokens, current_fees.amount );
          auto issue_tokens = distribute_tokens - fees_to_use;
+ 
+         // calculate rng amount from distribute_tokens, then subtract to get tokens for producers and savings/voters split
+         auto rng_amount = distribute_tokens * _gstate5.rng_rate / RATE_DENOMINATOR;
+         // get the treasury balance from rng contract
+         auto treasury_balance = rng::get_rng_balance();
+         // clamp the treasury balance to the max treasury balance
+         auto remaining_max_treasury_balance = (treasury_balance >= _gstate5.max_pool_rng) ? 0 : _gstate5.max_pool_rng - treasury_balance;
+         auto rng_deposit = std::min(rng_amount, remaining_max_treasury_balance);
+
          // needs to be 2/5 Savings, 2/5 Voters, 1/5 producers
-         auto to_per_block_pay = distribute_tokens / 5;
+         auto token_for_producers = distribute_tokens - rng_deposit;
+         auto to_per_block_pay = token_for_producers / 5;
          auto to_voters        = 2 * to_per_block_pay;
-         auto to_savings       = distribute_tokens - (to_voters + to_per_block_pay);
+         auto to_savings       = token_for_producers - (to_voters + to_per_block_pay);
 
          auto total_block_pay = to_per_block_pay;
          auto total_weight = (21ULL * PAY_SPLIT_SCALE) + (_gstate4.standby_slot_weight * _gstate4.num_standby_slots);
@@ -100,6 +109,10 @@ namespace eosiosystem {
             if( fees_to_use > 0 ){
                token::transfer_action transfer_act{ token_account, { {fees_account, active_permission} } };
                transfer_act.send( fees_account, get_self(), asset(fees_to_use, core_symbol()), "collect tokenomic fees" );
+            }
+            if (rng_deposit > 0) {
+               token::transfer_action transfer_act{ token_account, { {get_self(), active_permission} } };
+               transfer_act.send( get_self(), rng::RNG_ACCOUNT, asset(rng_deposit, core_symbol()), "treasury" );
             }
          }
          {
