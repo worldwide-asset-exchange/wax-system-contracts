@@ -86,8 +86,8 @@ namespace eosiosystem {
    static constexpr int64_t  default_inflation_pay_factor  = 50000;   // producers pay share = 10000 / 50000 = 20% of the inflation
    static constexpr int64_t  default_votepay_factor        = 40000;   // per-block pay share = 10000 / 40000 = 25% of the producer pay
 
-   static const     uint64_t PAY_SPLIT_SCALE = 10000;    // produce base weight for payout scaling
-   static constexpr int64_t  RATE_DENOMINATOR              = 10000;   // 4 decimals
+   static const     uint64_t PAY_SPLIT_SCALE               = 10000;   // produce base weight for payout scaling
+   static constexpr int64_t  RATE_DENOMINATOR              = 10000;   // basis points (100.00% = 10000)
    
 #ifdef SYSTEM_BLOCKCHAIN_PARAMETERS
    struct blockchain_parameters_v1 : eosio::blockchain_parameters
@@ -1478,10 +1478,10 @@ namespace eosiosystem {
           * Set RNG rate action, configures the RNG parameters in the system
           *
           * @param rng_rate - the rate to set for RNG generation
-          * @param max_pool_rng - the maximum pool size for RNG
+          * @param max_pool_rng - the maximum pool size for RNG. Setting to 0 disables RNG deposits
           */
          [[eosio::action]]
-         void setrngrate( double rng_rate, uint64_t max_pool_rng );
+         void setrngrate( uint64_t rng_rate, uint64_t max_pool_rng );
 
          using init_action = eosio::action_wrapper<"init"_n, &system_contract::init>;
          using setacctram_action = eosio::action_wrapper<"setacctram"_n, &system_contract::setacctram>;

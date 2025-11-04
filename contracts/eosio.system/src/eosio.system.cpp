@@ -492,7 +492,7 @@ namespace eosiosystem {
       });
    }
 
-   void system_contract::setrngrate( double rng_rate, uint64_t max_pool_rng ) {
+   void system_contract::setrngrate( uint64_t rng_rate, uint64_t max_pool_rng ) {
       require_auth( get_self() );
       check( rng_rate >= 0 && rng_rate < 10000, "rng_rate must be between 0 and 10000");
       _gstate5.rng_rate = rng_rate;

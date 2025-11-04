@@ -89,7 +89,7 @@ namespace eosiosystem {
          // get the treasury balance from rng contract
          auto treasury_balance = rng::get_rng_balance();
          // clamp the treasury balance to the max treasury balance
-         auto remaining_max_treasury_balance = _gstate5.max_pool_rng - treasury_balance;
+         auto remaining_max_treasury_balance = (treasury_balance >= _gstate5.max_pool_rng) ? 0 : _gstate5.max_pool_rng - treasury_balance;
          auto rng_deposit = std::min(rng_amount, remaining_max_treasury_balance);
 
          auto token_for_producers = distribute_tokens - rng_deposit;
