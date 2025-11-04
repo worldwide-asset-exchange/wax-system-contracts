@@ -515,10 +515,10 @@ BOOST_FIXTURE_TEST_CASE(treasury_exceeds_max_pool, eosio_rng_tester, * boost::un
   ilog("Testing treasury_balance > max_pool_rng (underflow prevention)");
 
   const uint64_t rng_rate = 5000;
-  const uint64_t max_pool_rng = 500000;  // Set a max
+  const uint64_t initial_max_pool_rng = 500000;  // Initial max
 
   BOOST_REQUIRE_EQUAL(
-      success(), push_action( config::system_account_name, "setrngrate"_n, mvo()("rng_rate", rng_rate)("max_pool_rng", max_pool_rng))
+      success(), push_action( config::system_account_name, "setrngrate"_n, mvo()("rng_rate", rng_rate)("max_pool_rng", initial_max_pool_rng))
   );
 
   const double continuous_rate = 0.04879;
@@ -535,34 +535,30 @@ BOOST_FIXTURE_TEST_CASE(treasury_exceeds_max_pool, eosio_rng_tester, * boost::un
   BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
   BOOST_REQUIRE_EQUAL(success(), vote( "producvotera"_n, { "defproducera"_n }));
 
-  // First claim to fill up the treasury to max
+  // First claim to fill up the treasury to the initial max
   produce_blocks(50);
   BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
 
   auto treasury_balance_after_first = get_treasury_balance();
   ilog("Treasury after first claim: ${b}", ("b", treasury_balance_after_first.pool_balance));
-  BOOST_REQUIRE_EQUAL(max_pool_rng, treasury_balance_after_first.pool_balance);
+  BOOST_REQUIRE_EQUAL(initial_max_pool_rng, treasury_balance_after_first.pool_balance);
 
-  // Now simulate treasury exceeding max by directly depositing more
-  // Transfer tokens to treasury to exceed the max
-  transfer( config::system_account_name, RNG_CONTRACT, core_sym::from_string("100.0000"), config::system_account_name);
-
-  // Call the RNG contract's deposit action to update treasury balance
-  base_tester::push_action(RNG_CONTRACT, "deposit"_n, RNG_CONTRACT, mvo()
-    ("from", config::system_account_name)
-    ("quantity", core_sym::from_string("100.0000"))
-    ("memo", "exceed max")
+  // Now LOWER the max_pool_rng to below the current treasury balance
+  // This simulates the scenario where treasury_balance > max_pool_rng
+  const uint64_t lowered_max_pool_rng = 100000;  // Much lower than current treasury (500000)
+  BOOST_REQUIRE_EQUAL(
+      success(), push_action( config::system_account_name, "setrngrate"_n, mvo()("rng_rate", rng_rate)("max_pool_rng", lowered_max_pool_rng))
   );
 
-  auto treasury_balance_after_excess = get_treasury_balance();
-  ilog("Treasury after excess deposit: ${b}", ("b", treasury_balance_after_excess.pool_balance));
-  BOOST_REQUIRE(treasury_balance_after_excess.pool_balance > max_pool_rng);
+  ilog("Lowered max_pool_rng to ${m}, treasury is ${t}",
+       ("m", lowered_max_pool_rng)("t", treasury_balance_after_first.pool_balance));
+  BOOST_REQUIRE(treasury_balance_after_first.pool_balance > lowered_max_pool_rng);
 
   const auto     initial_global_state      = get_global_state();
   const uint64_t initial_claim_time        = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
   const asset    initial_supply            = get_token_supply();
 
-  // Now claim again - should not deposit to RNG since it's already over max
+  // Now claim again - should NOT deposit to RNG since treasury > max_pool_rng
   produce_blocks(50);
   BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
 
@@ -579,11 +575,11 @@ BOOST_FIXTURE_TEST_CASE(treasury_exceeds_max_pool, eosio_rng_tester, * boost::un
   BOOST_REQUIRE_EQUAL(total_inflation, supply.get_amount() - initial_supply.get_amount());
 
   // Verify NO additional RNG deposit occurred (treasury was already over max)
-  BOOST_REQUIRE_EQUAL(treasury_balance_after_excess.pool_balance, treasury_balance_final.pool_balance);
+  BOOST_REQUIRE_EQUAL(treasury_balance_after_first.pool_balance, treasury_balance_final.pool_balance);
 
   // This proves the underflow prevention works - no deposit when treasury > max_pool_rng
   ilog("✓ No deposit when treasury (${t}) exceeds max_pool_rng (${m})",
-       ("t", treasury_balance_final.pool_balance)("m", max_pool_rng));
+       ("t", treasury_balance_final.pool_balance)("m", lowered_max_pool_rng));
 
 } FC_LOG_AND_RETHROW()
 
