@@ -337,4 +337,268 @@ BOOST_FIXTURE_TEST_CASE(rng_deposit_max_balance, eosio_rng_tester, * boost::unit
   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::off);
 } FC_LOG_AND_RETHROW()
 
+
+// Edge Case Tests
+
+BOOST_FIXTURE_TEST_CASE(rng_rate_zero, eosio_rng_tester, * boost::unit_test::tolerance(1e-10)) try {
+  ilog("Testing rng_rate = 0 (no deposits should occur)");
+
+  const uint64_t rng_rate = 0;  // Zero rate - should disable RNG deposits
+  const uint64_t max_pool_rng = 1000000000;
+
+  BOOST_REQUIRE_EQUAL(
+      success(), push_action( config::system_account_name, "setrngrate"_n, mvo()("rng_rate", rng_rate)("max_pool_rng", max_pool_rng))
+  );
+
+  const double continuous_rate = 0.04879;
+  const double secs_per_year   = 52 * 7 * 24 * 3600;
+
+  const asset large_asset = core_sym::from_string("80.0000");
+  create_account_with_resources( "defproducera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+  create_account_with_resources( "producvotera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+
+  BOOST_REQUIRE_EQUAL(success(), regproducer("defproducera"_n));
+  produce_block(fc::hours(24));
+
+  transfer( config::system_account_name, "producvotera", core_sym::from_string("400000000.0000"), config::system_account_name);
+  BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
+  BOOST_REQUIRE_EQUAL(success(), vote( "producvotera"_n, { "defproducera"_n }));
+
+  produce_blocks(50);
+
+  const auto     initial_global_state      = get_global_state();
+  const uint64_t initial_claim_time        = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
+  const asset    initial_supply            = get_token_supply();
+  const auto     initial_treasury_balance  = get_treasury_balance();
+
+  BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
+
+  const auto     global_state      = get_global_state();
+  const uint64_t claim_time        = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
+  const asset    supply            = get_token_supply();
+  const auto     treasury_balance  = get_treasury_balance();
+
+  auto usecs_between_fills = claim_time - initial_claim_time;
+  int32_t secs_between_fills = usecs_between_fills/1000000;
+  uint64_t expected_inflation = (initial_supply.get_amount() * double(secs_between_fills) * continuous_rate) / secs_per_year;
+
+  // Verify inflation occurred
+  BOOST_REQUIRE_EQUAL(expected_inflation, supply.get_amount() - initial_supply.get_amount());
+
+  // Verify NO RNG deposit occurred
+  BOOST_REQUIRE_EQUAL(initial_treasury_balance.pool_balance, treasury_balance.pool_balance);
+  BOOST_REQUIRE_EQUAL(0, treasury_balance.pool_balance);
+
+  ilog("✓ rng_rate = 0 correctly prevents RNG deposits");
+} FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(max_pool_rng_zero, eosio_rng_tester, * boost::unit_test::tolerance(1e-10)) try {
+  ilog("Testing max_pool_rng = 0 (should disable deposits)");
+
+  const uint64_t rng_rate = 5000;  // 50% rate
+  const uint64_t max_pool_rng = 0; // Zero max pool - should disable deposits
+
+  BOOST_REQUIRE_EQUAL(
+      success(), push_action( config::system_account_name, "setrngrate"_n, mvo()("rng_rate", rng_rate)("max_pool_rng", max_pool_rng))
+  );
+
+  const double continuous_rate = 0.04879;
+  const double secs_per_year   = 52 * 7 * 24 * 3600;
+
+  const asset large_asset = core_sym::from_string("80.0000");
+  create_account_with_resources( "defproducera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+  create_account_with_resources( "producvotera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+
+  BOOST_REQUIRE_EQUAL(success(), regproducer("defproducera"_n));
+  produce_block(fc::hours(24));
+
+  transfer( config::system_account_name, "producvotera", core_sym::from_string("400000000.0000"), config::system_account_name);
+  BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
+  BOOST_REQUIRE_EQUAL(success(), vote( "producvotera"_n, { "defproducera"_n }));
+
+  produce_blocks(50);
+
+  const auto     initial_global_state      = get_global_state();
+  const uint64_t initial_claim_time        = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
+  const asset    initial_supply            = get_token_supply();
+  const auto     initial_treasury_balance  = get_treasury_balance();
+
+  BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
+
+  const auto     global_state      = get_global_state();
+  const uint64_t claim_time        = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
+  const asset    supply            = get_token_supply();
+  const auto     treasury_balance  = get_treasury_balance();
+
+  auto usecs_between_fills = claim_time - initial_claim_time;
+  int32_t secs_between_fills = usecs_between_fills/1000000;
+  uint64_t expected_inflation = (initial_supply.get_amount() * double(secs_between_fills) * continuous_rate) / secs_per_year;
+
+  // Verify inflation occurred
+  BOOST_REQUIRE_EQUAL(expected_inflation, supply.get_amount() - initial_supply.get_amount());
+
+  // Verify NO RNG deposit occurred (max_pool_rng = 0 means always at max)
+  BOOST_REQUIRE_EQUAL(initial_treasury_balance.pool_balance, treasury_balance.pool_balance);
+  BOOST_REQUIRE_EQUAL(0, treasury_balance.pool_balance);
+
+  ilog("✓ max_pool_rng = 0 correctly disables RNG deposits");
+} FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(rng_rate_maximum, eosio_rng_tester, * boost::unit_test::tolerance(1e-10)) try {
+  ilog("Testing rng_rate = 9999 (maximum valid value - 99.99% to RNG)");
+
+  const uint64_t rng_rate = 9999;  // Maximum valid rate (99.99%)
+  const uint64_t max_pool_rng = 100000000000;  // Very large max
+
+  BOOST_REQUIRE_EQUAL(
+      success(), push_action( config::system_account_name, "setrngrate"_n, mvo()("rng_rate", rng_rate)("max_pool_rng", max_pool_rng))
+  );
+
+  const double continuous_rate = 0.04879;
+  const double secs_per_year   = 52 * 7 * 24 * 3600;
+
+  const asset large_asset = core_sym::from_string("80.0000");
+  create_account_with_resources( "defproducera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+  create_account_with_resources( "producvotera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+
+  BOOST_REQUIRE_EQUAL(success(), regproducer("defproducera"_n));
+  produce_block(fc::hours(24));
+
+  transfer( config::system_account_name, "producvotera", core_sym::from_string("400000000.0000"), config::system_account_name);
+  BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
+  BOOST_REQUIRE_EQUAL(success(), vote( "producvotera"_n, { "defproducera"_n }));
+
+  produce_blocks(50);
+
+  const auto     initial_global_state      = get_global_state();
+  const uint64_t initial_claim_time        = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
+  const int64_t  initial_savings           = get_balance("eosio.saving"_n).get_amount();
+  const asset    initial_supply            = get_token_supply();
+  const asset    initial_balance           = get_balance("defproducera"_n);
+
+  BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
+
+  const auto     global_state      = get_global_state();
+  const uint64_t claim_time        = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
+  const int64_t  savings           = get_balance("eosio.saving"_n).get_amount();
+  const asset    supply            = get_token_supply();
+  const asset    balance           = get_balance("defproducera"_n);
+  const auto     treasury_balance  = get_treasury_balance();
+
+  auto usecs_between_fills = claim_time - initial_claim_time;
+  int32_t secs_between_fills = usecs_between_fills/1000000;
+  uint64_t total_inflation = (initial_supply.get_amount() * double(secs_between_fills) * continuous_rate) / secs_per_year;
+  uint64_t expected_rng_deposit = total_inflation * rng_rate / 10000;
+  uint64_t remaining_for_producers = total_inflation - expected_rng_deposit;
+
+  // Verify total inflation
+  BOOST_REQUIRE_EQUAL(total_inflation, supply.get_amount() - initial_supply.get_amount());
+
+  // Verify RNG got 99.99% of inflation
+  BOOST_REQUIRE_EQUAL(expected_rng_deposit, treasury_balance.pool_balance);
+
+  // Verify producers only got 0.01% / 5 of total inflation
+  uint64_t expected_producer_pay = remaining_for_producers / 5;
+  BOOST_REQUIRE_EQUAL(expected_producer_pay, balance.get_amount() - initial_balance.get_amount());
+
+  // Verify savings got 2/5 of the remaining (not the RNG portion)
+  uint64_t expected_savings = remaining_for_producers - (remaining_for_producers / 5) * 3;
+  BOOST_REQUIRE_EQUAL(expected_savings, savings - initial_savings);
+
+  ilog("✓ rng_rate = 9999 correctly allocates 99.99%% to RNG");
+} FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(treasury_exceeds_max_pool, eosio_rng_tester, * boost::unit_test::tolerance(1e-10)) try {
+  ilog("Testing treasury_balance > max_pool_rng (underflow prevention)");
+
+  const uint64_t rng_rate = 5000;
+  const uint64_t max_pool_rng = 500000;  // Set a max
+
+  BOOST_REQUIRE_EQUAL(
+      success(), push_action( config::system_account_name, "setrngrate"_n, mvo()("rng_rate", rng_rate)("max_pool_rng", max_pool_rng))
+  );
+
+  const double continuous_rate = 0.04879;
+  const double secs_per_year   = 52 * 7 * 24 * 3600;
+
+  const asset large_asset = core_sym::from_string("80.0000");
+  create_account_with_resources( "defproducera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+  create_account_with_resources( "producvotera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+
+  BOOST_REQUIRE_EQUAL(success(), regproducer("defproducera"_n));
+  produce_block(fc::hours(24));
+
+  transfer( config::system_account_name, "producvotera", core_sym::from_string("400000000.0000"), config::system_account_name);
+  BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
+  BOOST_REQUIRE_EQUAL(success(), vote( "producvotera"_n, { "defproducera"_n }));
+
+  // First claim to fill up the treasury to max
+  produce_blocks(50);
+  BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
+
+  auto treasury_balance_after_first = get_treasury_balance();
+  ilog("Treasury after first claim: ${b}", ("b", treasury_balance_after_first.pool_balance));
+  BOOST_REQUIRE_EQUAL(max_pool_rng, treasury_balance_after_first.pool_balance);
+
+  // Now simulate treasury exceeding max by directly depositing more
+  // Transfer tokens to treasury to exceed the max
+  transfer( config::system_account_name, RNG_CONTRACT, core_sym::from_string("100.0000"), "direct deposit exceeding max");
+
+  // Call the RNG contract's deposit action to update treasury balance
+  base_tester::push_action(RNG_CONTRACT, "deposit"_n, RNG_CONTRACT, mvo()
+    ("from", config::system_account_name)
+    ("quantity", core_sym::from_string("100.0000"))
+    ("memo", "exceed max")
+  );
+
+  auto treasury_balance_after_excess = get_treasury_balance();
+  ilog("Treasury after excess deposit: ${b}", ("b", treasury_balance_after_excess.pool_balance));
+  BOOST_REQUIRE(treasury_balance_after_excess.pool_balance > max_pool_rng);
+
+  const auto     initial_global_state      = get_global_state();
+  const uint64_t initial_claim_time        = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
+  const asset    initial_supply            = get_token_supply();
+
+  // Now claim again - should not deposit to RNG since it's already over max
+  produce_blocks(50);
+  BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
+
+  const auto     global_state      = get_global_state();
+  const uint64_t claim_time        = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
+  const asset    supply            = get_token_supply();
+  const auto     treasury_balance_final  = get_treasury_balance();
+
+  auto usecs_between_fills = claim_time - initial_claim_time;
+  int32_t secs_between_fills = usecs_between_fills/1000000;
+  uint64_t total_inflation = (initial_supply.get_amount() * double(secs_between_fills) * continuous_rate) / secs_per_year;
+
+  // Verify inflation occurred
+  BOOST_REQUIRE_EQUAL(total_inflation, supply.get_amount() - initial_supply.get_amount());
+
+  // Verify NO additional RNG deposit occurred (treasury was already over max)
+  BOOST_REQUIRE_EQUAL(treasury_balance_after_excess.pool_balance, treasury_balance_final.pool_balance);
+
+  // This proves the underflow prevention works - no deposit when treasury > max_pool_rng
+  ilog("✓ No deposit when treasury (${t}) exceeds max_pool_rng (${m})",
+       ("t", treasury_balance_final.pool_balance)("m", max_pool_rng));
+
+} FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(rng_rate_boundary_10000, eosio_rng_tester) try {
+  ilog("Testing rng_rate = 10000 (should fail - at boundary)");
+
+  // Should fail because rate must be < 10000
+  BOOST_REQUIRE_EQUAL(
+      wasm_assert_msg("rng_rate must be between 0 and 10000"),
+      push_action( config::system_account_name, "setrngrate"_n, mvo()("rng_rate", 10000)("max_pool_rng", 1000000))
+  );
+
+  ilog("✓ rng_rate = 10000 correctly rejected");
+} FC_LOG_AND_RETHROW()
+
+
 BOOST_AUTO_TEST_SUITE_END()
