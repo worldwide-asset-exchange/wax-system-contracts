@@ -82,7 +82,6 @@ namespace eosiosystem {
          auto distribute_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
          auto fees_to_use = std::min( distribute_tokens, current_fees.amount );
          auto issue_tokens = distribute_tokens - fees_to_use;
-         // needs to be 2/5 Savings, 2/5 Voters, 1/5 producers
          // calculate rng amount from distribute_tokens, then subtract to get tokens for producers and savings/voters split
          auto rng_amount = distribute_tokens * _gstate5.rng_rate / RATE_DENOMINATOR;
 
@@ -92,6 +91,7 @@ namespace eosiosystem {
          auto remaining_max_treasury_balance = (treasury_balance >= _gstate5.max_pool_rng) ? 0 : _gstate5.max_pool_rng - treasury_balance;
          auto rng_deposit = std::min(rng_amount, remaining_max_treasury_balance);
 
+         // needs to be 2/5 Savings, 2/5 Voters, 1/5 producers
          auto token_for_producers = distribute_tokens - rng_deposit;
          auto to_per_block_pay = token_for_producers / 5;
          auto to_voters        = 2 * to_per_block_pay;
