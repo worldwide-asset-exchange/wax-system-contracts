@@ -25,7 +25,6 @@ namespace eosiosystem {
     _global6(get_self(), get_self().value),
     _standbys(get_self(), get_self().value),
     _standby_disallow(get_self(), get_self().value),
-    _global6(get_self(), get_self().value),
     _rammarket(get_self(), get_self().value),
     _proposers(get_self(), get_self().value),
     _proposals(get_self(), get_self().value),
