@@ -140,6 +140,9 @@ namespace eosiosystem {
       // Sort by weighted votes (descending)
       std::sort( weighted_producers.begin(), weighted_producers.end(),
          [](const weighted_producer& a, const weighted_producer& b) {
+            if (a.weighted_votes == b.weighted_votes) {
+               return a.producer_name < b.producer_name;  // Deterministic tie-breaker
+            }
             return a.weighted_votes > b.weighted_votes;
          });
 
