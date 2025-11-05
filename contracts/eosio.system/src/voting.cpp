@@ -538,22 +538,22 @@ namespace eosiosystem {
 
    bool system_contract::verify_guilds_contract() const {
       // If kill switch is disabled, return false
-      if( !_gstate5.enable_weighted_voting ) {
+      if( !_gstate6.enable_weighted_voting ) {
          return false;
       }
 
       // If hash list is empty, disable weighted voting (backward compatible)
-      if( _gstate5.guilds_code_hashes.empty() ) {
+      if( _gstate6.guilds_code_hashes.empty() ) {
          return false;
       }
 
       // Check if account exists
-      if( !eosio::is_account( _gstate5.guilds_contract ) ) {
+      if( !eosio::is_account( _gstate6.guilds_contract ) ) {
          return false;
       }
 
       // Get deployed contract hash
-      eosio::checksum256 deployed_hash = eosio::get_code_hash( _gstate5.guilds_contract );
+      eosio::checksum256 deployed_hash = eosio::get_code_hash( _gstate6.guilds_contract );
 
       // Empty hash means no code deployed
       if( deployed_hash == eosio::checksum256() ) {
@@ -561,7 +561,7 @@ namespace eosiosystem {
       }
 
       // Check if deployed hash is in our approved list
-      for( const auto& approved_hash : _gstate5.guilds_code_hashes ) {
+      for( const auto& approved_hash : _gstate6.guilds_code_hashes ) {
          if( deployed_hash == approved_hash ) {
             return true;
          }
@@ -577,49 +577,49 @@ namespace eosiosystem {
       }
 
       // Return 1.0 if scaling factor is 0 to avoid division by zero
-      if( _gstate5.bp_score_scaling_factor == 0 ) {
+      if( _gstate6.bp_score_scaling_factor == 0 ) {
          return 1.0;
       }
 
       // Try to read from guilds contract using helper function
-      auto guilds = guildsoig::get_guilds( _gstate5.guilds_contract );
+      auto guilds = guildsoig::get_guilds( _gstate6.guilds_contract );
       auto guild_itr = guilds.find( producer.value );
 
-      uint32_t score = _gstate5.bp_default_score;
+      uint32_t score = _gstate6.bp_default_score;
       if( guild_itr != guilds.end() ) {
          score = guild_itr->score;
       }
 
-      return static_cast<double>(score) / static_cast<double>(_gstate5.bp_score_scaling_factor);
+      return static_cast<double>(score) / static_cast<double>(_gstate6.bp_score_scaling_factor);
    }
 
    void system_contract::addguildhash( const eosio::checksum256& hash ) {
       require_auth( get_self() );
 
       // Check for duplicate before adding
-      for( const auto& existing_hash : _gstate5.guilds_code_hashes ) {
+      for( const auto& existing_hash : _gstate6.guilds_code_hashes ) {
          check( existing_hash != hash, "hash already exists in approved list" );
       }
 
-      _gstate5.guilds_code_hashes.push_back( hash );
-      _global5.set( _gstate5, get_self() );
+      _gstate6.guilds_code_hashes.push_back( hash );
+      _global6.set( _gstate6, get_self() );
    }
 
    void system_contract::rmguildhash( const eosio::checksum256& hash ) {
       require_auth( get_self() );
 
-      auto it = std::find( _gstate5.guilds_code_hashes.begin(), _gstate5.guilds_code_hashes.end(), hash );
-      check( it != _gstate5.guilds_code_hashes.end(), "hash not found in approved list" );
+      auto it = std::find( _gstate6.guilds_code_hashes.begin(), _gstate6.guilds_code_hashes.end(), hash );
+      check( it != _gstate6.guilds_code_hashes.end(), "hash not found in approved list" );
 
-      _gstate5.guilds_code_hashes.erase( it );
-      _global5.set( _gstate5, get_self() );
+      _gstate6.guilds_code_hashes.erase( it );
+      _global6.set( _gstate6, get_self() );
    }
 
    void system_contract::setenablewv( bool enable ) {
       require_auth( get_self() );
 
-      _gstate5.enable_weighted_voting = enable;
-      _global5.set( _gstate5, get_self() );
+      _gstate6.enable_weighted_voting = enable;
+      _global6.set( _gstate6, get_self() );
    }
 
 } /// namespace eosiosystem

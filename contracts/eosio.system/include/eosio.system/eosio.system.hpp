@@ -738,17 +738,17 @@ namespace eosiosystem {
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 
    // Defines new global state parameters for BP weighted voting
-   struct [[eosio::table("global5"), eosio::contract("eosio.system")]] eosio_global_state5 {
-      eosio_global_state5() { }
+   struct [[eosio::table("global.a"), eosio::contract("eosio.system")]] eosio_global_state6 {
+      eosio_global_state6() { }
       name     guilds_contract = "guilds.oig"_n;                     // Guild contract name
       uint32_t bp_score_scaling_factor = 1000;                       // Divisor for score (1000 = 1.0x multiplier)
       uint32_t bp_default_score = 1000;                              // Default score for unacknowledged BPs
       bool     enable_weighted_voting = true;                        // Kill switch for weighted voting
       std::vector<eosio::checksum256> guilds_code_hashes;            // List of approved guilds contract code hashes
 
-      EOSLIB_SERIALIZE( eosio_global_state5, (guilds_contract)(bp_score_scaling_factor)(bp_default_score)(enable_weighted_voting)(guilds_code_hashes) )
+      EOSLIB_SERIALIZE( eosio_global_state6, (guilds_contract)(bp_score_scaling_factor)(bp_default_score)(enable_weighted_voting)(guilds_code_hashes) )
    };
-   typedef eosio::singleton< "global5"_n, eosio_global_state5 > global_state5_singleton;
+   typedef eosio::singleton< "global.a"_n, eosio_global_state6 > global_state6_singleton;
 
    // Defines new standby producer info structure
    struct [[eosio::table, eosio::contract("eosio.system")]] standby_producer_info {
@@ -802,11 +802,13 @@ namespace eosiosystem {
          global_state3_singleton _global3;
          global_state4_singleton _global4;
          global_state5_singleton _global5;
+         global_state6_singleton _global6;
          eosio_global_state      _gstate;
          eosio_global_state2     _gstate2;
          eosio_global_state3     _gstate3;
          eosio_global_state4     _gstate4;
          eosio_global_state5     _gstate5;
+         eosio_global_state6     _gstate6;
          standby_disallow_table  _standby_disallow;
          standby_table           _standbys;
          rammarket               _rammarket;

@@ -76,9 +76,9 @@ struct eosio_weighted_producer_tester : eosio_system_tester {
     return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state4", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
   }
 
-  fc::variant get_global_state5() {
-    vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global5"_n, "global5"_n );
-    return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state5", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
+  fc::variant get_global_state6() {
+    vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global.a"_n, "global.a"_n );
+    return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state6", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
   }
 
   // read guild data from guilds.oig contract
@@ -185,7 +185,7 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester)
    // Test setting and getting weighted producer config values
 
    // Get initial global state 5
-   fc::variant initial_state = get_global_state5();
+   fc::variant initial_state = get_global_state6();
 
    // Test 1: Set guilds contract name
    const name new_guilds_contract = GUILDS_OIG;
@@ -195,7 +195,7 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester)
    produce_blocks(1);
 
    // Verify guilds contract was set
-   fc::variant state_after_guild = get_global_state5();
+   fc::variant state_after_guild = get_global_state6();
    BOOST_REQUIRE_EQUAL(state_after_guild["guilds_contract"].as<name>(), new_guilds_contract);
 
    // Test 2: Set BP score scaling factor
@@ -206,7 +206,7 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester)
    produce_blocks(1);
 
    // Verify scaling factor was set
-   fc::variant state_after_scale = get_global_state5();
+   fc::variant state_after_scale = get_global_state6();
    BOOST_REQUIRE_EQUAL(state_after_scale["bp_score_scaling_factor"].as<uint32_t>(), new_scaling_factor);
 
    // Test 3: Set default BP score
@@ -217,7 +217,7 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester)
    produce_blocks(1);
 
    // Verify default score was set
-   fc::variant final_state = get_global_state5();
+   fc::variant final_state = get_global_state6();
    BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), new_default_score);
 
    // Verify all settings persist together
@@ -238,7 +238,7 @@ BOOST_FIXTURE_TEST_CASE(test_config_and_guild_score, eosio_weighted_producer_tes
    produce_blocks(1);
 
    // Verify guilds contract was set
-   fc::variant state = get_global_state5();
+   fc::variant state = get_global_state6();
    BOOST_REQUIRE_EQUAL(state["guilds_contract"].as<name>(), guilds_contract);
 
    // Step 2: Set BP score scaling factor
@@ -279,7 +279,7 @@ BOOST_FIXTURE_TEST_CASE(test_config_and_guild_score, eosio_weighted_producer_tes
    BOOST_REQUIRE_EQUAL(guild_data.score, producer_score);
 
    // Verify the config values persist
-   fc::variant final_state = get_global_state5();
+   fc::variant final_state = get_global_state6();
    BOOST_REQUIRE_EQUAL(final_state["guilds_contract"].as<name>(), guilds_contract);
    BOOST_REQUIRE_EQUAL(final_state["bp_score_scaling_factor"].as<uint32_t>(), scaling_factor);
    BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), default_score);
@@ -318,7 +318,7 @@ BOOST_FIXTURE_TEST_CASE(test_producer_sorting_with_votes_and_scores, eosio_weigh
    produce_blocks(1);
 
    // Verify configuration was set correctly
-   fc::variant state = get_global_state5();
+   fc::variant state = get_global_state6();
    ilog( "=== Configuration ===" );
    ilog( "guilds_contract: ${guilds}", ("guilds", state["guilds_contract"].as<name>()) );
    ilog( "bp_score_scaling_factor: ${scale}", ("scale", state["bp_score_scaling_factor"].as<uint32_t>()) );
@@ -533,7 +533,7 @@ BOOST_FIXTURE_TEST_CASE(test_weighted_producer_with_standby_selection, eosio_wei
    produce_blocks(1);
 
    ilog( "=== Weighted Voting Configuration ===" );
-   fc::variant state5 = get_global_state5();
+   fc::variant state5 = get_global_state6();
    ilog( "guilds_contract: ${guilds}", ("guilds", state5["guilds_contract"].as<name>()) );
    ilog( "bp_score_scaling_factor: ${scale}", ("scale", state5["bp_score_scaling_factor"].as<uint32_t>()) );
    ilog( "bp_default_score: ${default}", ("default", state5["bp_default_score"].as<uint32_t>()) );
@@ -802,7 +802,7 @@ BOOST_FIXTURE_TEST_CASE(test_weighted_producer_with_guilds_code_hash_match_one_o
    produce_blocks(1);
 
    ilog( "=== Weighted Voting Configuration ===" );
-   fc::variant state5 = get_global_state5();
+   fc::variant state5 = get_global_state6();
    ilog( "guilds_contract: ${guilds}", ("guilds", state5["guilds_contract"].as<name>()) );
    ilog( "bp_score_scaling_factor: ${scale}", ("scale", state5["bp_score_scaling_factor"].as<uint32_t>()) );
    ilog( "bp_default_score: ${default}", ("default", state5["bp_default_score"].as<uint32_t>()) );
@@ -1058,7 +1058,7 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_empty_disabled, eosio_weighted_producer_
    produce_blocks(1);
 
    ilog( "=== Weighted Voting Configuration ===" );
-   fc::variant state5 = get_global_state5();
+   fc::variant state5 = get_global_state6();
    ilog( "guilds_contract: ${guilds}", ("guilds", state5["guilds_contract"].as<name>()) );
    ilog( "bp_score_scaling_factor: ${scale}", ("scale", state5["bp_score_scaling_factor"].as<uint32_t>()) );
    ilog( "bp_default_score: ${default}", ("default", state5["bp_default_score"].as<uint32_t>()) );
@@ -1310,7 +1310,7 @@ BOOST_FIXTURE_TEST_CASE(test_admin_disabled_guild_weight, eosio_weighted_produce
    produce_blocks(1);
 
    ilog( "=== Weighted Voting Configuration ===" );
-   fc::variant state5 = get_global_state5();
+   fc::variant state5 = get_global_state6();
    ilog( "guilds_contract: ${guilds}", ("guilds", state5["guilds_contract"].as<name>()) );
    ilog( "bp_score_scaling_factor: ${scale}", ("scale", state5["bp_score_scaling_factor"].as<uint32_t>()) );
    ilog( "bp_default_score: ${default}", ("default", state5["bp_default_score"].as<uint32_t>()) );
@@ -1554,7 +1554,7 @@ BOOST_FIXTURE_TEST_CASE(test_verify_hash_not_match, eosio_weighted_producer_test
    produce_blocks(1);
 
    ilog( "=== Weighted Voting Configuration ===" );
-   fc::variant state5 = get_global_state5();
+   fc::variant state5 = get_global_state6();
    ilog( "guilds_contract: ${guilds}", ("guilds", state5["guilds_contract"].as<name>()) );
    ilog( "bp_score_scaling_factor: ${scale}", ("scale", state5["bp_score_scaling_factor"].as<uint32_t>()) );
    ilog( "bp_default_score: ${default}", ("default", state5["bp_default_score"].as<uint32_t>()) );
@@ -1784,7 +1784,7 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_add_remove_operations, eosio_weighted_pr
    ));
    produce_blocks(1);
 
-   fc::variant state5 = get_global_state5();
+   fc::variant state5 = get_global_state6();
    auto hash_list = state5["guilds_code_hashes"].get_array();
    BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
    ilog( "✓ First hash added successfully" );
@@ -1805,7 +1805,7 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_add_remove_operations, eosio_weighted_pr
    ));
    produce_blocks(1);
 
-   state5 = get_global_state5();
+   state5 = get_global_state6();
    hash_list = state5["guilds_code_hashes"].get_array();
    BOOST_REQUIRE_EQUAL(hash_list.size(), 2);
    ilog( "✓ Second hash added successfully (total: 2)" );
@@ -1816,7 +1816,7 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_add_remove_operations, eosio_weighted_pr
    ));
    produce_blocks(1);
 
-   state5 = get_global_state5();
+   state5 = get_global_state6();
    hash_list = state5["guilds_code_hashes"].get_array();
    BOOST_REQUIRE_EQUAL(hash_list.size(), 1);
    ilog( "✓ First hash removed successfully (total: 1)" );
@@ -1835,7 +1835,7 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_add_remove_operations, eosio_weighted_pr
    ));
    produce_blocks(1);
 
-   state5 = get_global_state5();
+   state5 = get_global_state6();
    hash_list = state5["guilds_code_hashes"].get_array();
    BOOST_REQUIRE_EQUAL(hash_list.size(), 0);
    ilog( "✓ Last hash removed successfully (total: 0)" );
