@@ -10,11 +10,13 @@
 
 #include <eosio.system/exchange_state.hpp>
 #include <eosio.system/native.hpp>
+#include <eosio.system/guilds.oig.hpp>
 
 #include <deque>
 #include <optional>
 #include <string>
 #include <type_traits>
+#include <eosio.system/rng.hpp>
 
 #include <eosio.system/delphioracle-interface.hpp>
 
@@ -92,6 +94,8 @@ namespace eosiosystem {
    // delphi price oracle
    static constexpr uint64_t RATE_DECIMAL = 10000;
 
+   static constexpr int64_t  RATE_DENOMINATOR              = 10000;   // basis points (100.00% = 10000)
+   
 #ifdef SYSTEM_BLOCKCHAIN_PARAMETERS
    struct blockchain_parameters_v1 : eosio::blockchain_parameters
    {
@@ -202,6 +206,15 @@ namespace eosiosystem {
       double            total_vpay_share_change_rate = 0;
 
       EOSLIB_SERIALIZE( eosio_global_state3, (last_vpay_state_update)(total_vpay_share_change_rate) )
+   };
+
+   // Defines new global state parameters added after version 1.3.0
+   struct [[eosio::table("global5"), eosio::contract("eosio.system")]] eosio_global_state5 {
+      eosio_global_state5() { }
+      uint64_t          rng_rate = 0;
+      uint64_t          max_pool_rng = 0;
+
+      EOSLIB_SERIALIZE( eosio_global_state5, (rng_rate)(max_pool_rng) )
    };
 
    inline eosio::block_signing_authority convert_to_block_signing_authority( const eosio::public_key& producer_key ) {
@@ -499,6 +512,8 @@ namespace eosiosystem {
 
    typedef eosio::singleton< "global3"_n, eosio_global_state3 > global_state3_singleton;
 
+   typedef eosio::singleton< "global5"_n, eosio_global_state5 > global_state5_singleton;
+
    struct [[eosio::table, eosio::contract("eosio.system")]] user_resources {
       name          owner;
       asset         net_weight;
@@ -728,6 +743,18 @@ namespace eosiosystem {
    };
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 
+   // Defines new global state parameters for BP weighted voting
+   struct [[eosio::table("global.a"), eosio::contract("eosio.system")]] eosio_global_state6 {
+      eosio_global_state6() { }
+      name     guilds_contract = "guilds.oig"_n;                     // Guild contract name
+      uint32_t bp_score_scaling_factor = 1000;                       // Divisor for score (1000 = 1.0x multiplier)
+      uint32_t bp_default_score = 1000;                              // Default score for unacknowledged BPs
+      bool     enable_weighted_voting = true;                        // Kill switch for weighted voting
+      std::vector<eosio::checksum256> guilds_code_hashes;            // List of approved guilds contract code hashes
+
+      EOSLIB_SERIALIZE( eosio_global_state6, (guilds_contract)(bp_score_scaling_factor)(bp_default_score)(enable_weighted_voting)(guilds_code_hashes) )
+   };
+   typedef eosio::singleton< "global.a"_n, eosio_global_state6 > global_state6_singleton;
    // Defines new global state parameters for dynamic BP and Delphi oracle support
    struct [[eosio::table("global.b"), eosio::contract("eosio.system")]] eosio_global_state7 {
       eosio_global_state7() { }
@@ -798,11 +825,15 @@ namespace eosiosystem {
          global_state2_singleton _global2;
          global_state3_singleton _global3;
          global_state4_singleton _global4;
+         global_state5_singleton _global5;
+         global_state6_singleton _global6;
          global_state7_singleton _global7;
          eosio_global_state      _gstate;
          eosio_global_state2     _gstate2;
          eosio_global_state3     _gstate3;
          eosio_global_state4     _gstate4;
+         eosio_global_state5     _gstate5;
+         eosio_global_state6     _gstate6;
          eosio_global_state7     _gstate7;
          standby_disallow_table  _standby_disallow;
          standby_table           _standbys;
@@ -1465,7 +1496,31 @@ namespace eosiosystem {
 
          /** claim standby reward */
          [[eosio::action]]
-         void claimstandby(const name owner);  
+         void claimstandby(const name owner);
+
+         /** set guilds contract name for BP weighted voting */
+         [[eosio::action]]
+         void setguildcont( const name& contract );
+
+         /** set BP score scaling factor for weighted voting */
+         [[eosio::action]]
+         void setbpscale( uint32_t scaling_factor );
+
+         /** set default BP score for unacknowledged producers */
+         [[eosio::action]]
+         void setbpdefscore( uint32_t default_score );
+
+         /** add approved guilds contract code hash for weighted voting verification */
+         [[eosio::action]]
+         void addguildhash( const eosio::checksum256& hash );
+
+         /** remove approved guilds contract code hash */
+         [[eosio::action]]
+         void rmguildhash( const eosio::checksum256& hash );
+
+         /** enable or disable weighted voting kill switch */
+         [[eosio::action]]
+         void setenablewv( bool enable );
 
           /** set USD per BP value */
          [[eosio::action]]
@@ -1500,6 +1555,15 @@ namespace eosiosystem {
         */
        [[eosio::action]]
        void limitauthchg( const name& account, const std::vector<name>& allow_perms, const std::vector<name>& disallow_perms );
+
+         /**
+          * Set RNG rate action, configures the RNG parameters in the system
+          *
+          * @param rng_rate - the rate to set for RNG generation
+          * @param max_pool_rng - the maximum pool size for RNG. Setting to 0 disables RNG deposits
+          */
+         [[eosio::action]]
+         void setrngrate( uint64_t rng_rate, uint64_t max_pool_rng );
 
          using init_action = eosio::action_wrapper<"init"_n, &system_contract::init>;
          using setacctram_action = eosio::action_wrapper<"setacctram"_n, &system_contract::setacctram>;
@@ -1565,6 +1629,13 @@ namespace eosiosystem {
        using set_standby_slots_action = eosio::action_wrapper<"setsbslot"_n, &system_contract::setsbslot>;
        using add_standby_block_action = eosio::action_wrapper<"disallowsb"_n, &system_contract::disallowsb>;
        using rm_standby_block_action = eosio::action_wrapper<"allowsb"_n, &system_contract::allowsb>;
+       using setrngrate_action = eosio::action_wrapper<"setrngrate"_n, &system_contract::setrngrate>;
+       using setguildcont_action = eosio::action_wrapper<"setguildcont"_n, &system_contract::setguildcont>;
+       using setbpscale_action = eosio::action_wrapper<"setbpscale"_n, &system_contract::setbpscale>;
+       using setbpdefscore_action = eosio::action_wrapper<"setbpdefscore"_n, &system_contract::setbpdefscore>;
+       using addguildhash_action = eosio::action_wrapper<"addguildhash"_n, &system_contract::addguildhash>;
+       using rmguildhash_action = eosio::action_wrapper<"rmguildhash"_n, &system_contract::rmguildhash>;
+       using setenablewv_action = eosio::action_wrapper<"setenablewv"_n, &system_contract::setenablewv>;
 
        using set_usd_bp_action = eosio::action_wrapper<"setusdbp"_n, &system_contract::setusdbp>;
        using set_bps_params_action = eosio::action_wrapper<"setbpsparams"_n, &system_contract::setbpsparams>;
@@ -1616,6 +1687,8 @@ namespace eosiosystem {
                                                double shares_rate, bool reset_to_zero = false );
          double update_total_votepay_share( const time_point& ct,
                                             double additional_shares_delta = 0.0, double shares_rate_delta = 0.0 );
+         double get_bp_weight_multiplier( const name& producer ) const;
+         bool verify_guilds_contract() const;
 
          template <auto system_contract::*...Ptrs>
          class registration {
