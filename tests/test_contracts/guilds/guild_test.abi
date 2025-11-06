@@ -1,0 +1,89 @@
+{
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT ",
+    "version": "eosio::abi/1.2",
+    "types": [],
+    "structs": [
+        {
+            "name": "guild",
+            "base": "",
+            "fields": [
+                {
+                    "name": "producer",
+                    "type": "name"
+                },
+                {
+                    "name": "score",
+                    "type": "uint32"
+                },
+                {
+                    "name": "prv_score",
+                    "type": "uint32"
+                },
+                {
+                    "name": "balance",
+                    "type": "asset"
+                },
+                {
+                    "name": "eligibility",
+                    "type": "asset"
+                },
+                {
+                    "name": "autopay",
+                    "type": "bool"
+                },
+                {
+                    "name": "retired",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "insertguild",
+            "base": "",
+            "fields": [
+                {
+                    "name": "producer",
+                    "type": "name"
+                },
+                {
+                    "name": "score",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "removeguild",
+            "base": "",
+            "fields": [
+                {
+                    "name": "producer",
+                    "type": "name"
+                }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "name": "insertguild",
+            "type": "insertguild",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "removeguild",
+            "type": "removeguild",
+            "ricardian_contract": ""
+        }
+    ],
+    "tables": [
+        {
+            "name": "guild",
+            "type": "guild",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        }
+    ],
+    "ricardian_clauses": [],
+    "variants": [],
+    "action_results": []
+}

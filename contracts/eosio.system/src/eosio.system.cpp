@@ -22,6 +22,7 @@ namespace eosiosystem {
     _global3(get_self(), get_self().value),
     _global4(get_self(), get_self().value),
     _global5(get_self(), get_self().value),
+    _global6(get_self(), get_self().value),
     _standbys(get_self(), get_self().value),
     _standby_disallow(get_self(), get_self().value),
     _rammarket(get_self(), get_self().value),
@@ -37,6 +38,7 @@ namespace eosiosystem {
       _gstate3 = _global3.exists() ? _global3.get() : eosio_global_state3{};
       _gstate4 = _global4.exists() ? _global4.get() : eosio_global_state4{};
       _gstate5 = _global5.exists() ? _global5.get() : eosio_global_state5{};
+      _gstate6 = _global6.exists() ? _global6.get() : eosio_global_state6{};
    }
 
    eosio_global_state system_contract::get_default_parameters() {
@@ -57,6 +59,7 @@ namespace eosiosystem {
       _global3.set( _gstate3, get_self() );
       _global4.set( _gstate4, get_self() );
       _global5.set( _gstate5, get_self() );
+      _global6.set( _gstate6, get_self() );
    }
 
    void system_contract::setram( uint64_t max_ram_size ) {
@@ -492,6 +495,24 @@ namespace eosiosystem {
       });
    }
 
+
+   void system_contract::setguildcont( const name& contract ) {
+      require_auth( get_self() );
+      check( is_account( contract ), "guild contract account does not exist" );
+      _gstate6.guilds_contract = contract;
+   }
+
+   void system_contract::setbpscale( uint32_t scaling_factor ) {
+      require_auth( get_self() );
+      check( scaling_factor > 0, "scaling factor must be greater than 0" );
+      _gstate6.bp_score_scaling_factor = scaling_factor;
+   }
+
+   void system_contract::setbpdefscore( uint32_t default_score ) {
+      require_auth( get_self() );
+      _gstate6.bp_default_score = default_score;
+   }
+
    void system_contract::setrngrate( uint64_t rng_rate, uint64_t max_pool_rng ) {
       require_auth( get_self() );
       check( rng_rate >= 0 && rng_rate < 10000, "rng_rate must be between 0 and 10000");
@@ -500,5 +521,4 @@ namespace eosiosystem {
       
       _global5.set( _gstate5, get_self() );
    }
-
 } /// eosio.system

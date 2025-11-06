@@ -110,28 +110,61 @@ namespace eosiosystem {
       auto idx = _producers.get_index<"prototalvote"_n>();
 
       using value_type = std::pair<eosio::producer_authority, uint16_t>;
-      std::vector< value_type > top_producers;
-      top_producers.reserve(21);
       const uint32_t num_standby_slots = _gstate4.num_standby_slots;
 
-      std::vector<eosio::name> standby_producers;
-      standby_producers.reserve(num_standby_slots);
-      auto current_it = idx.cbegin();
-      for( auto it = idx.cbegin(); it != idx.cend() && top_producers.size() < 21 && 0 < it->total_votes && it->active(); ++it ) {
-         top_producers.emplace_back(
+      // Create vector to hold producers with their weighted votes
+      struct weighted_producer {
+         eosio::producer_authority authority;
+         uint16_t location;
+         double weighted_votes;
+         name producer_name;
+      };
+      std::vector<weighted_producer> weighted_producers;
+
+      // Calculate weighted votes for all active producers with votes
+      for( auto it = idx.cbegin(); it != idx.cend() && it->active() && it->total_votes > 0; ++it ) {
+         double multiplier = get_bp_weight_multiplier( it->owner );
+         double weighted_votes = it->total_votes * multiplier;
+
+         weighted_producers.push_back({
             eosio::producer_authority{
                .producer_name = it->owner,
                .authority     = it->get_producer_authority()
             },
-            it->location
-         );
-         current_it = it;
+            it->location,
+            weighted_votes,
+            it->owner
+         });
       }
 
-      for( auto it = ++current_it; it != idx.cend() && standby_producers.size() < num_standby_slots && 0 < it->total_votes && it->active(); ++it ) {
-         // check if producer is not on standbyblock list
-         if( !is_disallow_standby( it->owner ) ){
-            standby_producers.emplace_back( it->owner );
+      // Sort by weighted votes (descending)
+      std::sort( weighted_producers.begin(), weighted_producers.end(),
+         [](const weighted_producer& a, const weighted_producer& b) {
+            if (a.weighted_votes == b.weighted_votes) {
+               return a.producer_name < b.producer_name;  // Deterministic tie-breaker
+            }
+            return a.weighted_votes > b.weighted_votes;
+         });
+
+      // Select top 21 and standbys based on weighted votes
+      std::vector<value_type> top_producers;
+      top_producers.reserve(21);
+      std::vector<eosio::name> standby_producers;
+      standby_producers.reserve(num_standby_slots);
+
+      for( size_t i = 0; i < weighted_producers.size(); ++i ) {
+         if( i < 21 ) {
+            top_producers.emplace_back(
+               std::move(weighted_producers[i].authority),
+               weighted_producers[i].location
+            );
+         } else if( standby_producers.size() < num_standby_slots ) {
+            // check if producer is not on standbyblock list
+            if( !is_disallow_standby( weighted_producers[i].producer_name ) ) {
+               standby_producers.emplace_back( weighted_producers[i].producer_name );
+            }
+         } else {
+            break;
          }
       }
 
@@ -504,6 +537,92 @@ namespace eosiosystem {
             v.last_vote_weight = new_weight;
          }
       );
+   }
+
+   bool system_contract::verify_guilds_contract() const {
+      // If kill switch is disabled, return false
+      if( !_gstate6.enable_weighted_voting ) {
+         return false;
+      }
+
+      // If hash list is empty, disable weighted voting (backward compatible)
+      if( _gstate6.guilds_code_hashes.empty() ) {
+         return false;
+      }
+
+      // Check if account exists
+      if( !eosio::is_account( _gstate6.guilds_contract ) ) {
+         return false;
+      }
+
+      // Get deployed contract hash
+      eosio::checksum256 deployed_hash = eosio::get_code_hash( _gstate6.guilds_contract );
+
+      // Empty hash means no code deployed
+      if( deployed_hash == eosio::checksum256() ) {
+         return false;
+      }
+
+      // Check if deployed hash is in our approved list
+      for( const auto& approved_hash : _gstate6.guilds_code_hashes ) {
+         if( deployed_hash == approved_hash ) {
+            return true;
+         }
+      }
+
+      return false; // Hash not in approved list
+   }
+
+   double system_contract::get_bp_weight_multiplier( const name& producer ) const {
+      // Verify guilds contract before reading scores
+      if( !verify_guilds_contract() ) {
+         return 1.0; // Fall back to 1.0x (no weighting)
+      }
+
+      // Return 1.0 if scaling factor is 0 to avoid division by zero
+      if( _gstate6.bp_score_scaling_factor == 0 ) {
+         return 1.0;
+      }
+
+      // Try to read from guilds contract using helper function
+      auto guilds = guildsoig::get_guilds( _gstate6.guilds_contract );
+      auto guild_itr = guilds.find( producer.value );
+
+      uint32_t score = _gstate6.bp_default_score;
+      if( guild_itr != guilds.end() ) {
+         score = guild_itr->score;
+      }
+
+      return static_cast<double>(score) / static_cast<double>(_gstate6.bp_score_scaling_factor);
+   }
+
+   void system_contract::addguildhash( const eosio::checksum256& hash ) {
+      require_auth( get_self() );
+
+      // Check for duplicate before adding
+      for( const auto& existing_hash : _gstate6.guilds_code_hashes ) {
+         check( existing_hash != hash, "hash already exists in approved list" );
+      }
+
+      _gstate6.guilds_code_hashes.push_back( hash );
+      _global6.set( _gstate6, get_self() );
+   }
+
+   void system_contract::rmguildhash( const eosio::checksum256& hash ) {
+      require_auth( get_self() );
+
+      auto it = std::find( _gstate6.guilds_code_hashes.begin(), _gstate6.guilds_code_hashes.end(), hash );
+      check( it != _gstate6.guilds_code_hashes.end(), "hash not found in approved list" );
+
+      _gstate6.guilds_code_hashes.erase( it );
+      _global6.set( _gstate6, get_self() );
+   }
+
+   void system_contract::setenablewv( bool enable ) {
+      require_auth( get_self() );
+
+      _gstate6.enable_weighted_voting = enable;
+      _global6.set( _gstate6, get_self() );
    }
 
 } /// namespace eosiosystem
