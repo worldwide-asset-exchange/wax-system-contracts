@@ -54,7 +54,7 @@ namespace eosiosystem {
     void system_contract::setusdbp( uint32_t usd_per_bp ){
       require_auth( get_self() );
       check(usd_per_bp >= 0, "usd_per_bp must be greater than 0");
-      _gstate5.usd_per_bp = usd_per_bp;
+      _gstate7.usd_per_bp = usd_per_bp;
    }
 
    void system_contract::setbpsparams( uint32_t min_bps, uint32_t max_bps, uint32_t standby_offset ){
@@ -64,24 +64,24 @@ namespace eosiosystem {
       check(standby_offset >= 0, "standby_offset must be greater than 0");
         check(min_bps <= max_bps, "min_bps must be less than or equal to max_bps");
 
-        _gstate5.min_bps = min_bps;
-        _gstate5.max_bps = max_bps;
-        _gstate5.standby_offset = standby_offset;
+        _gstate7.min_bps = min_bps;
+        _gstate7.max_bps = max_bps;
+        _gstate7.standby_offset = standby_offset;
    }
 
    void system_contract::enabledynbp( bool enable_dynamic_bp ) {
       require_auth( get_self() );
       // check for other conditions before enabling dynamic bp
       if (enable_dynamic_bp){
-            check(_gstate5.usd_per_bp > 0, "usd_per_bp must be set");
-            check(_gstate5.min_bps > 0, "min_bps must be set");
-            check(_gstate5.max_bps > 0, "max_bps must be set");
-            check(_gstate5.delphi_pair != name(), "delphi_pair must be set");
-            check(_gstate5.price_average_days > 0, "price_average_days must be set");
-            check(_gstate5.last_average_price > 0, "last_average_price must > 0");
+            check(_gstate7.usd_per_bp > 0, "usd_per_bp must be set");
+            check(_gstate7.min_bps > 0, "min_bps must be set");
+            check(_gstate7.max_bps > 0, "max_bps must be set");
+            check(_gstate7.delphi_pair != name(), "delphi_pair must be set");
+            check(_gstate7.price_average_days > 0, "price_average_days must be set");
+            check(_gstate7.last_average_price > 0, "last_average_price must > 0");
             // TODO: check more for delphioracle value here
       }
-      _gstate5.enable_dynamic_bp = enable_dynamic_bp;
+      _gstate7.enable_dynamic_bp = enable_dynamic_bp;
    }
 
    void system_contract::setdelphipr( const name delphi_pair, uint32_t price_average_days ) {
@@ -91,8 +91,8 @@ namespace eosiosystem {
 
       auto delphi_pair_itr = delphioracle::get_pairs().require_find(delphi_pair.value,
                                                             "pair name does not exist in the delphi oracle contract");
-      _gstate5.delphi_pair = delphi_pair;
-      _gstate5.price_average_days = price_average_days;
+      _gstate7.delphi_pair = delphi_pair;
+      _gstate7.price_average_days = price_average_days;
 
       // update delphi price
       update_delphi_price();
@@ -101,16 +101,16 @@ namespace eosiosystem {
    void system_contract::update_delphi_price(){
       const auto ct = current_time_point();
       // check if last price update is more than 1 day
-      if (ct - _gstate5.last_price_update < microseconds(useconds_per_day)){
+      if (ct - _gstate7.last_price_update < microseconds(useconds_per_day)){
         return;
       }
 
       // check if delphi pair is set
-      if (_gstate5.delphi_pair == name()){
+      if (_gstate7.delphi_pair == name()){
         return;
       }
 
-      auto delphi_pair_name = _gstate5.delphi_pair;
+      auto delphi_pair_name = _gstate7.delphi_pair;
       eosio::print("delphi_pair_name: ", delphi_pair_name);
       delphioracle::datapoints_t datapoints = delphioracle::get_datapoints(delphi_pair_name);
       auto delphi_pair_itr = delphioracle::get_pairs().require_find(delphi_pair_name.value, "delphi pair does not exist");
@@ -131,17 +131,17 @@ namespace eosiosystem {
       eosio::print("median_price: ", median_price, "\n");
       uint64_t current_price_rate = median_price * RATE_DECIMAL / pow(10, delphi_pair_itr->quoted_precision);
       eosio::print("current_price_rate: ", current_price_rate, "\n");
-      // rolling update the average price in _gstate5.price_average_days
-      uint64_t price_average_days = _gstate5.price_average_days;
-      uint64_t price_average = _gstate5.last_average_price;
+      // rolling update the average price in _gstate7.price_average_days
+      uint64_t price_average_days = _gstate7.price_average_days;
+      uint64_t price_average = _gstate7.last_average_price;
       eosio::print("old price average: ", price_average, "\n");
       if (price_average == 0){
         price_average = current_price_rate;
       }else{
         price_average = (price_average * (price_average_days - 1) + current_price_rate) / price_average_days;
       }
-      _gstate5.last_average_price = price_average;
-      _gstate5.last_price_update = ct;
+      _gstate7.last_average_price = price_average;
+      _gstate7.last_price_update = ct;
       eosio::print("new price average: ", price_average, "\n");
    }
    

@@ -729,8 +729,8 @@ namespace eosiosystem {
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 
    // Defines new global state parameters for dynamic BP and Delphi oracle support
-   struct [[eosio::table("global5"), eosio::contract("eosio.system")]] eosio_global_state5 {
-      eosio_global_state5() { }
+   struct [[eosio::table("global.b"), eosio::contract("eosio.system")]] eosio_global_state7 {
+      eosio_global_state7() { }
       // dynamic block producer
       uint32_t          usd_per_bp = 0;
       uint32_t          min_bps = 0;
@@ -743,9 +743,9 @@ namespace eosiosystem {
       uint64_t          last_average_price = 0;
       time_point        last_price_update;
 
-      EOSLIB_SERIALIZE( eosio_global_state5, (usd_per_bp)(min_bps)(max_bps)(standby_offset)(enable_dynamic_bp)(delphi_pair)(price_average_days)(last_average_price)(last_price_update) )
+      EOSLIB_SERIALIZE( eosio_global_state7, (usd_per_bp)(min_bps)(max_bps)(standby_offset)(enable_dynamic_bp)(delphi_pair)(price_average_days)(last_average_price)(last_price_update) )
    };
-   typedef eosio::singleton< "global5"_n, eosio_global_state5 > global_state5_singleton;
+   typedef eosio::singleton< "global.b"_n, eosio_global_state7 > global_state7_singleton;
 
    // Defines new standby producer info structure
    struct [[eosio::table, eosio::contract("eosio.system")]] standby_producer_info {
@@ -798,12 +798,12 @@ namespace eosiosystem {
          global_state2_singleton _global2;
          global_state3_singleton _global3;
          global_state4_singleton _global4;
-         global_state5_singleton _global5;
+         global_state7_singleton _global7;
          eosio_global_state      _gstate;
          eosio_global_state2     _gstate2;
          eosio_global_state3     _gstate3;
          eosio_global_state4     _gstate4;
-         eosio_global_state5     _gstate5;
+         eosio_global_state7     _gstate7;
          standby_disallow_table  _standby_disallow;
          standby_table           _standbys;
          rammarket               _rammarket;
