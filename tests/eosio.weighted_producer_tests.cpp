@@ -216,14 +216,99 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester)
    ));
    produce_blocks(1);
 
+   // Test 4: Set min considered producers
+   const uint32_t max_considered_producers = 150;
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setmaxprod"_n, mvo()
+      ("max_considered_producers", max_considered_producers)
+   ));
+   produce_blocks(1);
+
+   // Test 5: Set min producers vote threshold
+   const double min_producer_vote_threshold = 155.678;
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setminvote"_n, mvo()
+      ("min_producer_vote_threshold", min_producer_vote_threshold)
+   ));
+   produce_blocks(1);
+
    // Verify default score was set
    fc::variant final_state = get_global_state6();
    BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), new_default_score);
+
+   // Verify max_considered_producers was set
+   BOOST_REQUIRE_EQUAL(final_state["max_considered_producers"].as<uint32_t>(), max_considered_producers);
+
+   // Verify min_producer_vote_threshold was set
+   BOOST_REQUIRE_EQUAL(final_state["min_producer_vote_threshold"].as<double>(), min_producer_vote_threshold);
 
    // Verify all settings persist together
    BOOST_REQUIRE_EQUAL(final_state["guilds_contract"].as<name>(), new_guilds_contract);
    BOOST_REQUIRE_EQUAL(final_state["bp_score_scaling_factor"].as<uint32_t>(), new_scaling_factor);
    BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), new_default_score);
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_config_set_missing_self_authority, eosio_weighted_producer_tester) try {
+   fc::variant before_state = get_global_state6();
+
+   create_account_with_resources("fakeeosio"_n, config::system_account_name, core_sym::from_string("1.0000"), false);
+
+   // Test 1: Set guilds contract name
+   const name new_guilds_contract = "fakeguild"_n;
+   BOOST_REQUIRE_EQUAL(error("missing authority of eosio"),
+      push_action("fakeeosio"_n, "setguildcont"_n, mvo()
+         ("contract", new_guilds_contract)
+      )
+   );
+
+   // Test 2: Set BP score scaling factor
+   const uint32_t new_scaling_factor = 2345;
+   BOOST_REQUIRE_EQUAL(error("missing authority of eosio"),
+      push_action("fakeeosio"_n, "setbpscale"_n, mvo()
+         ("scaling_factor", new_scaling_factor)
+      )
+   );
+
+   // Test 3: Set default BP score
+   const uint32_t new_default_score = 5412;
+   BOOST_REQUIRE_EQUAL(error("missing authority of eosio"),
+      push_action("fakeeosio"_n, "setbpdefscore"_n, mvo()
+         ("default_score", new_default_score)
+      )
+   );
+   produce_blocks(1);
+
+   // Test 4: Set min considered producers
+   const uint32_t max_considered_producers = 87612;
+   BOOST_REQUIRE_EQUAL(error("missing authority of eosio"),
+      push_action("fakeeosio"_n, "setmaxprod"_n, mvo()
+         ("max_considered_producers", max_considered_producers)
+      )
+   );
+   produce_blocks(1);
+
+   // Test 5: Set min producers vote threshold
+   const double min_producer_vote_threshold = 8761234;
+   BOOST_REQUIRE_EQUAL(error("missing authority of eosio"),
+      push_action("fakeeosio"_n, "setminvote"_n, mvo()
+         ("min_producer_vote_threshold", min_producer_vote_threshold)
+      )
+   );
+   produce_blocks(1);
+
+   // Verify state doesn't not change
+   fc::variant final_state = get_global_state6();
+   BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), before_state["bp_default_score"].as<uint32_t>());
+
+   // Verify max_considered_producers was set
+   BOOST_REQUIRE_EQUAL(final_state["max_considered_producers"].as<uint32_t>(), before_state["max_considered_producers"].as<uint32_t>());
+
+   // Verify min_producer_vote_threshold was set
+   BOOST_REQUIRE_EQUAL(final_state["min_producer_vote_threshold"].as<double>(), before_state["min_producer_vote_threshold"].as<double>());
+
+   // Verify all settings persist together
+   BOOST_REQUIRE_EQUAL(final_state["guilds_contract"].as<name>(), before_state["guilds_contract"].as<name>());
+   BOOST_REQUIRE_EQUAL(final_state["bp_score_scaling_factor"].as<uint32_t>(), before_state["bp_score_scaling_factor"].as<uint32_t>());
+   BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), before_state["bp_default_score"].as<uint32_t>());
 
 } FC_LOG_AND_RETHROW()
 
@@ -764,6 +849,841 @@ BOOST_FIXTURE_TEST_CASE(test_weighted_producer_with_standby_selection, eosio_wei
          ("total", 8) );
    ilog( "✓ No overlap between active and standby" );
    ilog( "SUCCESS: Weighted voting correctly affects both active and standby selection!" );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_min_vote_threshold_filters_standby_bps, eosio_weighted_producer_tester) try {
+   // Test that min_vote_threshold correctly filters out producers with insufficient votes
+   // Only producers with total_votes > min_vote_threshold should be considered for top 21 or standby
+   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+   // Step 1: Configure weighted voting system
+   const name guilds_contract = GUILDS_OIG;
+   const uint32_t scaling_factor = 1000; // 1.0x multiplier
+   const uint32_t default_score = 1000; // 1.0x default
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", guilds_contract)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
+      ("scaling_factor", scaling_factor)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
+      ("default_score", default_score)
+   ));
+   produce_blocks(1);
+
+   // Get the code hash of the deployed guilds contract
+   auto wasm = contracts::util::guild_test_wasm();
+   auto hash_result = fc::sha256::hash(reinterpret_cast<const char*>(wasm.data()), wasm.size());
+   ilog( "Guilds contract hash: ${hash}", ("hash", hash_result.str()) );
+   // Add the correct hash to approved list
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
+      ("hash", hash_result.str())
+   ));
+   produce_blocks(1);
+
+   // Step 2: Configure standby system
+   const uint32_t standby_slots = 5;
+   const uint32_t standby_ratio = 5000; // 0.5 weight
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setsbslot"_n, mvo()
+      ("num_slots", standby_slots)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setsbratio"_n, mvo()
+      ("ratio", standby_ratio)
+   ));
+   produce_blocks(1);
+
+   // Step 3: Create voters with different stake amounts to create vote variation
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const asset initial_supply = core_sym::from_string("100000000.0000");
+   const asset high_vote = core_sym::from_string("30000000.0000");
+   const asset low_vote = core_sym::from_string("10000000.0000");
+
+   // Create high-stake voters
+   const std::vector<account_name> high_voters = { "voter1111111"_n, "voter2222222"_n };
+   for (const auto& v: high_voters) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, initial_supply, config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, high_vote, high_vote) );
+   }
+
+   // Create low-stake voters
+   const std::vector<account_name> low_voters = { "voter3333333"_n, "voter4444444"_n };
+   for (const auto& v: low_voters) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, core_sym::from_string("100000000.0000"), config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, low_vote, low_vote) );
+   }
+
+   // Step 4: Create 30 producers
+   std::vector<account_name> producer_names;
+   const std::string root("prod111111");
+   const std::vector<std::string> suffixes = {
+      "aa", "ab", "ac", "ad", "ae", "af", "ag", "ah", "ai", "aj",  // 10
+      "ak", "al", "am", "an", "ao", "ap", "aq", "ar", "as", "at",  // 20
+      "au", "av", "aw", "ax", "ay", "az", "ba", "bb", "bc", "bd"   // 30
+   };
+
+   for (const auto& suffix : suffixes) {
+      producer_names.emplace_back(root + suffix);
+   }
+
+   setup_producer_accounts(producer_names);
+   for (const auto& p: producer_names) {
+      BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+      produce_blocks(1);
+   }
+
+   ilog( "=== Created ${count} producers ===" , ("count", producer_names.size()));
+
+   for (size_t i = 0; i < 30; ++i) {
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+         ("producer", producer_names[i])
+         ("score", 300)
+      ));
+      ilog( "  ${name}: score=300", ("name", producer_names[i]) );
+   }
+
+   // Step 5: Vote to create variation in vote weights
+   produce_block( fc::hours(24) );
+
+   // High-stake voters vote for first 25 producers (aa-ay)
+   std::vector<account_name> high_vote_producers(producer_names.begin(), producer_names.begin() + 23);
+   for (const auto& v: high_voters) {
+      BOOST_REQUIRE_EQUAL(success(), vote(v, high_vote_producers));
+   }
+
+   // Low-stake voters vote for last 5 producers (az-bd) - these will have low votes
+   std::vector<account_name> low_vote_producers(producer_names.begin() + 23, producer_names.end());
+   for (const auto& v: low_voters) {
+      BOOST_REQUIRE_EQUAL(success(), vote(v, low_vote_producers));
+   }
+
+   // Wait for votes to be recorded
+   produce_blocks(10);
+
+   // Step 6: Calculate the vote threshold - set it between high and low vote weights
+   // Get vote weight of a producer with high votes
+   fc::variant high_vote_prod_info = get_producer_info(producer_names[0]); // prod111111aa
+   fc::variant high_vote_prod_info1 = get_producer_info(producer_names[1]); // prod111111aa
+   fc::variant high_vote_prod_info2 = get_producer_info(producer_names[2]); // prod111111aa
+   double high_votes = high_vote_prod_info["total_votes"].as<double>();
+
+   // Get vote weight of a producer with low votes
+   fc::variant low_vote_prod_info = get_producer_info(producer_names[25]); // prod111111az
+   fc::variant low_vote_prod_info1 = get_producer_info(producer_names[24]); // prod111111az
+   double low_votes = low_vote_prod_info["total_votes"].as<double>();
+
+   ilog( "=== Vote Weight Analysis ===" );
+   ilog( "High-vote producer (${name}): ${votes}", ("name", producer_names[0])("votes", high_votes) );
+   ilog( "Low-vote producer (${name}): ${votes}", ("name", producer_names[25])("votes", low_votes) );
+
+   // Set threshold between low and high votes to filter out low-vote producers
+   double min_vote_threshold = (high_votes + low_votes) / 2.0;
+   ilog( "Setting min_vote_threshold to: ${threshold}", ("threshold", min_vote_threshold) );
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setminvote"_n, mvo()
+      ("min_producer_vote_threshold", min_vote_threshold)
+   ));
+   produce_blocks(1);
+
+   // Verify threshold was set
+   auto state6 = get_global_state6();
+   double actual_threshold = state6["min_producer_vote_threshold"].as<double>();
+   BOOST_REQUIRE_EQUAL(actual_threshold, min_vote_threshold);
+   ilog( "✓ min_vote_threshold confirmed: ${threshold}", ("threshold", actual_threshold) );
+
+   // Step 7: Trigger schedule update
+   produce_blocks(250);
+
+   // Step 8: Verify active producer selection (should only include high-vote producers)
+   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   ilog( "${idx}: ${name}", ("idx", 0)("name", producer_keys[0].producer_name) );
+   BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
+
+   ilog( "=== Active Producers (Top 21 - should only have high-vote producers) ===" );
+   std::set<name> active_producers;
+   for (size_t i = 0; i < producer_keys.size(); ++i) {
+      active_producers.insert(producer_keys[i].producer_name);
+      ilog( "${idx}: ${name}", ("idx", i)("name", producer_keys[i].producer_name) );
+   }
+
+   // Step 9: Verify standby producer selection
+   auto standby_producers = get_standby_table();
+   ilog( "=== Standby Producers (should only have high-vote producers) ===" );
+
+   std::set<name> standby_producer_names;
+   for (size_t i = 0; i < standby_producers.size() && standby_producers[i].is_active; ++i) {
+      standby_producer_names.insert(standby_producers[i].owner);
+      ilog( "${idx}: ${name} (active=${active})",
+            ("idx", i)
+            ("name", standby_producers[i].owner)
+            ("active", standby_producers[i].is_active) );
+   }
+   // only 23 bps are above min_vote_threshold, 21 are main bps, 2 are standbys
+   BOOST_REQUIRE_EQUAL( 2, standby_producer_names.size() );
+
+   // Step 10: Verification - Check that low-vote producers are EXCLUDED
+   ilog( "=== Verifying Low-Vote Producers Exclusion ===" );
+   int excluded_count = 0;
+   for (size_t i = 23; i < producer_names.size(); ++i) {
+      name producer = producer_names[i];
+      fc::variant prod_info = get_producer_info(producer);
+      double votes = prod_info["total_votes"].as<double>();
+
+      bool in_active = active_producers.find(producer) != active_producers.end();
+      bool in_standby = standby_producer_names.find(producer) != standby_producer_names.end();
+
+      if (!in_active && !in_standby) {
+         BOOST_REQUIRE(votes <= min_vote_threshold);
+         ilog( "✓ ${name} (votes=${votes}) EXCLUDED - votes below threshold ${threshold}",
+               ("name", producer)
+               ("votes", votes)
+               ("threshold", min_vote_threshold) );
+         excluded_count++;
+      } else {
+         ilog( "✗ ${name} (votes=${votes}) found in ${where} - should be EXCLUDED!",
+               ("name", producer)
+               ("votes", votes)
+               ("where", in_active ? "active" : "standby") );
+      }
+   }
+
+   // All 7 low-vote producers should be excluded
+   BOOST_REQUIRE_EQUAL(excluded_count, 7);
+
+   // Step 11: Verify high-vote producers are INCLUDED
+   ilog( "=== Verifying High-Vote Producers Inclusion ===" );
+   for (size_t i = 0; i < 21; ++i) {
+      name producer = producer_names[i];
+      fc::variant prod_info = get_producer_info(producer);
+      double votes = prod_info["total_votes"].as<double>();
+
+      bool in_active = active_producers.find(producer) != active_producers.end();
+
+      BOOST_REQUIRE(in_active);
+      BOOST_REQUIRE(votes > min_vote_threshold);
+   }
+
+   for (size_t i = 21; i < 23; ++i) {
+      name producer = producer_names[i];
+      fc::variant prod_info = get_producer_info(producer);
+      double votes = prod_info["total_votes"].as<double>();
+
+      bool in_standby = standby_producer_names.find(producer) != active_producers.end();
+
+      BOOST_REQUIRE(in_standby);
+      BOOST_REQUIRE(votes > min_vote_threshold);
+   }
+
+   ilog( "=== TEST SUMMARY ===" );
+   ilog( "✓ min_vote_threshold set to: ${threshold}", ("threshold", min_vote_threshold) );
+   ilog( "✓ Low-vote producers excluded: ${excluded}/5", ("excluded", excluded_count) );
+   ilog( "✓ Active producers: ${active}", ("active", producer_keys.size()) );
+   ilog( "✓ Standby producers: ${standby}", ("standby", standby_producers.size()) );
+   ilog( "SUCCESS: min_vote_threshold correctly filters producers!" );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_min_vote_threshold_filters_main_bps, eosio_weighted_producer_tester) try {
+   // Test that min_vote_threshold correctly limits main (active) BPs when threshold is high
+   // Only 15 producers will have votes above threshold -> 15 active BPs, 0 standbys
+   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+   // Step 1: Configure weighted voting system
+   const name guilds_contract = GUILDS_OIG;
+   const uint32_t scaling_factor = 1000; // 1.0x multiplier
+   const uint32_t default_score = 1000; // 1.0x default
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", guilds_contract)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
+      ("scaling_factor", scaling_factor)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
+      ("default_score", default_score)
+   ));
+   produce_blocks(1);
+
+   // Get the code hash of the deployed guilds contract
+   auto wasm = contracts::util::guild_test_wasm();
+   auto hash_result = fc::sha256::hash(reinterpret_cast<const char*>(wasm.data()), wasm.size());
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
+      ("hash", hash_result.str())
+   ));
+   produce_blocks(1);
+
+   // Step 2: Configure standby system
+   const uint32_t standby_slots = 5;
+   const uint32_t standby_ratio = 5000; // 0.5 weight
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setsbslot"_n, mvo()
+      ("num_slots", standby_slots)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setsbratio"_n, mvo()
+      ("ratio", standby_ratio)
+   ));
+   produce_blocks(1);
+
+   // Step 3: Create voters with different stake amounts
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const asset initial_supply = core_sym::from_string("100000000.0000");
+   const asset high_vote = core_sym::from_string("30000000.0000");
+   const asset low_vote = core_sym::from_string("10000000.0000");
+
+   // Create high-stake voters
+   const std::vector<account_name> high_voters = { "voter1111111"_n, "voter2222222"_n };
+   for (const auto& v: high_voters) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, initial_supply, config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, high_vote, high_vote) );
+   }
+
+   // Create low-stake voters
+   const std::vector<account_name> low_voters = { "voter3333333"_n, "voter4444444"_n };
+   for (const auto& v: low_voters) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, core_sym::from_string("100000000.0000"), config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, low_vote, low_vote) );
+   }
+
+   // Step 4: Create 30 producers
+   std::vector<account_name> producer_names;
+   const std::string root("prod111111");
+   const std::vector<std::string> suffixes = {
+      "aa", "ab", "ac", "ad", "ae", "af", "ag", "ah", "ai", "aj",  // 10
+      "ak", "al", "am", "an", "ao", "ap", "aq", "ar", "as", "at",  // 20
+      "au", "av", "aw", "ax", "ay", "az", "ba", "bb", "bc", "bd"   // 30
+   };
+
+   for (const auto& suffix : suffixes) {
+      producer_names.emplace_back(root + suffix);
+   }
+
+   setup_producer_accounts(producer_names);
+   for (const auto& p: producer_names) {
+      BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+      // produce_blocks(1);
+   }
+
+   ilog( "=== Created ${count} producers ===" , ("count", producer_names.size()));
+
+   // Set all producers with same guild score
+   for (size_t i = 0; i < 30; ++i) {
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+         ("producer", producer_names[i])
+         ("score", 1000)
+      ));
+   }
+
+   // Step 5: Vote to create variation - only 15 producers get high votes
+   produce_block( fc::hours(24) );
+
+   // High-stake voters vote for first 15 producers only (aa-ao)
+   std::vector<account_name> high_vote_producers(producer_names.begin(), producer_names.begin() + 15);
+   for (const auto& v: high_voters) {
+      BOOST_REQUIRE_EQUAL(success(), vote(v, high_vote_producers));
+   }
+
+   // Step 6: Set threshold between high and low vote weights
+   fc::variant high_vote_prod_info = get_producer_info(producer_names[0]); // prod111111aa
+   double high_votes = high_vote_prod_info["total_votes"].as<double>();
+
+   ilog( "=== Vote Weight Analysis ===" );
+   ilog( "High-vote producer (${name}): ${votes}", ("name", producer_names[0])("votes", high_votes) );
+
+   // Set threshold right below high votes to filter out low-vote producers
+   // Set min vote before low vote producer
+   // To make sure that threshold was set before update_elected_producers trigger cause thresh_activated_stake_time
+   double min_vote_threshold = high_votes - high_votes/10.0;
+   ilog( "Setting min_vote_threshold to: ${threshold}", ("threshold", min_vote_threshold) );
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setminvote"_n, mvo()
+      ("min_producer_vote_threshold", min_vote_threshold)
+   ));
+
+   // Low-stake voters vote for producers 15-29 (ap-bd) - these will have low votes
+   std::vector<account_name> low_vote_producers(producer_names.begin() + 15, producer_names.end());
+   for (const auto& v: low_voters) {
+      BOOST_REQUIRE_EQUAL(success(), vote(v, low_vote_producers));
+   }
+
+   fc::variant low_vote_prod_info = get_producer_info(producer_names[15]); // prod111111ap
+   double low_votes = low_vote_prod_info["total_votes"].as<double>();
+   ilog( "Low-vote producer (${name}): ${votes}", ("name", producer_names[15])("votes", low_votes) );
+
+   // Verify threshold was set
+   auto state6 = get_global_state6();
+   double actual_threshold = state6["min_producer_vote_threshold"].as<double>();
+   BOOST_REQUIRE_EQUAL(actual_threshold, min_vote_threshold);
+   ilog( "✓ min_vote_threshold confirmed: ${threshold}", ("threshold", actual_threshold) );
+
+   // Step 7: Trigger schedule update
+   produce_blocks(250);
+
+   // Step 8: Verify active producer selection - should only have 15 BPs
+   auto producer_keys = control->head_block_state()->active_schedule.producers;
+
+   ilog( "=== Active Producers (should be 15 only) ===" );
+   std::set<name> active_producers;
+   for (size_t i = 0; i < producer_keys.size(); ++i) {
+      active_producers.insert(producer_keys[i].producer_name);
+      ilog( "${idx}: ${name}", ("idx", i)("name", producer_keys[i].producer_name) );
+   }
+
+   // Only 15 producers have votes above threshold -> only 15 active BPs
+   BOOST_REQUIRE_EQUAL( 15, producer_keys.size() );
+
+   // Step 9: Verify standby producer selection - should be ZERO
+   auto standby_producers = get_standby_table();
+
+   std::set<name> standby_producer_names;
+   for (size_t i = 0; i < standby_producers.size() && standby_producers[i].is_active; ++i) {
+      standby_producer_names.insert(standby_producers[i].owner);
+      ilog( "${idx}: ${name} (active=${active})",
+            ("idx", i)
+            ("name", standby_producers[i].owner)
+            ("active", standby_producers[i].is_active) );
+   }
+
+   // No producers qualify for standby since only 15 total are above threshold
+   BOOST_REQUIRE_EQUAL( 0, standby_producer_names.size() );
+
+   // Step 10: Verify first 15 producers (high votes) are in active
+   ilog( "=== Verifying High-Vote Producers (first 15) in Active ===" );
+   for (size_t i = 0; i < 15; ++i) {
+      name producer = producer_names[i];
+      fc::variant prod_info = get_producer_info(producer);
+      double votes = prod_info["total_votes"].as<double>();
+
+      bool in_active = active_producers.find(producer) != active_producers.end();
+
+      BOOST_REQUIRE(in_active);
+      BOOST_REQUIRE(votes > min_vote_threshold);
+      ilog( "✓ ${name} (votes=${votes}) in ACTIVE", ("name", producer)("votes", votes) );
+   }
+
+   // Step 11: Verify remaining producers (low votes) are EXCLUDED
+   ilog( "=== Verifying Low-Vote Producers (15-29) Excluded ===" );
+   int excluded_count = 0;
+   for (size_t i = 15; i < producer_names.size(); ++i) {
+      name producer = producer_names[i];
+      fc::variant prod_info = get_producer_info(producer);
+      double votes = prod_info["total_votes"].as<double>();
+
+      bool in_active = active_producers.find(producer) != active_producers.end();
+      bool in_standby = standby_producer_names.find(producer) != standby_producer_names.end();
+
+      if (!in_active && !in_standby) {
+         BOOST_REQUIRE(votes <= min_vote_threshold);
+         excluded_count++;
+      }
+   }
+
+   // All 15 low-vote producers should be excluded
+   BOOST_REQUIRE_EQUAL(excluded_count, 15);
+
+   ilog( "=== TEST SUMMARY ===" );
+   ilog( "✓ min_vote_threshold set to: ${threshold}", ("threshold", min_vote_threshold) );
+   ilog( "✓ Active producers: ${active} (expected 15)", ("active", producer_keys.size()) );
+   ilog( "✓ Standby producers: ${standby} (expected 0)", ("standby", standby_producer_names.size()) );
+   ilog( "✓ Low-vote producers excluded: ${excluded}/15", ("excluded", excluded_count) );
+   ilog( "SUCCESS: min_vote_threshold correctly limits main BPs to 15!" );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_max_considered_producers_filters_main_bps, eosio_weighted_producer_tester) try {
+   // Test that max_considered_producers correctly limits how many producers are considered
+   // Setting max_considered_producers to 15 -> only 15 active BPs, 0 standbys
+   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+   // Step 1: Configure weighted voting system
+   const name guilds_contract = GUILDS_OIG;
+   const uint32_t scaling_factor = 1000; // 1.0x multiplier
+   const uint32_t default_score = 1000; // 1.0x default
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", guilds_contract)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
+      ("scaling_factor", scaling_factor)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
+      ("default_score", default_score)
+   ));
+   produce_blocks(1);
+
+   // Get the code hash of the deployed guilds contract
+   auto wasm = contracts::util::guild_test_wasm();
+   auto hash_result = fc::sha256::hash(reinterpret_cast<const char*>(wasm.data()), wasm.size());
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
+      ("hash", hash_result.str())
+   ));
+   produce_blocks(1);
+
+   // Step 2: Configure standby system
+   const uint32_t standby_slots = 5;
+   const uint32_t standby_ratio = 5000; // 0.5 weight
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setsbslot"_n, mvo()
+      ("num_slots", standby_slots)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setsbratio"_n, mvo()
+      ("ratio", standby_ratio)
+   ));
+   produce_blocks(1);
+
+   // Step 3: Set max_considered_producers to 15
+   const uint32_t max_considered = 15;
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setmaxprod"_n, mvo()
+      ("max_considered_producers", max_considered)
+   ));
+   produce_blocks(1);
+
+   // Verify max_considered_producers was set
+   auto state6 = get_global_state6();
+   uint32_t actual_max_considered = state6["max_considered_producers"].as<uint32_t>();
+   BOOST_REQUIRE_EQUAL(actual_max_considered, max_considered);
+   ilog( "✓ max_considered_producers confirmed: ${max}", ("max", actual_max_considered) );
+
+   // Step 4: Create voters with equal stake
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const asset initial_supply = core_sym::from_string("100000000.0000");
+   const asset stake_amount = core_sym::from_string("30000000.0000");
+
+   // Create voters - all with same stake so all producers get equal votes
+   const std::vector<account_name> voters = { "voter1111111"_n, "voter2222222"_n, "voter3333333"_n, "voter4444444"_n };
+   for (const auto& v: voters) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, initial_supply, config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, stake_amount, stake_amount) );
+   }
+
+   // Step 5: Create 30 producers
+   std::vector<account_name> producer_names;
+   const std::string root("prod111111");
+   const std::vector<std::string> suffixes = {
+      "aa", "ab", "ac", "ad", "ae", "af", "ag", "ah", "ai", "aj",  // 10
+      "ak", "al", "am", "an", "ao", "ap", "aq", "ar", "as", "at",  // 20
+      "au", "av", "aw", "ax", "ay", "az", "ba", "bb", "bc", "bd"   // 30
+   };
+
+   for (const auto& suffix : suffixes) {
+      producer_names.emplace_back(root + suffix);
+   }
+
+   setup_producer_accounts(producer_names);
+   for (const auto& p: producer_names) {
+      BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+      produce_blocks(1);
+   }
+
+   ilog( "=== Created ${count} producers ===" , ("count", producer_names.size()));
+
+   // Set all producers with same guild score
+   for (size_t i = 0; i < 30; ++i) {
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+         ("producer", producer_names[i])
+         ("score", 1000)
+      ));
+   }
+
+   // Step 6: All voters vote for ALL producers (equal votes for all)
+   produce_block( fc::hours(24) );
+
+   for (const auto& v: voters) {
+      BOOST_REQUIRE_EQUAL(success(), vote(v, producer_names));
+   }
+
+   // Wait for votes to be recorded
+   produce_blocks(10);
+
+   // Verify all producers have equal votes
+   fc::variant first_prod_info = get_producer_info(producer_names[0]);
+   double first_votes = first_prod_info["total_votes"].as<double>();
+
+   fc::variant last_prod_info = get_producer_info(producer_names[29]);
+   double last_votes = last_prod_info["total_votes"].as<double>();
+
+   ilog( "First producer votes: ${votes}", ("votes", first_votes) );
+   ilog( "Last producer votes: ${votes}", ("votes", last_votes) );
+   BOOST_REQUIRE_EQUAL(first_votes, last_votes); // All should have equal votes
+
+   // Step 7: Trigger schedule update
+   produce_blocks(250);
+
+   // Step 8: Verify active producer selection - should only have 15 BPs
+   auto producer_keys = control->head_block_state()->active_schedule.producers;
+
+   ilog( "=== Active Producers (should be 15 only due to max_considered_producers) ===" );
+   std::set<name> active_producers;
+   for (size_t i = 0; i < producer_keys.size(); ++i) {
+      active_producers.insert(producer_keys[i].producer_name);
+      ilog( "${idx}: ${name}", ("idx", i)("name", producer_keys[i].producer_name) );
+   }
+
+   // Only 15 producers are considered -> only 15 active BPs
+   BOOST_REQUIRE_EQUAL( 15, producer_keys.size() );
+
+   // Step 9: Verify standby producer selection - should be ZERO
+   auto standby_producers = get_standby_table();
+
+   std::set<name> standby_producer_names;
+   for (size_t i = 0; i < standby_producers.size() && standby_producers[i].is_active; ++i) {
+      standby_producer_names.insert(standby_producers[i].owner);
+      ilog( "${idx}: ${name} (active=${active})",
+            ("idx", i)
+            ("name", standby_producers[i].owner)
+            ("active", standby_producers[i].is_active) );
+   }
+
+   // No producers qualify for standby since only 15 total are considered
+   BOOST_REQUIRE_EQUAL( 0, standby_producer_names.size() );
+
+   // Step 10: Verify that only first 15 producers (by name, since all have equal votes) are active
+   // Since all producers have equal votes and scores, selection is deterministic by name order
+   ilog( "=== Verifying First 15 Producers in Active ===" );
+   for (size_t i = 0; i < 15; ++i) {
+      name producer = producer_names[i];
+      bool in_active = active_producers.find(producer) != active_producers.end();
+
+      BOOST_REQUIRE(in_active);
+      ilog( "✓ ${name} in ACTIVE (position ${pos})", ("name", producer)("pos", i) );
+   }
+
+   // Step 11: Verify remaining 15 producers are NOT considered
+   ilog( "=== Verifying Last 15 Producers NOT Considered ===" );
+   int not_considered = 0;
+   for (size_t i = 15; i < producer_names.size(); ++i) {
+      name producer = producer_names[i];
+      bool in_active = active_producers.find(producer) != active_producers.end();
+
+      if (!in_active) {
+         not_considered++;
+         ilog( "✓ ${name} NOT considered (beyond max_considered_producers limit)", ("name", producer) );
+      } else {
+         ilog( "✗ ${name} was considered - should not be!", ("name", producer) );
+      }
+   }
+
+   // All 15 producers beyond the limit should not be considered
+   BOOST_REQUIRE_EQUAL(not_considered, 15);
+
+   ilog( "=== TEST SUMMARY ===" );
+   ilog( "✓ max_considered_producers set to: ${max}", ("max", max_considered) );
+   ilog( "✓ Active producers: ${active} (expected 15)", ("active", producer_keys.size()) );
+   ilog( "✓ Standby producers: ${standby} (expected 0)", ("standby", standby_producer_names.size()) );
+   ilog( "✓ Producers not considered: ${not_considered}/15", ("not_considered", not_considered) );
+   ilog( "SUCCESS: max_considered_producers correctly limits BPs to 15!" );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_max_considered_producers_filters_standby_bps, eosio_weighted_producer_tester) try {
+   // Test that max_considered_producers correctly limits producers for both active and standby
+   // Setting max_considered_producers to 23 -> 21 active BPs, 2 standby BPs
+   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+
+   // Step 1: Configure weighted voting system
+   const name guilds_contract = GUILDS_OIG;
+   const uint32_t scaling_factor = 1000; // 1.0x multiplier
+   const uint32_t default_score = 1000; // 1.0x default
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", guilds_contract)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
+      ("scaling_factor", scaling_factor)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
+      ("default_score", default_score)
+   ));
+   produce_blocks(1);
+
+   // Get the code hash of the deployed guilds contract
+   auto wasm = contracts::util::guild_test_wasm();
+   auto hash_result = fc::sha256::hash(reinterpret_cast<const char*>(wasm.data()), wasm.size());
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
+      ("hash", hash_result.str())
+   ));
+   produce_blocks(1);
+
+   // Step 2: Configure standby system
+   const uint32_t standby_slots = 5;
+   const uint32_t standby_ratio = 5000; // 0.5 weight
+
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setsbslot"_n, mvo()
+      ("num_slots", standby_slots)
+   ));
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setsbratio"_n, mvo()
+      ("ratio", standby_ratio)
+   ));
+   produce_blocks(1);
+
+   ilog( "=== Standby Configuration ===" );
+   fc::variant state4 = get_global_state4();
+   ilog( "num_standby_slots: ${slots}", ("slots", state4["num_standby_slots"].as<uint32_t>()) );
+   ilog( "standby_slot_weight: ${weight}", ("weight", state4["standby_slot_weight"].as<uint32_t>()) );
+
+   // Step 3: Set max_considered_producers to 23 (21 active + 2 standby)
+   const uint32_t max_considered = 23;
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setmaxprod"_n, mvo()
+      ("max_considered_producers", max_considered)
+   ));
+   produce_blocks(1);
+
+   // Verify max_considered_producers was set
+   auto state6 = get_global_state6();
+   uint32_t actual_max_considered = state6["max_considered_producers"].as<uint32_t>();
+   BOOST_REQUIRE_EQUAL(actual_max_considered, max_considered);
+   ilog( "✓ max_considered_producers confirmed: ${max}", ("max", actual_max_considered) );
+
+   // Step 4: Create voters with equal stake
+   const asset net = core_sym::from_string("80.0000");
+   const asset cpu = core_sym::from_string("80.0000");
+   const asset initial_supply = core_sym::from_string("100000000.0000");
+   const asset stake_amount = core_sym::from_string("30000000.0000");
+
+   // Create voters - all with same stake so all producers get equal votes
+   const std::vector<account_name> voters = { "voter1111111"_n, "voter2222222"_n, "voter3333333"_n, "voter4444444"_n };
+   for (const auto& v: voters) {
+      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, initial_supply, config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, stake_amount, stake_amount) );
+   }
+
+   // Step 5: Create 30 producers
+   std::vector<account_name> producer_names;
+   const std::string root("prod111111");
+   const std::vector<std::string> suffixes = {
+      "aa", "ab", "ac", "ad", "ae", "af", "ag", "ah", "ai", "aj",  // 10
+      "ak", "al", "am", "an", "ao", "ap", "aq", "ar", "as", "at",  // 20
+      "au", "av", "aw", "ax", "ay", "az", "ba", "bb", "bc", "bd"   // 30
+   };
+
+   for (const auto& suffix : suffixes) {
+      producer_names.emplace_back(root + suffix);
+   }
+
+   setup_producer_accounts(producer_names);
+   for (const auto& p: producer_names) {
+      BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+      produce_blocks(1);
+   }
+
+   ilog( "=== Created ${count} producers ===" , ("count", producer_names.size()));
+
+   // Set all producers with same guild score
+   for (size_t i = 0; i < 30; ++i) {
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+         ("producer", producer_names[i])
+         ("score", 1000)
+      ));
+   }
+
+   // Step 6: All voters vote for ALL producers (equal votes for all)
+   produce_block( fc::hours(24) );
+
+   for (const auto& v: voters) {
+      BOOST_REQUIRE_EQUAL(success(), vote(v, producer_names));
+   }
+
+   // Wait for votes to be recorded
+   produce_blocks(10);
+
+   // Verify all producers have equal votes
+   fc::variant first_prod_info = get_producer_info(producer_names[0]);
+   double first_votes = first_prod_info["total_votes"].as<double>();
+
+   fc::variant last_prod_info = get_producer_info(producer_names[29]);
+   double last_votes = last_prod_info["total_votes"].as<double>();
+
+   ilog( "First producer votes: ${votes}", ("votes", first_votes) );
+   ilog( "Last producer votes: ${votes}", ("votes", last_votes) );
+   BOOST_REQUIRE_EQUAL(first_votes, last_votes); // All should have equal votes
+
+   // Step 7: Trigger schedule update
+   produce_blocks(250);
+
+   // Step 8: Verify active producer selection - should have 21 BPs
+   auto producer_keys = control->head_block_state()->active_schedule.producers;
+
+   ilog( "=== Active Producers (should be 21) ===" );
+   std::set<name> active_producers;
+   for (size_t i = 0; i < producer_keys.size(); ++i) {
+      active_producers.insert(producer_keys[i].producer_name);
+      ilog( "${idx}: ${name}", ("idx", i)("name", producer_keys[i].producer_name) );
+   }
+
+   // First 21 of the considered producers become active
+   BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
+
+   // Step 9: Verify standby producer selection - should be 2
+   auto standby_producers = get_standby_table();
+
+   std::set<name> standby_producer_names;
+   for (size_t i = 0; i < standby_producers.size() && standby_producers[i].is_active; ++i) {
+      standby_producer_names.insert(standby_producers[i].owner);
+      ilog( "${idx}: ${name} (active=${active})",
+            ("idx", i)
+            ("name", standby_producers[i].owner)
+            ("active", standby_producers[i].is_active) );
+   }
+
+   // Next 2 of the considered producers become standby
+   BOOST_REQUIRE_EQUAL( 2, standby_producer_names.size() );
+
+   // Step 10: Verify that first 21 producers are active
+   ilog( "=== Verifying First 21 Producers in Active ===" );
+   for (size_t i = 0; i < 21; ++i) {
+      name producer = producer_names[i];
+      bool in_active = active_producers.find(producer) != active_producers.end();
+
+      BOOST_REQUIRE(in_active);
+      ilog( "✓ ${name} in ACTIVE (position ${pos})", ("name", producer)("pos", i) );
+   }
+
+   // Step 11: Verify that next 2 producers (21-22) are standby
+   ilog( "=== Verifying Next 2 Producers in Standby ===" );
+   for (size_t i = 21; i < 23; ++i) {
+      name producer = producer_names[i];
+      bool in_standby = standby_producer_names.find(producer) != standby_producer_names.end();
+
+      BOOST_REQUIRE(in_standby);
+      ilog( "✓ ${name} in STANDBY (position ${pos})", ("name", producer)("pos", i) );
+   }
+
+   // Step 12: Verify remaining producers (23-29) are NOT considered
+   ilog( "=== Verifying Last 7 Producers NOT Considered ===" );
+   int not_considered = 0;
+   for (size_t i = 23; i < producer_names.size(); ++i) {
+      name producer = producer_names[i];
+      bool in_active = active_producers.find(producer) != active_producers.end();
+      bool in_standby = standby_producer_names.find(producer) != standby_producer_names.end();
+
+      if (!in_active && !in_standby) {
+         not_considered++;
+         ilog( "✓ ${name} NOT considered (beyond max_considered_producers limit)", ("name", producer) );
+      } else {
+         ilog( "✗ ${name} was considered - should not be!", ("name", producer) );
+      }
+   }
+
+   // All 7 producers beyond the limit should not be considered
+   BOOST_REQUIRE_EQUAL(not_considered, 7);
+
+   ilog( "=== TEST SUMMARY ===" );
+   ilog( "✓ max_considered_producers set to: ${max}", ("max", max_considered) );
+   ilog( "✓ Active producers: ${active} (expected 21)", ("active", producer_keys.size()) );
+   ilog( "✓ Standby producers: ${standby} (expected 2)", ("standby", standby_producer_names.size()) );
+   ilog( "✓ Producers not considered: ${not_considered}/7", ("not_considered", not_considered) );
+   ilog( "✓ No overlap between active and standby" );
+   ilog( "SUCCESS: max_considered_producers correctly limits to 21 active + 2 standby BPs!" );
 
 } FC_LOG_AND_RETHROW()
 
