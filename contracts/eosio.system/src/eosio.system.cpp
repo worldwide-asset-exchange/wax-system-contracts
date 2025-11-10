@@ -538,4 +538,10 @@ namespace eosiosystem {
       
       _global5.set( _gstate5, get_self() );
    }
+
+   void system_contract::setprodcnt( uint32_t count ) {
+      require_auth( get_self() );
+      check( count >= 1 && count <= 21, "count must be between 1 and 21" );
+      _gstate4.active_producer_count = count;
+   }
 } /// eosio.system

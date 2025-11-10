@@ -176,6 +176,27 @@ struct eosio_weighted_producer_tester : eosio_system_tester {
     return producer_names;
   }
 
+  void wait_for_schedule_change_and_stabilize(uint32_t expected_count) {
+   const uint32_t max_blocks = 2000;
+
+   // Wait for version change (max 2000 blocks)
+   uint32_t blocks_produced = 0;
+   while (control->head_block_state()->active_schedule.producers.size() != expected_count
+      && blocks_produced < max_blocks) {
+      produce_block();
+      blocks_produced++;
+   }
+   BOOST_REQUIRE(blocks_produced < max_blocks); // Didn't timeout
+
+   // Stabilize: 3 full rounds minimum
+   uint32_t stabilization = expected_count * 12 * 3;
+   produce_blocks(stabilization);
+
+   // Verify
+   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   BOOST_REQUIRE_EQUAL(expected_count, producer_keys.size());
+}
+
 };
 
 
@@ -230,6 +251,13 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester)
    ));
    produce_blocks(1);
 
+   // Test 6: Set active producer count
+   const uint32_t active_producer_count = 15;
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setprodcnt"_n, mvo()
+      ("count", active_producer_count)
+   ));
+   produce_blocks(1);
+
    // Verify default score was set
    fc::variant final_state = get_global_state6();
    BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), new_default_score);
@@ -240,6 +268,10 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester)
    // Verify min_producer_vote_threshold was set
    BOOST_REQUIRE_EQUAL(final_state["min_producer_vote_threshold"].as<double>(), min_producer_vote_threshold);
 
+   // Verify active_producer_count was set
+   fc::variant state4 = get_global_state4();
+   BOOST_REQUIRE_EQUAL(state4["active_producer_count"].as<uint32_t>(), active_producer_count);
+
    // Verify all settings persist together
    BOOST_REQUIRE_EQUAL(final_state["guilds_contract"].as<name>(), new_guilds_contract);
    BOOST_REQUIRE_EQUAL(final_state["bp_score_scaling_factor"].as<uint32_t>(), new_scaling_factor);
@@ -249,6 +281,7 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester)
 
 BOOST_FIXTURE_TEST_CASE(test_config_set_missing_self_authority, eosio_weighted_producer_tester) try {
    fc::variant before_state = get_global_state6();
+   fc::variant before_state4 = get_global_state4();
 
    create_account_with_resources("fakeeosio"_n, config::system_account_name, core_sym::from_string("1.0000"), false);
 
@@ -295,6 +328,15 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_missing_self_authority, eosio_weighted_p
    );
    produce_blocks(1);
 
+   // Test 6: Set active producer count
+   const uint32_t active_producer_count = 10;
+   BOOST_REQUIRE_EQUAL(error("missing authority of eosio"),
+      push_action("fakeeosio"_n, "setprodcnt"_n, mvo()
+         ("count", active_producer_count)
+      )
+   );
+   produce_blocks(1);
+
    // Verify state doesn't not change
    fc::variant final_state = get_global_state6();
    BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), before_state["bp_default_score"].as<uint32_t>());
@@ -304,6 +346,10 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_missing_self_authority, eosio_weighted_p
 
    // Verify min_producer_vote_threshold was set
    BOOST_REQUIRE_EQUAL(final_state["min_producer_vote_threshold"].as<double>(), before_state["min_producer_vote_threshold"].as<double>());
+
+   // Verify active_producer_count was not changed
+   fc::variant final_state4 = get_global_state4();
+   BOOST_REQUIRE_EQUAL(final_state4["active_producer_count"].as<uint32_t>(), before_state4["active_producer_count"].as<uint32_t>());
 
    // Verify all settings persist together
    BOOST_REQUIRE_EQUAL(final_state["guilds_contract"].as<name>(), before_state["guilds_contract"].as<name>());
@@ -397,6 +443,54 @@ BOOST_FIXTURE_TEST_CASE(test_setminvote_validation, eosio_weighted_producer_test
 
    fc::variant state_after_positive = get_global_state6();
    BOOST_REQUIRE_EQUAL(state_after_positive["min_producer_vote_threshold"].as<double>(), test_threshold);
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_setprodcnt_boundary_validation, eosio_weighted_producer_tester) try {
+   // Test boundary conditions for setprodcnt action
+
+   fc::variant initial_state4 = get_global_state4();
+   uint32_t initial_count = initial_state4["active_producer_count"].as<uint32_t>();
+
+   // Test 1: Setting count to 0 should fail
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("count must be between 1 and 21"),
+      push_action(config::system_account_name, "setprodcnt"_n, mvo()
+         ("count", 0)
+      )
+   );
+   produce_blocks(1);
+
+   // Test 2: Setting count to 22 should fail
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("count must be between 1 and 21"),
+      push_action(config::system_account_name, "setprodcnt"_n, mvo()
+         ("count", 22)
+      )
+   );
+   produce_blocks(1);
+
+   // Test 3: Setting count to 1 should succeed
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setprodcnt"_n, mvo()
+      ("count", 1)
+   ));
+   produce_blocks(1);
+   fc::variant state_after_1 = get_global_state4();
+   BOOST_REQUIRE_EQUAL(state_after_1["active_producer_count"].as<uint32_t>(), 1);
+
+   // Test 4: Setting count to 21 should succeed
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setprodcnt"_n, mvo()
+      ("count", 21)
+   ));
+   produce_blocks(1);
+   fc::variant state_after_21 = get_global_state4();
+   BOOST_REQUIRE_EQUAL(state_after_21["active_producer_count"].as<uint32_t>(), 21);
+
+   // Test 5: Setting count to a value in the middle (10) should succeed
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setprodcnt"_n, mvo()
+      ("count", 10)
+   ));
+   produce_blocks(1);
+   fc::variant state_after_10 = get_global_state4();
+   BOOST_REQUIRE_EQUAL(state_after_10["active_producer_count"].as<uint32_t>(), 10);
 
 } FC_LOG_AND_RETHROW()
 
@@ -2686,6 +2780,110 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_add_remove_operations, eosio_weighted_pr
    ilog( "✓ Non-eosio account cannot toggle kill switch" );
 
    ilog( "✓ SUCCESS: All add/remove operations work correctly" );
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( test_configurable_active_producer_count, eosio_weighted_producer_tester ) try {
+   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
+   // Create 25 producers to ensure we have more than the configured active count
+   std::vector<account_name> producers;
+   const std::string root("prod111111");
+   const std::vector<std::string> suffixes = {
+      "aa", "ab", "ac", "ad", "ae", "af", "ag", "ah", "ai", "aj",  // 10
+      "ak", "al", "am", "an", "ao", "ap", "aq", "ar", "as", "at",  // 20
+      "au", "av", "aw", "ax", "ay", "az", "ba", "bb", "bc", "bd"   // 30
+   };
+
+   for (const auto& suffix : suffixes) {
+      producers.emplace_back(root + suffix);
+   }
+   create_accounts_with_resources(producers);
+
+   // Register all 30 producers
+   for (const auto& p : producers) {
+      BOOST_REQUIRE_EQUAL(success(), regproducer(p));
+   }
+
+   // Stake more than 15% of total supply to activate chain
+   transfer("eosio", "alice1111111", core_sym::from_string("600000000.0000"), "eosio");
+   BOOST_REQUIRE_EQUAL(success(), stake("alice1111111", "alice1111111",
+      core_sym::from_string("300000000.0000"), core_sym::from_string("300000000.0000")));
+
+   // Vote for all 30 producers
+   BOOST_REQUIRE_EQUAL(success(), vote("alice1111111"_n, producers));
+
+   // Produce blocks to update producer schedule with default (21 producers)
+   produce_blocks(250);
+
+   // Verify initial schedule has 21 producers (default)
+   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   BOOST_REQUIRE_EQUAL(21, producer_keys.size());
+   ilog( "✓ Initial schedule has 21 producers (default)" );
+
+   // Verify global state 4 has default value
+   fc::variant state4_before = get_global_state4();
+   BOOST_REQUIRE_EQUAL(state4_before["active_producer_count"].as<uint32_t>(), 21);
+   ilog( "✓ Global state4 active_producer_count is 21 (default)" );
+
+   uint32_t next_active_producer_count = 19;
+   // Set active_producer_count to next_active_producer_count
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setprodcnt"_n, mvo()
+      ("count", next_active_producer_count)
+   ));
+   ilog( "✓ Set active_producer_count to next_active_producer_count" );
+
+   // Wait until schedule actually changes
+   wait_for_schedule_change_and_stabilize(next_active_producer_count);
+
+   // Verify schedule now has exactly next_active_producer_count producers
+   producer_keys = control->head_block_state()->active_schedule.producers;
+   BOOST_REQUIRE_EQUAL(next_active_producer_count, producer_keys.size());
+   ilog( "✓ Schedule now has exactly next_active_producer_count producers" );
+
+   // Verify global state 4 has the correct value
+   fc::variant state4_after = get_global_state4();
+   BOOST_REQUIRE_EQUAL(state4_after["active_producer_count"].as<uint32_t>(), next_active_producer_count);
+   ilog( "✓ Global state4 active_producer_count is next_active_producer_count" );
+
+   // Verify the first next_active_producer_count producers are in the schedule (sorted by votes)
+   for (size_t i = 0; i < next_active_producer_count; i++) {
+      // All producers have equal votes, so order is deterministic by name
+      BOOST_REQUIRE(producer_keys[i].producer_name.to_string().find(root + suffixes[i]) == 0);
+   }
+   ilog( "✓ First next_active_producer_count producers are correctly selected" );
+
+   // Test setting back to 21
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setprodcnt"_n, mvo()
+      ("count", 21)
+   ));
+   ilog( "✓ Set active_producer_count back to 21" );
+
+   wait_for_schedule_change_and_stabilize(21);
+
+   // Verify schedule is back to 21 producers
+   producer_keys = control->head_block_state()->active_schedule.producers;
+   BOOST_REQUIRE_EQUAL(21, producer_keys.size());
+   ilog( "✓ Schedule is back to 21 producers" );
+
+   // Test setting to minimum (1)
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setprodcnt"_n, mvo()
+      ("count", 1)
+   ));
+   ilog( "✓ Set active_producer_count to 1 (minimum)" );
+
+   wait_for_schedule_change_and_stabilize(1);
+
+   // Verify schedule has only 1 producer
+   producer_keys = control->head_block_state()->active_schedule.producers;
+   BOOST_REQUIRE_EQUAL(1, producer_keys.size());
+   ilog( "✓ Schedule has only 1 producer" );
+
+   // Verify global state 4 has the correct value
+   fc::variant state4_min = get_global_state4();
+   BOOST_REQUIRE_EQUAL(state4_min["active_producer_count"].as<uint32_t>(), 1);
+   ilog( "✓ Global state4 active_producer_count is 1" );
+
+   ilog( "✓ SUCCESS: Configurable active producer count works correctly" );
 
 } FC_LOG_AND_RETHROW()
 
