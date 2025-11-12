@@ -61,6 +61,15 @@ struct eosio_rng_tester : eosio_system_tester {
       rng_abi_ser.set_abi(abi, abi_serializer::create_yield_function(abi_serializer_max_time));
     }
 
+    // Get the code hash of the deployed ORNG contract
+    // Compute hash from the WASM code that was deployed
+    auto wasm = contracts::util::rng_wasm();
+    auto hash_result = fc::sha256::hash(reinterpret_cast<const char*>(wasm.data()), wasm.size());
+    ilog( "ORNG contract hash: ${hash}", ("hash", hash_result.str()) );
+    // Add the correct hash to approved list
+    base_tester::push_action(config::system_account_name, "addornghash"_n, config::system_account_name, mvo()
+       ("hash", hash_result.str())
+    );
 
      base_tester::push_action(config::system_account_name, updateauth::get_name(), RNG_CONTRACT, mvo()
       ("account", RNG_CONTRACT.to_string())
@@ -77,6 +86,11 @@ struct eosio_rng_tester : eosio_system_tester {
   fc::variant get_global_state5() {
     vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global5"_n, "global5"_n );
     return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state5", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
+  }
+
+  fc::variant get_global_state7() {
+    vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global.b"_n, "global.b"_n );
+    return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state7", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
   }
 
   rng_treasury_data get_treasury_balance() {
@@ -597,5 +611,196 @@ BOOST_FIXTURE_TEST_CASE(rng_rate_boundary_10000, eosio_rng_tester) try {
   ilog("✓ rng_rate = 10000 correctly rejected");
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(orng_hash_validation_wrong_hash, eosio_rng_tester, * boost::unit_test::tolerance(1e-10)) try {
+  ilog("Testing ORNG hash validation with wrong hash (should block deposits)");
+
+  const uint64_t rng_rate = 5000;
+  const uint64_t max_pool_rng = 1000000000;
+
+  BOOST_REQUIRE_EQUAL(
+      success(), push_action( config::system_account_name, "setrngrate"_n, mvo()("rng_rate", rng_rate)("max_pool_rng", max_pool_rng))
+  );
+
+  // Replace the correct hash (from constructor) with a WRONG hash
+  std::vector<std::string> wrong_hashes = {
+      "0000000000000000000000000000000000000000000000000000000000000001"
+  };
+  BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setornghash"_n, mvo()
+     ("hashes", wrong_hashes)
+  ));
+
+  // Verify hash was added
+  auto global_state7 = get_global_state7();
+  BOOST_REQUIRE(!global_state7.is_null());
+  auto hashes = global_state7["orng_code_hashes"].get_array();
+  BOOST_REQUIRE_EQUAL(1, hashes.size());
+
+  const double continuous_rate = 0.04879;
+  const double secs_per_year   = 52 * 7 * 24 * 3600;
+
+  const asset large_asset = core_sym::from_string("80.0000");
+  create_account_with_resources( "defproducera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+  create_account_with_resources( "producvotera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+
+  BOOST_REQUIRE_EQUAL(success(), regproducer("defproducera"_n));
+  produce_block(fc::hours(24));
+
+  transfer( config::system_account_name, "producvotera", core_sym::from_string("400000000.0000"), config::system_account_name);
+  BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
+  BOOST_REQUIRE_EQUAL(success(), vote( "producvotera"_n, { "defproducera"_n }));
+
+  produce_blocks(50);
+
+  auto initial_treasury_balance = get_treasury_balance();
+  BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
+  auto final_treasury_balance = get_treasury_balance();
+
+  // With wrong hash, deposits should NOT occur
+  BOOST_REQUIRE_EQUAL(initial_treasury_balance.pool_balance, final_treasury_balance.pool_balance);
+
+  ilog("✓ Wrong hash blocks deposits (security validated)");
+} FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(orng_hash_validation_no_approved_hash, eosio_rng_tester, * boost::unit_test::tolerance(1e-10)) try {
+  ilog("Testing ORNG deposit blocked when contract hash not in approved list");
+
+  const uint64_t rng_rate = 5000;
+  const uint64_t max_pool_rng = 1000000000;
+
+  BOOST_REQUIRE_EQUAL(
+      success(), push_action( config::system_account_name, "setrngrate"_n, mvo()("rng_rate", rng_rate)("max_pool_rng", max_pool_rng))
+  );
+
+  // Clear all approved hashes - the deployed ORNG contract hash won't match anything
+  std::vector<std::string> empty_hashes;
+  BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setornghash"_n, mvo()
+     ("hashes", empty_hashes)
+  ));
+
+  // Verify the approved hash list is empty
+  auto global_state7 = get_global_state7();
+  BOOST_REQUIRE(!global_state7.is_null());
+  auto hashes = global_state7["orng_code_hashes"].get_array();
+  BOOST_REQUIRE_EQUAL(0, hashes.size());
+
+  const double continuous_rate = 0.04879;
+  const double secs_per_year   = 52 * 7 * 24 * 3600;
+
+  const asset large_asset = core_sym::from_string("80.0000");
+  create_account_with_resources( "defproducera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+  create_account_with_resources( "producvotera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+
+  BOOST_REQUIRE_EQUAL(success(), regproducer("defproducera"_n));
+  produce_block(fc::hours(24));
+
+  transfer( config::system_account_name, "producvotera", core_sym::from_string("400000000.0000"), config::system_account_name);
+  BOOST_REQUIRE_EQUAL(success(), stake("producvotera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
+  BOOST_REQUIRE_EQUAL(success(), vote( "producvotera"_n, { "defproducera"_n }));
+
+  produce_blocks(50);
+
+  const auto     initial_global_state      = get_global_state();
+  const uint64_t initial_claim_time        = microseconds_since_epoch_of_iso_string( initial_global_state["last_pervote_bucket_fill"] );
+  const asset    initial_supply            = get_token_supply();
+  auto initial_treasury_balance = get_treasury_balance();
+
+  ilog("Initial treasury balance: ${b}", ("b", initial_treasury_balance.pool_balance));
+
+  BOOST_REQUIRE_EQUAL(success(), push_action("defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera")));
+
+  const auto     global_state      = get_global_state();
+  const uint64_t claim_time        = microseconds_since_epoch_of_iso_string( global_state["last_pervote_bucket_fill"] );
+  const asset    supply            = get_token_supply();
+  auto final_treasury_balance = get_treasury_balance();
+
+  auto usecs_between_fills = claim_time - initial_claim_time;
+  int32_t secs_between_fills = usecs_between_fills/1000000;
+  uint64_t expected_inflation = (initial_supply.get_amount() * double(secs_between_fills) * continuous_rate) / secs_per_year;
+
+  // Verify inflation occurred normally
+  BOOST_REQUIRE_EQUAL(expected_inflation, supply.get_amount() - initial_supply.get_amount());
+
+  // Verify NO RNG deposit occurred (contract hash not in approved list)
+  BOOST_REQUIRE_EQUAL(initial_treasury_balance.pool_balance, final_treasury_balance.pool_balance);
+  BOOST_REQUIRE_EQUAL(0, final_treasury_balance.pool_balance);
+
+  ilog("Final treasury balance: ${b}", ("b", final_treasury_balance.pool_balance));
+  ilog("✓ Deposits blocked when contract hash not in approved list");
+} FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(orng_hash_management_actions, eosio_rng_tester) try {
+  ilog("Testing ORNG hash management actions (add/remove/set)");
+
+  // Test addornghash
+  BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addornghash"_n, mvo()
+     ("hash", "0000000000000000000000000000000000000000000000000000000000000001")
+  ));
+
+  auto global_state7 = get_global_state7();
+  auto hashes = global_state7["orng_code_hashes"].get_array();
+  BOOST_REQUIRE_EQUAL(2, hashes.size());
+
+  // Test adding duplicate (should fail)
+  BOOST_REQUIRE_EQUAL(
+      wasm_assert_msg("hash already exists in approved list"),
+      push_action(config::system_account_name, "addornghash"_n, mvo()
+         ("hash", "0000000000000000000000000000000000000000000000000000000000000001")
+      )
+  );
+
+  // Test adding second hash
+  BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addornghash"_n, mvo()
+     ("hash", "0000000000000000000000000000000000000000000000000000000000000002")
+  ));
+
+  global_state7 = get_global_state7();
+  hashes = global_state7["orng_code_hashes"].get_array();
+  BOOST_REQUIRE_EQUAL(3, hashes.size());
+
+  // Test rmornghash
+  BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "rmornghash"_n, mvo()
+     ("hash", "0000000000000000000000000000000000000000000000000000000000000001")
+  ));
+
+  global_state7 = get_global_state7();
+  hashes = global_state7["orng_code_hashes"].get_array();
+  BOOST_REQUIRE_EQUAL(2, hashes.size());
+
+  // Test removing non-existent hash (should fail)
+  BOOST_REQUIRE_EQUAL(
+      wasm_assert_msg("hash not found in approved list"),
+      push_action(config::system_account_name, "rmornghash"_n, mvo()
+         ("hash", "0000000000000000000000000000000000000000000000000000000000000099")
+      )
+  );
+
+  // Test setornghash (replace entire list)
+  std::vector<std::string> new_hashes = {
+      "0000000000000000000000000000000000000000000000000000000000000003",
+      "0000000000000000000000000000000000000000000000000000000000000004",
+      "0000000000000000000000000000000000000000000000000000000000000005"
+  };
+  BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setornghash"_n, mvo()
+     ("hashes", new_hashes)
+  ));
+
+  global_state7 = get_global_state7();
+  hashes = global_state7["orng_code_hashes"].get_array();
+  BOOST_REQUIRE_EQUAL(3, hashes.size());
+
+  // Test setting empty list
+  std::vector<std::string> empty_hashes;
+  BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setornghash"_n, mvo()
+     ("hashes", empty_hashes)
+  ));
+
+  global_state7 = get_global_state7();
+  hashes = global_state7["orng_code_hashes"].get_array();
+  BOOST_REQUIRE_EQUAL(0, hashes.size());
+
+  ilog("✓ All ORNG hash management actions work correctly");
+} FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()

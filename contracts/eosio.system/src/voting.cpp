@@ -582,6 +582,35 @@ namespace eosiosystem {
       return false; // Hash not in approved list
    }
 
+   bool system_contract::verify_orng_contract() const {
+      // No hash configured disallow deposits until it is
+      if( _gstate7.orng_code_hashes.empty() ) {
+         return false;
+      }
+
+      // Check if account exists
+      if( !eosio::is_account( rng::RNG_ACCOUNT ) ) {
+         return false;
+      }
+
+      // Get deployed contract hash
+      eosio::checksum256 deployed_hash = eosio::get_code_hash( rng::RNG_ACCOUNT );
+
+      // Empty hash means no code deployed
+      if( deployed_hash == eosio::checksum256() ) {
+         return false;
+      }
+
+      // Check if deployed hash is in our approved list
+      for( const auto& approved_hash : _gstate7.orng_code_hashes ) {
+         if( deployed_hash == approved_hash ) {
+            return true;
+         }
+      }
+
+      return false; // Hash not in approved list
+   }
+
    double system_contract::get_bp_weight_multiplier( const name& producer ) const {
       // Verify guilds contract before reading scores
       if( !verify_guilds_contract() ) {
@@ -632,6 +661,35 @@ namespace eosiosystem {
 
       _gstate6.enable_weighted_voting = enable;
       _global6.set( _gstate6, get_self() );
+   }
+
+   void system_contract::addornghash( const eosio::checksum256& hash ) {
+      require_auth( get_self() );
+
+      // Check for duplicate before adding
+      for( const auto& existing_hash : _gstate7.orng_code_hashes ) {
+         check( existing_hash != hash, "hash already exists in approved list" );
+      }
+
+      _gstate7.orng_code_hashes.push_back( hash );
+      _global7.set( _gstate7, get_self() );
+   }
+
+   void system_contract::rmornghash( const eosio::checksum256& hash ) {
+      require_auth( get_self() );
+
+      auto it = std::find( _gstate7.orng_code_hashes.begin(), _gstate7.orng_code_hashes.end(), hash );
+      check( it != _gstate7.orng_code_hashes.end(), "hash not found in approved list" );
+
+      _gstate7.orng_code_hashes.erase( it );
+      _global7.set( _gstate7, get_self() );
+   }
+
+   void system_contract::setornghash( const std::vector<eosio::checksum256>& hashes ) {
+      require_auth( get_self() );
+
+      _gstate7.orng_code_hashes = hashes;
+      _global7.set( _gstate7, get_self() );
    }
 
 } /// namespace eosiosystem

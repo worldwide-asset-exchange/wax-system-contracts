@@ -752,6 +752,15 @@ namespace eosiosystem {
    };
    typedef eosio::singleton< "global.a"_n, eosio_global_state6 > global_state6_singleton;
 
+   // Defines new global state parameters for ORNG contract hash validation
+   struct [[eosio::table("global.b"), eosio::contract("eosio.system")]] eosio_global_state7 {
+      eosio_global_state7() { }
+      std::vector<eosio::checksum256> orng_code_hashes;            // List of approved ORNG contract code hashes
+
+      EOSLIB_SERIALIZE( eosio_global_state7, (orng_code_hashes) )
+   };
+   typedef eosio::singleton< "global.b"_n, eosio_global_state7 > global_state7_singleton;
+
    // Defines new standby producer info structure
    struct [[eosio::table, eosio::contract("eosio.system")]] standby_producer_info {
       name            owner;
@@ -805,12 +814,14 @@ namespace eosiosystem {
          global_state4_singleton _global4;
          global_state5_singleton _global5;
          global_state6_singleton _global6;
+         global_state7_singleton _global7;
          eosio_global_state      _gstate;
          eosio_global_state2     _gstate2;
          eosio_global_state3     _gstate3;
          eosio_global_state4     _gstate4;
          eosio_global_state5     _gstate5;
          eosio_global_state6     _gstate6;
+         eosio_global_state7     _gstate7;
          standby_disallow_table  _standby_disallow;
          standby_table           _standbys;
          rammarket               _rammarket;
@@ -1505,6 +1516,18 @@ namespace eosiosystem {
          /** set min producer vote threshold */
          [[eosio::action]]
          void setminvote( double min_producer_vote_threshold );
+         
+         /** add approved ORNG contract code hash for treasury deposit verification */
+         [[eosio::action]]
+         void addornghash( const eosio::checksum256& hash );
+
+         /** remove approved ORNG contract code hash */
+         [[eosio::action]]
+         void rmornghash( const eosio::checksum256& hash );
+
+         /** set approved ORNG contract code hashes (replaces entire list) */
+         [[eosio::action]]
+         void setornghash( const std::vector<eosio::checksum256>& hashes );
 
        /**
         * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
@@ -1606,6 +1629,9 @@ namespace eosiosystem {
        using setenablewv_action = eosio::action_wrapper<"setenablewv"_n, &system_contract::setenablewv>;
        using setmaxprod_action = eosio::action_wrapper<"setmaxprod"_n, &system_contract::setmaxprod>;
        using setminvote_action = eosio::action_wrapper<"setminvote"_n, &system_contract::setminvote>;
+       using addornghash_action = eosio::action_wrapper<"addornghash"_n, &system_contract::addornghash>;
+       using rmornghash_action = eosio::action_wrapper<"rmornghash"_n, &system_contract::rmornghash>;
+       using setornghash_action = eosio::action_wrapper<"setornghash"_n, &system_contract::setornghash>;
 
       private:
          // WAX specifics
@@ -1655,6 +1681,7 @@ namespace eosiosystem {
                                             double additional_shares_delta = 0.0, double shares_rate_delta = 0.0 );
          double get_bp_weight_multiplier( const name& producer ) const;
          bool verify_guilds_contract() const;
+         bool verify_orng_contract() const;
 
          template <auto system_contract::*...Ptrs>
          class registration {
