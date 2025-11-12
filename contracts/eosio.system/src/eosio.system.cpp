@@ -515,11 +515,15 @@ namespace eosiosystem {
 
    void system_contract::setmaxprod( uint32_t max_considered_producers ) {
       require_auth( get_self() );
+
+      check( max_considered_producers >= 21, "max_considered_producers must be at least 21" );
+      check( max_considered_producers <= 500, "max_considered_producers cannot exceed 500" );
       _gstate6.max_considered_producers = max_considered_producers;
    }
 
    void system_contract::setminvote( double min_producer_vote_threshold ) {
       require_auth( get_self() );
+      check( min_producer_vote_threshold >= 0.0, "min_producer_vote_threshold cannot be negative" );
       _gstate6.min_producer_vote_threshold = min_producer_vote_threshold;
    }
 

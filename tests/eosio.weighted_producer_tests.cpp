@@ -312,6 +312,94 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_missing_self_authority, eosio_weighted_p
 
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(test_setmaxprod_validation, eosio_weighted_producer_tester) try {
+   fc::variant before_state = get_global_state6();
+
+   // Test 1: max_considered_producers less than 21 should fail
+   BOOST_REQUIRE_EQUAL(error("assertion failure with message: max_considered_producers must be at least 21"),
+      push_action(config::system_account_name, "setmaxprod"_n, mvo()
+         ("max_considered_producers", 20)
+      )
+   );
+   produce_blocks(1);
+
+   // Test 2: max_considered_producers greater than 500 should fail
+   BOOST_REQUIRE_EQUAL(error("assertion failure with message: max_considered_producers cannot exceed 500"),
+      push_action(config::system_account_name, "setmaxprod"_n, mvo()
+         ("max_considered_producers", 501)
+      )
+   );
+   produce_blocks(1);
+
+   // Verify state hasn't changed
+   fc::variant final_state = get_global_state6();
+   BOOST_REQUIRE_EQUAL(final_state["max_considered_producers"].as<uint32_t>(), before_state["max_considered_producers"].as<uint32_t>());
+
+   // Test 3: Valid boundary values should succeed
+   // Test minimum valid value (21)
+   BOOST_REQUIRE_EQUAL(success(),
+      push_action(config::system_account_name, "setmaxprod"_n, mvo()
+         ("max_considered_producers", 21)
+      )
+   );
+   produce_blocks(1);
+
+   fc::variant state_after_min = get_global_state6();
+   BOOST_REQUIRE_EQUAL(state_after_min["max_considered_producers"].as<uint32_t>(), 21);
+
+   // Test maximum valid value (500)
+   BOOST_REQUIRE_EQUAL(success(),
+      push_action(config::system_account_name, "setmaxprod"_n, mvo()
+         ("max_considered_producers", 500)
+      )
+   );
+   produce_blocks(1);
+
+   fc::variant state_after_max = get_global_state6();
+   BOOST_REQUIRE_EQUAL(state_after_max["max_considered_producers"].as<uint32_t>(), 500);
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_setminvote_validation, eosio_weighted_producer_tester) try {
+   fc::variant before_state = get_global_state6();
+
+   // Test 1: Negative min_producer_vote_threshold should fail
+   BOOST_REQUIRE_EQUAL(error("assertion failure with message: min_producer_vote_threshold cannot be negative"),
+      push_action(config::system_account_name, "setminvote"_n, mvo()
+         ("min_producer_vote_threshold", -0.1)
+      )
+   );
+   produce_blocks(1);
+
+   // Test 2: Verify state hasn't changed after failed attempt
+   fc::variant after_fail = get_global_state6();
+   BOOST_REQUIRE_EQUAL(after_fail["min_producer_vote_threshold"].as<double>(), before_state["min_producer_vote_threshold"].as<double>());
+
+   // Test 3: Valid boundary value (0.0) should succeed
+   BOOST_REQUIRE_EQUAL(success(),
+      push_action(config::system_account_name, "setminvote"_n, mvo()
+         ("min_producer_vote_threshold", 0.0)
+      )
+   );
+   produce_blocks(1);
+
+   fc::variant state_after_zero = get_global_state6();
+   BOOST_REQUIRE_EQUAL(state_after_zero["min_producer_vote_threshold"].as<double>(), 0.0);
+
+   // Test 4: Positive value should succeed
+   const double test_threshold = 150000.5;
+   BOOST_REQUIRE_EQUAL(success(),
+      push_action(config::system_account_name, "setminvote"_n, mvo()
+         ("min_producer_vote_threshold", test_threshold)
+      )
+   );
+   produce_blocks(1);
+
+   fc::variant state_after_positive = get_global_state6();
+   BOOST_REQUIRE_EQUAL(state_after_positive["min_producer_vote_threshold"].as<double>(), test_threshold);
+
+} FC_LOG_AND_RETHROW()
+
 BOOST_FIXTURE_TEST_CASE(test_config_and_guild_score, eosio_weighted_producer_tester) try {
    // Test setting config and inserting guild scores
 
@@ -1294,193 +1382,6 @@ BOOST_FIXTURE_TEST_CASE(test_min_vote_threshold_filters_main_bps, eosio_weighted
    ilog( "✓ Standby producers: ${standby} (expected 0)", ("standby", standby_producer_names.size()) );
    ilog( "✓ Low-vote producers excluded: ${excluded}/15", ("excluded", excluded_count) );
    ilog( "SUCCESS: min_vote_threshold correctly limits main BPs to 15!" );
-
-} FC_LOG_AND_RETHROW()
-
-BOOST_FIXTURE_TEST_CASE(test_max_considered_producers_filters_main_bps, eosio_weighted_producer_tester) try {
-   // Test that max_considered_producers correctly limits how many producers are considered
-   // Setting max_considered_producers to 15 -> only 15 active BPs, 0 standbys
-   fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
-
-   // Step 1: Configure weighted voting system
-   const name guilds_contract = GUILDS_OIG;
-   const uint32_t scaling_factor = 1000; // 1.0x multiplier
-   const uint32_t default_score = 1000; // 1.0x default
-
-   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
-      ("contract", guilds_contract)
-   ));
-   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpscale"_n, mvo()
-      ("scaling_factor", scaling_factor)
-   ));
-   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setbpdefscore"_n, mvo()
-      ("default_score", default_score)
-   ));
-   produce_blocks(1);
-
-   // Get the code hash of the deployed guilds contract
-   auto wasm = contracts::util::guild_test_wasm();
-   auto hash_result = fc::sha256::hash(reinterpret_cast<const char*>(wasm.data()), wasm.size());
-   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "addguildhash"_n, mvo()
-      ("hash", hash_result.str())
-   ));
-   produce_blocks(1);
-
-   // Step 2: Configure standby system
-   const uint32_t standby_slots = 5;
-   const uint32_t standby_ratio = 5000; // 0.5 weight
-
-   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setsbslot"_n, mvo()
-      ("num_slots", standby_slots)
-   ));
-   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setsbratio"_n, mvo()
-      ("ratio", standby_ratio)
-   ));
-   produce_blocks(1);
-
-   // Step 3: Set max_considered_producers to 15
-   const uint32_t max_considered = 15;
-   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setmaxprod"_n, mvo()
-      ("max_considered_producers", max_considered)
-   ));
-   produce_blocks(1);
-
-   // Verify max_considered_producers was set
-   auto state6 = get_global_state6();
-   uint32_t actual_max_considered = state6["max_considered_producers"].as<uint32_t>();
-   BOOST_REQUIRE_EQUAL(actual_max_considered, max_considered);
-   ilog( "✓ max_considered_producers confirmed: ${max}", ("max", actual_max_considered) );
-
-   // Step 4: Create voters with equal stake
-   const asset net = core_sym::from_string("80.0000");
-   const asset cpu = core_sym::from_string("80.0000");
-   const asset initial_supply = core_sym::from_string("100000000.0000");
-   const asset stake_amount = core_sym::from_string("30000000.0000");
-
-   // Create voters - all with same stake so all producers get equal votes
-   const std::vector<account_name> voters = { "voter1111111"_n, "voter2222222"_n, "voter3333333"_n, "voter4444444"_n };
-   for (const auto& v: voters) {
-      create_account_with_resources( v, config::system_account_name, core_sym::from_string("1.0000"), false, net, cpu );
-      transfer( config::system_account_name, v, initial_supply, config::system_account_name );
-      BOOST_REQUIRE_EQUAL(success(), stake(v, stake_amount, stake_amount) );
-   }
-
-   // Step 5: Create 30 producers
-   std::vector<account_name> producer_names;
-   const std::string root("prod111111");
-   const std::vector<std::string> suffixes = {
-      "aa", "ab", "ac", "ad", "ae", "af", "ag", "ah", "ai", "aj",  // 10
-      "ak", "al", "am", "an", "ao", "ap", "aq", "ar", "as", "at",  // 20
-      "au", "av", "aw", "ax", "ay", "az", "ba", "bb", "bc", "bd"   // 30
-   };
-
-   for (const auto& suffix : suffixes) {
-      producer_names.emplace_back(root + suffix);
-   }
-
-   setup_producer_accounts(producer_names);
-   for (const auto& p: producer_names) {
-      BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
-      produce_blocks(1);
-   }
-
-   ilog( "=== Created ${count} producers ===" , ("count", producer_names.size()));
-
-   // Set all producers with same guild score
-   for (size_t i = 0; i < 30; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
-         ("producer", producer_names[i])
-         ("score", 1000)
-      ));
-   }
-
-   // Step 6: All voters vote for ALL producers (equal votes for all)
-   produce_block( fc::hours(24) );
-
-   for (const auto& v: voters) {
-      BOOST_REQUIRE_EQUAL(success(), vote(v, producer_names));
-   }
-
-   // Wait for votes to be recorded
-   produce_blocks(10);
-
-   // Verify all producers have equal votes
-   fc::variant first_prod_info = get_producer_info(producer_names[0]);
-   double first_votes = first_prod_info["total_votes"].as<double>();
-
-   fc::variant last_prod_info = get_producer_info(producer_names[29]);
-   double last_votes = last_prod_info["total_votes"].as<double>();
-
-   ilog( "First producer votes: ${votes}", ("votes", first_votes) );
-   ilog( "Last producer votes: ${votes}", ("votes", last_votes) );
-   BOOST_REQUIRE_EQUAL(first_votes, last_votes); // All should have equal votes
-
-   // Step 7: Trigger schedule update
-   produce_blocks(250);
-
-   // Step 8: Verify active producer selection - should only have 15 BPs
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
-
-   ilog( "=== Active Producers (should be 15 only due to max_considered_producers) ===" );
-   std::set<name> active_producers;
-   for (size_t i = 0; i < producer_keys.size(); ++i) {
-      active_producers.insert(producer_keys[i].producer_name);
-      ilog( "${idx}: ${name}", ("idx", i)("name", producer_keys[i].producer_name) );
-   }
-
-   // Only 15 producers are considered -> only 15 active BPs
-   BOOST_REQUIRE_EQUAL( 15, producer_keys.size() );
-
-   // Step 9: Verify standby producer selection - should be ZERO
-   auto standby_producers = get_standby_table();
-
-   std::set<name> standby_producer_names;
-   for (size_t i = 0; i < standby_producers.size() && standby_producers[i].is_active; ++i) {
-      standby_producer_names.insert(standby_producers[i].owner);
-      ilog( "${idx}: ${name} (active=${active})",
-            ("idx", i)
-            ("name", standby_producers[i].owner)
-            ("active", standby_producers[i].is_active) );
-   }
-
-   // No producers qualify for standby since only 15 total are considered
-   BOOST_REQUIRE_EQUAL( 0, standby_producer_names.size() );
-
-   // Step 10: Verify that only first 15 producers (by name, since all have equal votes) are active
-   // Since all producers have equal votes and scores, selection is deterministic by name order
-   ilog( "=== Verifying First 15 Producers in Active ===" );
-   for (size_t i = 0; i < 15; ++i) {
-      name producer = producer_names[i];
-      bool in_active = active_producers.find(producer) != active_producers.end();
-
-      BOOST_REQUIRE(in_active);
-      ilog( "✓ ${name} in ACTIVE (position ${pos})", ("name", producer)("pos", i) );
-   }
-
-   // Step 11: Verify remaining 15 producers are NOT considered
-   ilog( "=== Verifying Last 15 Producers NOT Considered ===" );
-   int not_considered = 0;
-   for (size_t i = 15; i < producer_names.size(); ++i) {
-      name producer = producer_names[i];
-      bool in_active = active_producers.find(producer) != active_producers.end();
-
-      if (!in_active) {
-         not_considered++;
-         ilog( "✓ ${name} NOT considered (beyond max_considered_producers limit)", ("name", producer) );
-      } else {
-         ilog( "✗ ${name} was considered - should not be!", ("name", producer) );
-      }
-   }
-
-   // All 15 producers beyond the limit should not be considered
-   BOOST_REQUIRE_EQUAL(not_considered, 15);
-
-   ilog( "=== TEST SUMMARY ===" );
-   ilog( "✓ max_considered_producers set to: ${max}", ("max", max_considered) );
-   ilog( "✓ Active producers: ${active} (expected 15)", ("active", producer_keys.size()) );
-   ilog( "✓ Standby producers: ${standby} (expected 0)", ("standby", standby_producer_names.size()) );
-   ilog( "✓ Producers not considered: ${not_considered}/15", ("not_considered", not_considered) );
-   ilog( "SUCCESS: max_considered_producers correctly limits BPs to 15!" );
 
 } FC_LOG_AND_RETHROW()
 
