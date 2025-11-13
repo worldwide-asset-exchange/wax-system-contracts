@@ -743,10 +743,12 @@ namespace eosiosystem {
       name     guilds_contract = "guilds.oig"_n;                     // Guild contract name
       uint32_t bp_score_scaling_factor = 1000;                       // Divisor for score (1000 = 1.0x multiplier)
       uint32_t bp_default_score = 1000;                              // Default score for unacknowledged BPs
+      uint32_t max_considered_producers = 100;                       // the maximimum number of producers we will consider in the loop
+      double   min_producer_vote_threshold;                          // the minimum allowable vote weight that the producer already has to be considered in the loop
       bool     enable_weighted_voting = true;                        // Kill switch for weighted voting
       std::vector<eosio::checksum256> guilds_code_hashes;            // List of approved guilds contract code hashes
 
-      EOSLIB_SERIALIZE( eosio_global_state6, (guilds_contract)(bp_score_scaling_factor)(bp_default_score)(enable_weighted_voting)(guilds_code_hashes) )
+      EOSLIB_SERIALIZE( eosio_global_state6, (guilds_contract)(bp_score_scaling_factor)(bp_default_score)(max_considered_producers)(min_producer_vote_threshold)(enable_weighted_voting)(guilds_code_hashes) )
    };
    typedef eosio::singleton< "global.a"_n, eosio_global_state6 > global_state6_singleton;
 
@@ -1496,6 +1498,14 @@ namespace eosiosystem {
          [[eosio::action]]
          void setenablewv( bool enable );
 
+         /** set max considered producers */
+         [[eosio::action]]
+         void setmaxprod( uint32_t max_considered_producers );
+
+         /** set min producer vote threshold */
+         [[eosio::action]]
+         void setminvote( double min_producer_vote_threshold );
+
        /**
         * limitauthchg opts into or out of restrictions on updateauth, deleteauth, linkauth, and unlinkauth.
         *
@@ -1594,6 +1604,8 @@ namespace eosiosystem {
        using addguildhash_action = eosio::action_wrapper<"addguildhash"_n, &system_contract::addguildhash>;
        using rmguildhash_action = eosio::action_wrapper<"rmguildhash"_n, &system_contract::rmguildhash>;
        using setenablewv_action = eosio::action_wrapper<"setenablewv"_n, &system_contract::setenablewv>;
+       using setmaxprod_action = eosio::action_wrapper<"setmaxprod"_n, &system_contract::setmaxprod>;
+       using setminvote_action = eosio::action_wrapper<"setminvote"_n, &system_contract::setminvote>;
 
       private:
          // WAX specifics

@@ -112,6 +112,9 @@ namespace eosiosystem {
       using value_type = std::pair<eosio::producer_authority, uint16_t>;
       const uint32_t num_standby_slots = _gstate4.num_standby_slots;
 
+      const uint32_t max_considered_producers = _gstate6.max_considered_producers;
+      const double min_vote_threshold = _gstate6.min_producer_vote_threshold;
+
       // Create vector to hold producers with their weighted votes
       struct weighted_producer {
          eosio::producer_authority authority;
@@ -122,7 +125,13 @@ namespace eosiosystem {
       std::vector<weighted_producer> weighted_producers;
 
       // Calculate weighted votes for all active producers with votes
-      for( auto it = idx.cbegin(); it != idx.cend() && it->active() && it->total_votes > 0; ++it ) {
+      uint32_t processed = 0;
+      for( auto it = idx.cbegin();
+          it != idx.cend() &&
+          it->active() &&
+          it->total_votes > min_vote_threshold &&    // ← Minimum vote requirement
+          processed < max_considered_producers;       // ← Hard limit on processing
+          ++it, ++processed ) {
          double multiplier = get_bp_weight_multiplier( it->owner );
          double weighted_votes = it->total_votes * multiplier;
 
