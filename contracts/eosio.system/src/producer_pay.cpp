@@ -85,11 +85,17 @@ namespace eosiosystem {
  
          // calculate rng amount from distribute_tokens, then subtract to get tokens for producers and savings/voters split
          auto rng_amount = distribute_tokens * _gstate5.rng_rate / RATE_DENOMINATOR;
-         // get the treasury balance from rng contract
-         auto treasury_balance = rng::get_rng_balance();
-         // clamp the treasury balance to the max treasury balance
-         auto remaining_max_treasury_balance = (treasury_balance >= _gstate5.max_pool_rng) ? 0 : _gstate5.max_pool_rng - treasury_balance;
-         auto rng_deposit = std::min(rng_amount, remaining_max_treasury_balance);
+
+         // Validate ORNG contract hash before calculating deposit
+         uint64_t rng_deposit = 0;
+         if (verify_orng_contract()) {
+            // get the treasury balance from rng contract
+            auto treasury_balance = rng::get_rng_balance();
+            // clamp the treasury balance to the max treasury balance
+            auto remaining_max_treasury_balance = (treasury_balance >= _gstate5.max_pool_rng) ? 0 : _gstate5.max_pool_rng - treasury_balance;
+            rng_deposit = std::min(rng_amount, remaining_max_treasury_balance);
+         }
+         // else rng_deposit stays 0, funds go to producers instead
 
          // needs to be 2/5 Savings, 2/5 Voters, 1/5 producers
          auto token_for_producers = distribute_tokens - rng_deposit;
