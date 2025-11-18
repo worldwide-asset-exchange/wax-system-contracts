@@ -542,6 +542,21 @@ namespace eosiosystem {
    void system_contract::setprodcnt( uint32_t count ) {
       require_auth( get_self() );
       check( count >= 1 && count <= 21, "count must be between 1 and 21" );
+
+      int delta = int(count) - int(_gstate4.active_producer_count);
+      check(delta == 1 || delta == -1, "must change by exactly ±1");
+
+      uint32_t now = current_time_point().sec_since_epoch();
+      check(now - _gstate4.last_change_time >= _gstate4.min_cooldown_secs, "cool-down not elapsed");
+
       _gstate4.active_producer_count = count;
+      _gstate4.last_change_time = now;
+   }
+
+   ACTION system_contract::setprodctrl(uint32_t cooldown_secs) {
+      require_auth(get_self());
+
+      check( cooldown_secs >= 600, "cooldown must be at least 600 (10 minutes)" );
+      _gstate4.min_cooldown_secs = cooldown_secs;
    }
 } /// eosio.system

@@ -198,12 +198,8 @@ namespace eosiosystem {
       for( auto& item : top_producers )
          producers.push_back( std::move(item.first) );
 
-      eosio::print(" set_proposed_producers( producers )");
       if( set_proposed_producers( producers ) >= 0 ) {
-         eosio::print(" set_proposed_producers( producers updated)");
          _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
-      }else {
-         eosio::print(" set_proposed_producers( producers failed)");
       }
       if (standby_producers.size() > 0) {
          update_standby_producers( standby_producers );
