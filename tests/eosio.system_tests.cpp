@@ -3775,11 +3775,12 @@ BOOST_FIXTURE_TEST_CASE( elect_producers /*_and_parameters*/, eosio_system_teste
    //config = config_to_variant( control->get_global_properties().configuration );
    //REQUIRE_EQUAL_OBJECTS(prod2_config, config);
 
+   // The test below is invalid now, the check top_producers.size() < _gstate.last_producer_schedule_size removed
    // try to go back to 2 producers and fail
-   BOOST_REQUIRE_EQUAL( success(), vote( "bob111111111"_n, { "defproducer3"_n } ) );
-   produce_blocks(250);
-   producer_keys = control->head_block_state()->active_schedule.producers;
-   BOOST_REQUIRE_EQUAL( 3, producer_keys.size() );
+   // BOOST_REQUIRE_EQUAL( success(), vote( "bob111111111"_n, { "defproducer3"_n } ) );
+   // produce_blocks(250);
+   // producer_keys = control->head_block_state()->active_schedule.producers;
+   // BOOST_REQUIRE_EQUAL( 3, producer_keys.size() );
 
    // The test below is invalid now, producer schedule is not updated if there are
    // fewer producers in the new schedule

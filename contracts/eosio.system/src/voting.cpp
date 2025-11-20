@@ -111,6 +111,7 @@ namespace eosiosystem {
 
       using value_type = std::pair<eosio::producer_authority, uint16_t>;
       const uint32_t num_standby_slots = _gstate4.num_standby_slots;
+      const uint32_t active_producer_count = _gstate4.active_producer_count;
 
       const uint32_t max_considered_producers = _gstate6.max_considered_producers;
       const double min_vote_threshold = _gstate6.min_producer_vote_threshold;
@@ -157,12 +158,13 @@ namespace eosiosystem {
 
       // Select top 21 and standbys based on weighted votes
       std::vector<value_type> top_producers;
-      top_producers.reserve(21);
+      size_t num_to_select = std::min(active_producer_count, (uint32_t)weighted_producers.size());
+      top_producers.reserve(num_to_select);
       std::vector<eosio::name> standby_producers;
       standby_producers.reserve(num_standby_slots);
 
       for( size_t i = 0; i < weighted_producers.size(); ++i ) {
-         if( i < 21 ) {
+         if( i < num_to_select ) {
             top_producers.emplace_back(
                std::move(weighted_producers[i].authority),
                weighted_producers[i].location
@@ -177,7 +179,7 @@ namespace eosiosystem {
          }
       }
 
-      if( top_producers.size() == 0 || top_producers.size() < _gstate.last_producer_schedule_size ) {
+      if( top_producers.size() == 0 ) {
          return;
       }
 
