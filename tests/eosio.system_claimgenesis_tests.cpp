@@ -9,7 +9,9 @@
 #include <fc/log/logger.hpp>
 #include <eosio/chain/exceptions.hpp>
 
+#define GENESIS_TIME_TESTER
 #include "eosio.system_tester.hpp"
+
 struct _abi_hash {
    name owner;
    fc::sha256 hash;

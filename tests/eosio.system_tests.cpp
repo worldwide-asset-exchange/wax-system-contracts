@@ -9,6 +9,7 @@
 #include <fc/log/logger.hpp>
 #include <eosio/chain/exceptions.hpp>
 
+#define GENESIS_TIME_TESTER
 #include "eosio.system_tester.hpp"
 struct _abi_hash {
    name owner;
@@ -3740,7 +3741,7 @@ BOOST_FIXTURE_TEST_CASE( elect_producers /*_and_parameters*/, eosio_system_teste
    //vote for producers
    BOOST_REQUIRE_EQUAL( success(), vote( "alice1111111"_n, { "defproducer1"_n } ) );
    produce_blocks(250);
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL( 1, producer_keys.size() );
    BOOST_REQUIRE_EQUAL( name("defproducer1"), producer_keys[0].producer_name );
 
@@ -3756,7 +3757,7 @@ BOOST_FIXTURE_TEST_CASE( elect_producers /*_and_parameters*/, eosio_system_teste
    BOOST_REQUIRE_EQUAL( success(), vote( "bob111111111"_n, { "defproducer2"_n } ) );
    ilog(".");
    produce_blocks(250);
-   producer_keys = control->head_block_state()->active_schedule.producers;
+   producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL( 2, producer_keys.size() );
    BOOST_REQUIRE_EQUAL( name("defproducer1"), producer_keys[0].producer_name );
    BOOST_REQUIRE_EQUAL( name("defproducer2"), producer_keys[1].producer_name );
@@ -3767,7 +3768,7 @@ BOOST_FIXTURE_TEST_CASE( elect_producers /*_and_parameters*/, eosio_system_teste
    // elect 3 producers
    BOOST_REQUIRE_EQUAL( success(), vote( "bob111111111"_n, { "defproducer2"_n, "defproducer3"_n } ) );
    produce_blocks(250);
-   producer_keys = control->head_block_state()->active_schedule.producers;
+   producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL( 3, producer_keys.size() );
    BOOST_REQUIRE_EQUAL( name("defproducer1"), producer_keys[0].producer_name );
    BOOST_REQUIRE_EQUAL( name("defproducer2"), producer_keys[1].producer_name );
@@ -3779,7 +3780,7 @@ BOOST_FIXTURE_TEST_CASE( elect_producers /*_and_parameters*/, eosio_system_teste
    // try to go back to 2 producers and fail
    // BOOST_REQUIRE_EQUAL( success(), vote( "bob111111111"_n, { "defproducer3"_n } ) );
    // produce_blocks(250);
-   // producer_keys = control->head_block_state()->active_schedule.producers;
+   // producer_keys = control->active_producers().producers;
    // BOOST_REQUIRE_EQUAL( 3, producer_keys.size() );
 
    // The test below is invalid now, producer schedule is not updated if there are

@@ -131,7 +131,7 @@ struct eosio_standby_tester : eosio_system_tester {
     }
     produce_blocks(23 * 12 + 20);
 
-    auto producer_keys = control->head_block_state()->active_schedule.producers;
+    auto producer_keys = control->active_producers().producers;
     BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
     BOOST_REQUIRE_EQUAL( name("defproducera"), producer_keys[0].producer_name );
 
@@ -208,7 +208,7 @@ BOOST_FIXTURE_TEST_CASE(standby_list, eosio_standby_tester ) try {
   ilog( "------ get producers----------" );
   wdump((producer_names));
 
-  auto producer_keys = control->head_block_state()->active_schedule.producers;
+  auto producer_keys = control->active_producers().producers;
 
   wdump((producer_keys));
 
@@ -245,7 +245,7 @@ BOOST_FIXTURE_TEST_CASE(standby_claims, eosio_standby_tester ) try {
   ilog( "------ get producers----------" );
   wdump((producer_names));
 
-  auto producer_keys = control->head_block_state()->active_schedule.producers;
+  auto producer_keys = control->active_producers().producers;
 
   wdump((producer_keys));
 
@@ -383,7 +383,7 @@ BOOST_FIXTURE_TEST_CASE(standby_producer_pay, eosio_standby_tester,  * boost::un
   auto producer_names = active_and_vote_producers_and_standbys();
   wdump((producer_names));
 
-  auto producer_keys = control->head_block_state()->active_schedule.producers;
+  auto producer_keys = control->active_producers().producers;
 
   wdump((producer_keys));
 

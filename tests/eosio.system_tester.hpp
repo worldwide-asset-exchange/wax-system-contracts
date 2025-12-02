@@ -15,9 +15,113 @@ using namespace fc;
 
 using mvo = fc::mutable_variant_object;
 
+class genesis_time_tester : public base_tester {
+   public:
+      virtual ~genesis_time_tester() {
+         if( !validating_node ) {
+            elog( "~validating_tester() called with empty validating_node; likely in the middle of failure" );
+            return;
+         }
+         try {
+            if (!skip_validate && std::uncaught_exceptions() == 0)
+               BOOST_CHECK_EQUAL( validate(), true );
+         } catch( const fc::exception& e ) {
+            wdump((e.to_detail_string()));
+         }
+      }
+      controller::config vcfg;
+
+      genesis_time_tester() {
+         auto def_conf = default_config(tempdir);
+
+         vcfg = def_conf.first;
+         config_validator(vcfg);
+         vcfg.trusted_producers = flat_set<account_name>();
+
+         def_conf.second.initial_timestamp = fc::time_point::from_iso_string("2019-06-30T00:00:00.000");
+         validating_node = create_validating_node(vcfg, def_conf.second);
+
+         init(def_conf.first, def_conf.second, call_startup_t::yes);
+         execute_setup_policy(setup_policy::full_except_do_not_disable_deferred_trx);
+      }
+
+      static void config_validator(controller::config& vcfg) {
+         FC_ASSERT( vcfg.blocks_dir.filename().generic_string() != "."
+                    && vcfg.state_dir.filename().generic_string() != ".", "invalid path names in controller::config" );
+
+         vcfg.finalizers_dir = vcfg.blocks_dir.parent_path() / std::string("v_").append( vcfg.finalizers_dir.filename().generic_string() );
+         vcfg.blocks_dir = vcfg.blocks_dir.parent_path() / std::string("v_").append( vcfg.blocks_dir.filename().generic_string() );
+         vcfg.state_dir  = vcfg.state_dir.parent_path() / std::string("v_").append( vcfg.state_dir.filename().generic_string() );
+
+         vcfg.contracts_console = false;
+      }
+
+      static unique_ptr<controller> create_validating_node(controller::config vcfg, const genesis_state& genesis) {
+         unique_ptr<controller> validating_node = std::make_unique<controller>(vcfg, make_protocol_feature_set(), genesis.compute_chain_id());
+         validating_node->add_indices();
+         validating_node->startup( [](){}, []() { return false; }, genesis );
+         return validating_node;
+      }
+
+      produce_block_result_t produce_block_ex( fc::microseconds skip_time = default_skip_time, bool no_throw = false ) override {
+         auto produce_block_result = _produce_block(skip_time, false, no_throw);
+         validate_push_block(produce_block_result.block);
+         return produce_block_result;
+      }
+
+      signed_block_ptr produce_block( fc::microseconds skip_time = default_skip_time, bool no_throw = false ) override {
+         return produce_block_ex(skip_time, no_throw).block;
+      }
+
+      signed_block_ptr produce_block_no_validation( fc::microseconds skip_time = default_skip_time ) {
+         return _produce_block(skip_time, false, false).block;
+      }
+
+      void validate_push_block(const signed_block_ptr& sb) {
+         auto [best_head, obh] = validating_node->accept_block( sb->calculate_id(), sb );
+         EOS_ASSERT(obh, unlinkable_block_exception, "block did not link ${b}", ("b", sb->calculate_id()));
+         validating_node->apply_blocks( {}, trx_meta_cache_lookup{} );
+         _check_for_vote_if_needed(*validating_node, *obh);
+      }
+
+      signed_block_ptr produce_empty_block( fc::microseconds skip_time = default_skip_time )override {
+         unapplied_transactions.add_aborted( control->abort_block() );
+         auto sb = _produce_block(skip_time, true);
+         validate_push_block(sb);
+         return sb;
+      }
+
+      signed_block_ptr finish_block()override {
+         return _finish_block();
+      }
+
+      bool validate() {
+        const block_header hbh = control->head().header();
+        const block_header vn_hbh = validating_node->head().header();
+        bool ok = control->head().id() == validating_node->head().id() &&
+               hbh.previous == vn_hbh.previous &&
+               hbh.timestamp == vn_hbh.timestamp &&
+               hbh.transaction_mroot == vn_hbh.transaction_mroot &&
+               hbh.action_mroot == vn_hbh.action_mroot &&
+               hbh.producer == vn_hbh.producer;
+
+        validating_node.reset();
+        validating_node = std::make_unique<controller>(vcfg, make_protocol_feature_set(), control->get_chain_id());
+        validating_node->add_indices();
+        validating_node->startup( [](){}, []() { return false; } );
+
+        return ok;
+      }
+
+      unique_ptr<controller>      validating_node;
+      bool                        skip_validate = false;
+};
+
 #ifndef TESTER
 #ifdef NON_VALIDATING_TEST
 #define TESTER tester_no_disable_deferred_trx
+#elif defined(GENESIS_TIME_TESTER)
+#define TESTER genesis_time_tester
 #else
 #define TESTER validating_tester_no_disable_deferred_trx
 #endif
@@ -1370,7 +1474,7 @@ public:
       }
       produce_blocks( 250 );
 
-      auto producer_keys = control->head_block_state()->active_schedule.producers;
+      auto producer_keys = control->active_producers().producers;
       BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
       BOOST_REQUIRE_EQUAL( name("defproducera"), producer_keys[0].producer_name );
 
