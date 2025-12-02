@@ -1,5 +1,5 @@
 DEV_VERSION=ce-v1.0.3wax01-v4.1.1wax01
-DEV_DOCKER_IMAGE=waxteam/waxdev:$(DEV_VERSION)
+DEV_DOCKER_IMAGE=waxteam/cdt-base:$(DEV_VERSION)
 DEV_DOCKER_CONTAINER=contracts-development
 DEV_DOCKER_COMMON=-v `pwd`:/opt/contracts \
 			--name $(DEV_DOCKER_CONTAINER) -w /opt/contracts $(DEV_DOCKER_IMAGE)
