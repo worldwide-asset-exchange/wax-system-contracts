@@ -42,7 +42,7 @@ class genesis_time_tester : public base_tester {
          validating_node = create_validating_node(vcfg, def_conf.second);
 
          init(def_conf.first, def_conf.second, call_startup_t::yes);
-         execute_setup_policy(setup_policy::full_except_do_not_disable_deferred_trx);
+         execute_setup_policy(setup_policy::full);
       }
 
       static void config_validator(controller::config& vcfg) {
@@ -117,20 +117,9 @@ class genesis_time_tester : public base_tester {
       bool                        skip_validate = false;
 };
 
-#ifndef TESTER
-#ifdef NON_VALIDATING_TEST
-#define TESTER tester_no_disable_deferred_trx
-#elif defined(GENESIS_TIME_TESTER)
-#define TESTER genesis_time_tester
-#else
-#define TESTER validating_tester_no_disable_deferred_trx
-#endif
-#endif
-
 namespace eosio_system {
 
-
-class eosio_system_tester : public TESTER {
+class eosio_system_tester : public genesis_time_tester {
 public:
 
    void basic_setup() {
@@ -1427,7 +1416,7 @@ public:
       return msig_abi_ser;
    }
 
-   vector<name> active_and_vote_producers() {
+   vector<name> active_and_vote_producers(uint32_t num_producers = 21) {
       //stake more than 15% of total EOS supply to activate chain
       transfer( "eosio"_n, "alice1111111"_n, core_sym::from_string("650000000.0000"), config::system_account_name );
       BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111"_n, "alice1111111"_n, core_sym::from_string("300000000.0000"), core_sym::from_string("300000000.0000") ) );
@@ -1437,7 +1426,7 @@ public:
       {
          producer_names.reserve('z' - 'a' + 1);
          const std::string root("defproducer");
-         for ( char c = 'a'; c < 'a'+21; ++c ) {
+         for ( char c = 'a'; c < 'a'+num_producers; ++c ) {
             producer_names.emplace_back(root + std::string(1, c));
          }
          setup_producer_accounts(producer_names);
@@ -1448,7 +1437,7 @@ public:
       }
       produce_blocks( 250);
 
-      auto trace_auth = TESTER::push_action(config::system_account_name, updateauth::get_name(), config::system_account_name, mvo()
+      auto trace_auth = genesis_time_tester::push_action(config::system_account_name, updateauth::get_name(), config::system_account_name, mvo()
                                             ("account", name(config::system_account_name).to_string())
                                             ("permission", name(config::active_name).to_string())
                                             ("parent", name(config::owner_name).to_string())
@@ -1468,14 +1457,14 @@ public:
          BOOST_REQUIRE_EQUAL(success(), push_action("alice1111111"_n, "voteproducer"_n, mvo()
                                                     ("voter",  "alice1111111")
                                                     ("proxy", name(0).to_string())
-                                                    ("producers", vector<account_name>(producer_names.begin(), producer_names.begin()+21))
+                                                    ("producers", vector<account_name>(producer_names.begin(), producer_names.begin()+num_producers))
                              )
          );
       }
       produce_blocks( 250 );
 
       auto producer_keys = control->active_producers().producers;
-      BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
+      BOOST_REQUIRE_EQUAL( std::min(21u, num_producers), producer_keys.size() );
       BOOST_REQUIRE_EQUAL( name("defproducera"), producer_keys[0].producer_name );
 
       return producer_names;

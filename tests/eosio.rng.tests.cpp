@@ -100,7 +100,6 @@ struct eosio_rng_tester : eosio_system_tester {
 
 };
 
-
 BOOST_AUTO_TEST_SUITE(eosio_rng_tests)
 
 BOOST_FIXTURE_TEST_CASE(rng_config_tests, eosio_rng_tester ) try {
