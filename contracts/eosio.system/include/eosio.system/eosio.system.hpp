@@ -735,8 +735,9 @@ namespace eosiosystem {
       uint32_t          active_producer_count = 21;
       uint32_t          min_cooldown_secs     = 86400;
       uint32_t          last_change_time      = 0;
+      uint32_t          min_bps_voting_reward = 16;
 
-      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_slot_weight)(num_standby_slots)(active_producer_count)(min_cooldown_secs)(last_change_time) )
+      EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_slot_weight)(num_standby_slots)(active_producer_count)(min_cooldown_secs)(last_change_time)(min_bps_voting_reward) )
    };
    typedef eosio::singleton< "global4"_n, eosio_global_state4 > global_state4_singleton;
 
@@ -1564,6 +1565,9 @@ namespace eosiosystem {
 
       [[eosio::action]]
       void setprodctrl(uint32_t cooldown_secs);
+
+      [[eosio::action]]
+      void setminbpvote( uint32_t min );
 
          using init_action = eosio::action_wrapper<"init"_n, &system_contract::init>;
          using setacctram_action = eosio::action_wrapper<"setacctram"_n, &system_contract::setacctram>;

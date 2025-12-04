@@ -553,6 +553,14 @@ namespace eosiosystem {
       _gstate4.last_change_time = now;
    }
 
+   void system_contract::setminbpvote( uint32_t min ) {
+      require_auth( get_self() );
+      check( min > 0, "min_bps_voting_reward must be greater than 0" );
+      check( min <= _gstate4.active_producer_count, "min_bps_voting_reward must be less than or equal to active_producer_count" );
+
+      _gstate4.min_bps_voting_reward = min;
+   }
+
    ACTION system_contract::setprodctrl(uint32_t cooldown_secs) {
       require_auth(get_self());
 

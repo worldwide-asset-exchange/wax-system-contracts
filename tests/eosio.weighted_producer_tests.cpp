@@ -199,7 +199,6 @@ struct eosio_weighted_producer_tester : eosio_system_tester {
 
 };
 
-
 BOOST_AUTO_TEST_SUITE(eosio_weighted_producer_tests)
 
 BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester) try {
@@ -274,6 +273,13 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester)
    ));
    produce_blocks(1);
 
+   // Test 8: Set producer cooldown
+   const uint32_t min_bps_vote = 7;
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setminbpvote"_n, mvo()
+      ("min", min_bps_vote)
+   ));
+   produce_blocks(1);
+
    // Verify default score was set
    fc::variant final_state = get_global_state6();
    BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), new_default_score);
@@ -290,6 +296,9 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester)
 
    // Verify min_cooldown_secs was set
    BOOST_REQUIRE_EQUAL(state4["min_cooldown_secs"].as<uint32_t>(), cooldown_secs);
+
+   // Verify min_bps_voting_reward was set
+   BOOST_REQUIRE_EQUAL(state4["min_bps_voting_reward"].as<uint32_t>(), min_bps_vote);
 
    // Verify all settings persist together
    BOOST_REQUIRE_EQUAL(final_state["guilds_contract"].as<name>(), new_guilds_contract);
@@ -365,6 +374,15 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_missing_self_authority, eosio_weighted_p
    );
    produce_blocks(1);
 
+   // Test 8: Set min bp vote
+   const uint32_t min_bps_vote = 7;
+   BOOST_REQUIRE_EQUAL(error("missing authority of eosio"),
+      push_action("fakeeosio"_n, "setminbpvote"_n, mvo()
+         ("min", min_bps_vote)
+      )
+   );
+   produce_blocks(1);
+
    // Verify state doesn't not change
    fc::variant final_state = get_global_state6();
    BOOST_REQUIRE_EQUAL(final_state["bp_default_score"].as<uint32_t>(), before_state["bp_default_score"].as<uint32_t>());
@@ -381,6 +399,9 @@ BOOST_FIXTURE_TEST_CASE(test_config_set_missing_self_authority, eosio_weighted_p
 
    // Verify min_cooldown_secs was not changed
    BOOST_REQUIRE_EQUAL(final_state4["min_cooldown_secs"].as<uint32_t>(), before_state4["min_cooldown_secs"].as<uint32_t>());
+
+   // Verify min_bps_voting_reward was not changed
+   BOOST_REQUIRE_EQUAL(final_state4["min_bps_voting_reward"].as<uint32_t>(), before_state4["min_bps_voting_reward"].as<uint32_t>());
 
    // Verify all settings persist together
    BOOST_REQUIRE_EQUAL(final_state["guilds_contract"].as<name>(), before_state["guilds_contract"].as<name>());
@@ -515,6 +536,31 @@ BOOST_FIXTURE_TEST_CASE(test_setminvote_validation, eosio_weighted_producer_test
    fc::variant state_after_positive = get_global_state6();
    BOOST_REQUIRE_EQUAL(state_after_positive["min_producer_vote_threshold"].as<double>(), test_threshold);
 
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(test_setminbpvote_validation, eosio_weighted_producer_tester) try {
+   fc::variant initial_state4 = get_global_state4();
+   uint32_t initial_value = initial_state4["min_bps_voting_reward"].as<uint32_t>();
+
+   // Test 1: Setting min to 0 should fail
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("min_bps_voting_reward must be greater than 0"),
+      push_action(config::system_account_name, "setminbpvote"_n, mvo()
+         ("min", 0)
+      )
+   );
+   produce_blocks(1);
+
+   // Test 2: Setting min greater than number of bp should fail
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("min_bps_voting_reward must be less than or equal to active_producer_count"),
+      push_action(config::system_account_name, "setminbpvote"_n, mvo()
+         ("min", initial_state4["active_producer_count"].as<uint32_t>() + 1)
+      )
+   );
+   produce_blocks(1);
+
+   fc::variant after_state4 = get_global_state4();
+   uint32_t after_value = after_state4["min_bps_voting_reward"].as<uint32_t>();
+   BOOST_REQUIRE_EQUAL(after_value, initial_value);
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(test_setprodcnt_boundary_validation, eosio_weighted_producer_tester) try {
