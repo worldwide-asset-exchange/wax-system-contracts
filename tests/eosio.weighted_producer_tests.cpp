@@ -563,6 +563,44 @@ BOOST_FIXTURE_TEST_CASE(test_setminbpvote_validation, eosio_weighted_producer_te
    BOOST_REQUIRE_EQUAL(after_value, initial_value);
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(adjust_min_bps_voting_reward_according_to_active_producer_count, eosio_weighted_producer_tester) try {
+   fc::variant initial_state4 = get_global_state4();
+   uint32_t initial_value = initial_state4["min_bps_voting_reward"].as<uint32_t>();
+
+   uint32_t target_bp_number = 9;
+   for (int bp_count = 20; bp_count >= target_bp_number; --bp_count) {
+      // Set active_producer_count to bp_count
+      BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setprodcnt"_n, mvo()
+         ("count", bp_count)
+      ));
+
+      produce_block( fc::hours(24) ); // cooldown
+   }
+
+   fc::variant after_state4 = get_global_state4();
+   uint32_t after_value = after_state4["min_bps_voting_reward"].as<uint32_t>();
+   BOOST_REQUIRE_EQUAL(after_state4["active_producer_count"], 9);
+   BOOST_REQUIRE_EQUAL(after_value, after_state4["active_producer_count"]);
+   BOOST_REQUIRE(after_value != initial_value);
+
+   // inrease bp count should not update min bp vote reward
+   target_bp_number = 15;
+   for (int bp_count = 10; bp_count <= target_bp_number; ++bp_count) {
+      // Set active_producer_count to bp_count
+      BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setprodcnt"_n, mvo()
+         ("count", bp_count)
+      ));
+
+      produce_block( fc::hours(24) ); // cooldown
+   }
+
+   after_state4 = get_global_state4();
+   after_value = after_state4["min_bps_voting_reward"].as<uint32_t>();
+   BOOST_REQUIRE_EQUAL(after_state4["active_producer_count"], 15);
+   // still 9
+   BOOST_REQUIRE_EQUAL(after_value, 9);
+} FC_LOG_AND_RETHROW()
+
 BOOST_FIXTURE_TEST_CASE(test_setprodcnt_boundary_validation, eosio_weighted_producer_tester) try {
    // Test boundary conditions for setprodcnt action
 

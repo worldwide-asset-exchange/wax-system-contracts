@@ -551,6 +551,11 @@ namespace eosiosystem {
 
       _gstate4.active_producer_count = count;
       _gstate4.last_change_time = now;
+
+      // adjust the min_bps_voting_reward accordingly
+      if (_gstate4.min_bps_voting_reward > count) {
+         _gstate4.min_bps_voting_reward = count;
+      }
    }
 
    void system_contract::setminbpvote( uint32_t min ) {
