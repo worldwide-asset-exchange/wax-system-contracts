@@ -24,11 +24,8 @@ jobs:
           echo "Mem :" && free -h
       - name: Free up Disk Space
         run: |
-          # Remove specific Docker images that are no longer needed
-          docker rmi $(docker images -f "dangling=true" -q) || true
-
           # Prune unused Docker objects (images, containers, volumes, and networks)
-          docker system prune -f || true
+          docker system prune --all --force
 
           # Show disk space usage
           df -h
