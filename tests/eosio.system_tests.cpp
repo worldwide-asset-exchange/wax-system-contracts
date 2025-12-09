@@ -1600,6 +1600,122 @@ BOOST_FIXTURE_TEST_CASE(voter_pay_gstate_consistency, eosio_system_tester, * boo
 
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(min_bps_voting_reward_case, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
+   const asset large_asset = core_sym::from_string("80.0000");
+   create_account_with_resources( "votera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "voterb"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "voterc"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+
+   std::vector<account_name> producer_names;
+   {
+      producer_names.reserve('z' - 'a' + 1);
+      {
+         const std::string root("producer");
+         for ( char c = 'a'; c <= 'z'; ++c ) {
+            producer_names.emplace_back(root + std::string(1, c));
+         }
+      }
+      setup_producer_accounts(producer_names);
+      for (const auto& p: producer_names) {
+         BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+         produce_blocks(1);
+         ilog( "------ get pro----------" );
+         wdump((p));
+         BOOST_TEST(0 == get_producer_info(p)["total_votes"].as<double>());
+      }
+   }
+
+   produce_block(fc::hours(1));
+
+   const uint32_t min_bps_vote = 10;
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setminbpvote"_n, mvo()
+      ("min", min_bps_vote)
+   ));
+   produce_blocks(1);
+
+   fc::variant state4 = get_global_state4();
+   BOOST_REQUIRE_EQUAL(state4["min_bps_voting_reward"].as<uint32_t>(), min_bps_vote);
+
+   transfer( config::system_account_name, "votera", core_sym::from_string("200000000.0000"), config::system_account_name);
+   transfer( config::system_account_name, "voterb", core_sym::from_string("200000000.0000"), config::system_account_name);
+   transfer( config::system_account_name, "voterc", core_sym::from_string("200000000.0000"), config::system_account_name);
+   BOOST_REQUIRE_EQUAL(success(), stake("votera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
+   BOOST_REQUIRE_EQUAL(success(), stake("voterb", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
+   BOOST_REQUIRE_EQUAL(success(), stake("voterc", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000")));
+
+   // number of voted producers less than min_bps_vote
+   BOOST_REQUIRE_EQUAL(success(), vote("votera"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+min_bps_vote - 2)));
+   // number of voted producers equal to min_bps_vote
+   BOOST_REQUIRE_EQUAL(success(), vote("voterb"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+min_bps_vote)));
+   // number of voted producers greater than min_bps_vote
+   BOOST_REQUIRE_EQUAL(success(), vote("voterc"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+min_bps_vote + 2)));
+
+   produce_block(fc::hours(2));
+
+   // update total_unpaid_voteshare, total_unpaid_voteshare_last_updated
+   BOOST_REQUIRE_EQUAL(success(), vote("voterc"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+min_bps_vote + 2)));
+
+   auto global_state = get_global_state();
+   auto votera = get_voter_info( "votera"_n );
+   auto voterb = get_voter_info( "voterb"_n );
+   auto voterc = get_voter_info( "voterc"_n );
+
+   BOOST_REQUIRE_EQUAL(global_state["voters_bucket"].as<int64_t>(), get_balance("eosio.voters"_n).get_amount());
+   // votera is not being counted
+   double total_weight = voterb["unpaid_voteshare_change_rate"].as<double>() + voterc["unpaid_voteshare_change_rate"].as<double>();
+   BOOST_REQUIRE(global_state["total_voteshare_change_rate"].as<double>() == total_weight);
+
+   BOOST_REQUIRE_EQUAL(votera["unpaid_voteshare"].as<double>(), 0);
+   BOOST_REQUIRE_EQUAL(votera["unpaid_voteshare_change_rate"].as<double>(), 0);
+
+   time_point last_update = global_state["total_unpaid_voteshare_last_updated"].as<time_point>();
+   double voterb_unpaid_voteshare = voterb["unpaid_voteshare"].as<double>() + voterb["unpaid_voteshare_change_rate"].as<double>() * double((last_update - voterb["unpaid_voteshare_last_updated"].as<time_point>()).count() / 1E6);
+   double voterc_unpaid_voteshare = voterc["unpaid_voteshare"].as<double>() + voterc["unpaid_voteshare_change_rate"].as<double>() * double((last_update - voterc["unpaid_voteshare_last_updated"].as<time_point>()).count() / 1E6);
+   BOOST_REQUIRE(voterb_unpaid_voteshare > 0);
+   BOOST_REQUIRE(voterc_unpaid_voteshare > 0);
+   BOOST_TEST(global_state["total_unpaid_voteshare"].as<double>() == voterb_unpaid_voteshare + voterc_unpaid_voteshare);
+
+   produce_block(fc::hours(1));
+
+   BOOST_REQUIRE_EQUAL(error("assertion failure with message: no rewards available."), push_action("votera"_n, "voterclaim"_n, mvo()("owner", "votera")));
+
+   // reduce min bp vote to accept votera
+   const uint32_t min_bps_vote1 = 3;
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setminbpvote"_n, mvo()
+      ("min", min_bps_vote1)
+   ));
+   produce_blocks(1);
+
+   transfer( config::system_account_name, "votera", core_sym::from_string("50000000.0000"), config::system_account_name);
+   BOOST_REQUIRE_EQUAL(success(), stake("votera", core_sym::from_string("15000000.0000"), core_sym::from_string("15000000.0000")));
+
+   produce_block(fc::hours(3));
+
+   // update total_unpaid_voteshare, total_unpaid_voteshare_last_updated 
+   BOOST_REQUIRE_EQUAL(success(), stake("votera", core_sym::from_string("10000000.0000"), core_sym::from_string("10000000.0000")));
+
+   global_state = get_global_state();
+   votera = get_voter_info( "votera"_n );
+   voterb = get_voter_info( "voterb"_n );
+   voterc = get_voter_info( "voterc"_n );
+
+   BOOST_REQUIRE(votera["unpaid_voteshare"].as<double>() > 0);
+   BOOST_REQUIRE(votera["unpaid_voteshare_change_rate"].as<double>() > 0);
+
+   total_weight = votera["unpaid_voteshare_change_rate"].as<double>() + voterb["unpaid_voteshare_change_rate"].as<double>() + voterc["unpaid_voteshare_change_rate"].as<double>();
+   BOOST_TEST(global_state["total_voteshare_change_rate"].as<double>() == total_weight);
+
+   last_update = global_state["total_unpaid_voteshare_last_updated"].as<time_point>();
+   // votera is being counted
+   double votera_unpaid_voteshare = votera["unpaid_voteshare"].as<double>() + votera["unpaid_voteshare_change_rate"].as<double>() * double((last_update - votera["unpaid_voteshare_last_updated"].as<time_point>()).count() / 1E6);
+   voterb_unpaid_voteshare = voterb["unpaid_voteshare"].as<double>() + voterb["unpaid_voteshare_change_rate"].as<double>() * double((last_update - voterb["unpaid_voteshare_last_updated"].as<time_point>()).count() / 1E6);
+   voterc_unpaid_voteshare = voterc["unpaid_voteshare"].as<double>() + voterc["unpaid_voteshare_change_rate"].as<double>() * double((last_update - voterc["unpaid_voteshare_last_updated"].as<time_point>()).count() / 1E6);
+   BOOST_REQUIRE(votera_unpaid_voteshare > 0);
+   BOOST_REQUIRE(voterb_unpaid_voteshare > 0);
+   BOOST_REQUIRE(voterc_unpaid_voteshare > 0);
+   BOOST_TEST(global_state["total_unpaid_voteshare"].as<double>() == votera_unpaid_voteshare + voterb_unpaid_voteshare + voterc_unpaid_voteshare);
+} FC_LOG_AND_RETHROW()
+
 BOOST_FIXTURE_TEST_CASE(voter_pay, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
 
    const double continuous_rate = 0.04879;

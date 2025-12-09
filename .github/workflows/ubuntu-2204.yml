@@ -22,6 +22,13 @@ jobs:
         run: |
           echo "Disk:" && df -h
           echo "Mem :" && free -h
+      - name: Free up Disk Space
+        run: |
+          # Prune unused Docker objects (images, containers, volumes, and networks)
+          docker system prune --all --force
+
+          # Show disk space usage
+          df -h
       - name: Build & tests
         env:
           PARALLEL: 2
