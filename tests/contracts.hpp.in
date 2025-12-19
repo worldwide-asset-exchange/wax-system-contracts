@@ -31,8 +31,8 @@ struct contracts {
        // a custom contract does not check for WAXP symbol to support testing
       static std::vector<uint8_t> rng_wasm() { return read_wasm("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/wax.orng.wasm"); }
       static std::vector<char>    rng_abi() { return read_abi("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/wax.orng.abi"); }
-      static std::vector<uint8_t> guild_test_wasm() { return read_wasm("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/guilds/guild_test.wasm"); }
-      static std::vector<char>    guild_test_abi() { return read_abi("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/guilds/guild_test.abi"); }
+      static std::vector<uint8_t> guild_test_wasm() { return read_wasm("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/guilds/guilds_oig.wasm"); }
+      static std::vector<char>    guild_test_abi() { return read_abi("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/guilds/guilds_oig.abi"); }
    };
 };
 

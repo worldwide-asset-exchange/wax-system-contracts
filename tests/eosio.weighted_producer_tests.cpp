@@ -83,7 +83,7 @@ struct eosio_weighted_producer_tester : eosio_system_tester {
 
   // read guild data from guilds.oig contract
   guild get_guild_table(name producer) {
-    vector<char> data = get_row_by_account( GUILDS_OIG, GUILDS_OIG, "guild"_n, producer );
+    vector<char> data = get_row_by_account( GUILDS_OIG, GUILDS_OIG, "guilds"_n, producer );
     return fc::raw::unpack<guild>(data);
   }
 
@@ -711,10 +711,12 @@ BOOST_FIXTURE_TEST_CASE(test_config_and_guild_score, eosio_weighted_producer_tes
    BOOST_REQUIRE_EQUAL(success(), regproducer(test_producer));
    produce_blocks(1);
 
-   // Insert guild data using the insertguild action
-   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+   // Insert guild data using the addguild action
+   BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
       ("producer", test_producer)
       ("score", producer_score)
+      ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+      ("eligibility", core_sym::from_string("1.0000"))
    ));
    produce_blocks(1);
 
@@ -812,27 +814,33 @@ BOOST_FIXTURE_TEST_CASE(test_producer_sorting_with_votes_and_scores, eosio_weigh
    ilog( "=== Setting Scores ===" );
    ilog( "Group 1 (a-e): LOW score 0.5x - these 5 should be EXCLUDED from top 21" );
    for (size_t i = 0; i < 5; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 500) // 0.5x - LOW - should be excluded!
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
 
    // Group 2: Medium score (1.5x) - producers f-p (11 producers)
    ilog( "Group 2 (f-p): MEDIUM score 1.5x" );
    for (size_t i = 5; i < 16; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 1500) // 1.5x - MEDIUM
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
 
    // Group 3: HIGH score (2.0x) - producers q-z (10 producers)
    ilog( "Group 3 (q-z): HIGH score 2.0x - these should be selected" );
    for (size_t i = 16; i < 26; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 2000) // 2.0x - HIGH
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
    produce_blocks(1);
@@ -1055,35 +1063,43 @@ BOOST_FIXTURE_TEST_CASE(test_weighted_producer_with_standby_selection, eosio_wei
 
    ilog( "Group 1 (indices 0-3, prod111111aa-ad): VERY LOW score 0.3x - should be EXCLUDED" );
    for (size_t i = 0; i < 4; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 300) // 0.3x - VERY LOW
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
       ilog( "  ${name}: score=300", ("name", producer_names[i]) );
    }
 
    ilog( "Group 2 (indices 4-7, prod111111ae-ah): LOW score 0.8x - may be standby or excluded" );
    for (size_t i = 4; i < 8; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 800) // 0.8x - LOW
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
       ilog( "  ${name}: score=800", ("name", producer_names[i]) );
    }
 
    ilog( "Group 3 (indices 8-21, prod111111ai-av): MEDIUM score 1.5x - should be in active" );
    for (size_t i = 8; i < 22; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 1500) // 1.5x - MEDIUM
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
 
    ilog( "Group 4 (indices 22-29, prod111111aw-bd): HIGH score 2.5x - should be in active" );
    for (size_t i = 22; i < 30; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 2500) // 2.5x - HIGH
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
    produce_blocks(1);
@@ -1300,9 +1316,11 @@ BOOST_FIXTURE_TEST_CASE(test_min_vote_threshold_filters_standby_bps, eosio_weigh
    ilog( "=== Created ${count} producers ===" , ("count", producer_names.size()));
 
    for (size_t i = 0; i < 30; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 300)
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
       ilog( "  ${name}: score=300", ("name", producer_names[i]) );
    }
@@ -1535,9 +1553,11 @@ BOOST_FIXTURE_TEST_CASE(test_min_vote_threshold_filters_main_bps, eosio_weighted
 
    // Set all producers with same guild score
    for (size_t i = 0; i < 30; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 1000)
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
 
@@ -1753,9 +1773,11 @@ BOOST_FIXTURE_TEST_CASE(test_max_considered_producers_filters_standby_bps, eosio
 
    // Set all producers with same guild score
    for (size_t i = 0; i < 30; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 1000)
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
 
@@ -1973,35 +1995,43 @@ BOOST_FIXTURE_TEST_CASE(test_weighted_producer_with_guilds_code_hash_match_one_o
 
    ilog( "Group 1 (indices 0-3, prod111111aa-ad): VERY LOW score 0.3x - should be EXCLUDED" );
    for (size_t i = 0; i < 4; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 300) // 0.3x - VERY LOW
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
       ilog( "  ${name}: score=300", ("name", producer_names[i]) );
    }
 
    ilog( "Group 2 (indices 4-7, prod111111ae-ah): LOW score 0.8x - may be standby or excluded" );
    for (size_t i = 4; i < 8; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 800) // 0.8x - LOW
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
       ilog( "  ${name}: score=800", ("name", producer_names[i]) );
    }
 
    ilog( "Group 3 (indices 8-21, prod111111ai-av): MEDIUM score 1.5x - should be in active" );
    for (size_t i = 8; i < 22; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 1500) // 1.5x - MEDIUM
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
 
    ilog( "Group 4 (indices 22-29, prod111111aw-bd): HIGH score 2.5x - should be in active" );
    for (size_t i = 22; i < 30; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 2500) // 2.5x - HIGH
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
    produce_blocks(1);
@@ -2230,35 +2260,43 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_empty_disabled, eosio_weighted_producer_
 
    ilog( "Group 1 (indices 0-3, prod111111aa-ad): VERY LOW score 0.3x - should be EXCLUDED" );
    for (size_t i = 0; i < 4; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 300) // 0.3x - VERY LOW
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
       ilog( "  ${name}: score=300", ("name", producer_names[i]) );
    }
 
    ilog( "Group 2 (indices 4-7, prod111111ae-ah): LOW score 0.8x - may be standby or excluded" );
    for (size_t i = 4; i < 8; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 800) // 0.8x - LOW
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
       ilog( "  ${name}: score=800", ("name", producer_names[i]) );
    }
 
    ilog( "Group 3 (indices 8-21, prod111111ai-av): MEDIUM score 1.5x - should be in active" );
    for (size_t i = 8; i < 22; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 1500) // 1.5x - MEDIUM
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
 
    ilog( "Group 4 (indices 22-29, prod111111aw-bd): HIGH score 2.5x - should be in active" );
    for (size_t i = 22; i < 30; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 2500) // 2.5x - HIGH
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
    produce_blocks(1);
@@ -2483,35 +2521,43 @@ BOOST_FIXTURE_TEST_CASE(test_admin_disabled_guild_weight, eosio_weighted_produce
 
    ilog( "Group 1 (indices 0-3, prod111111aa-ad): VERY LOW score 0.3x - should be EXCLUDED" );
    for (size_t i = 0; i < 4; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 300) // 0.3x - VERY LOW
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
       ilog( "  ${name}: score=300", ("name", producer_names[i]) );
    }
 
    ilog( "Group 2 (indices 4-7, prod111111ae-ah): LOW score 0.8x - may be standby or excluded" );
    for (size_t i = 4; i < 8; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 800) // 0.8x - LOW
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
       ilog( "  ${name}: score=800", ("name", producer_names[i]) );
    }
 
    ilog( "Group 3 (indices 8-21, prod111111ai-av): MEDIUM score 1.5x - should be in active" );
    for (size_t i = 8; i < 22; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 1500) // 1.5x - MEDIUM
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
 
    ilog( "Group 4 (indices 22-29, prod111111aw-bd): HIGH score 2.5x - should be in active" );
    for (size_t i = 22; i < 30; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 2500) // 2.5x - HIGH
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
    produce_blocks(1);
@@ -2727,35 +2773,43 @@ BOOST_FIXTURE_TEST_CASE(test_verify_hash_not_match, eosio_weighted_producer_test
 
    ilog( "Group 1 (indices 0-3, prod111111aa-ad): VERY LOW score 0.3x - should be EXCLUDED" );
    for (size_t i = 0; i < 4; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 300) // 0.3x - VERY LOW
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
       ilog( "  ${name}: score=300", ("name", producer_names[i]) );
    }
 
    ilog( "Group 2 (indices 4-7, prod111111ae-ah): LOW score 0.8x - may be standby or excluded" );
    for (size_t i = 4; i < 8; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 800) // 0.8x - LOW
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
       ilog( "  ${name}: score=800", ("name", producer_names[i]) );
    }
 
    ilog( "Group 3 (indices 8-21, prod111111ai-av): MEDIUM score 1.5x - should be in active" );
    for (size_t i = 8; i < 22; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 1500) // 1.5x - MEDIUM
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
 
    ilog( "Group 4 (indices 22-29, prod111111aw-bd): HIGH score 2.5x - should be in active" );
    for (size_t i = 22; i < 30; ++i) {
-      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "insertguild"_n, mvo()
+      BOOST_REQUIRE_EQUAL(success(), push_guild_action(GUILDS_OIG, "addguild"_n, mvo()
          ("producer", producer_names[i])
          ("score", 2500) // 2.5x - HIGH
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000"))
       ));
    }
    produce_blocks(1);
