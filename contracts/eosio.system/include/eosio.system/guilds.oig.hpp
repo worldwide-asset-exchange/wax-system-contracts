@@ -41,7 +41,7 @@ namespace guildsoig {
         uint64_t primary_key() const { return producer.value; }
     };
 
-    typedef multi_index<name("guild"), guild_s> guild_table;
+    typedef multi_index<name("guilds"), guild_s> guild_table;
 
     // Use inline function to prevent duplicate symbols
     inline guild_table get_guilds(name contract_account) {
