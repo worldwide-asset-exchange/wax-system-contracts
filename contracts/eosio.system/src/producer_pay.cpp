@@ -104,8 +104,9 @@ namespace eosiosystem {
          auto to_savings       = token_for_producers - (to_voters + to_per_block_pay);
 
          auto total_block_pay = to_per_block_pay;
-         auto total_weight = (_gstate4.active_producer_count * PAY_SPLIT_SCALE) + (_gstate4.standby_slot_weight * _gstate4.num_standby_slots);
-         auto to_producers_pay = (total_block_pay * _gstate4.active_producer_count * PAY_SPLIT_SCALE) / total_weight;
+         uint32_t apc = *_gstate4.active_producer_count;
+         auto total_weight = (apc * PAY_SPLIT_SCALE) + (_gstate4.standby_slot_weight * _gstate4.num_standby_slots);
+         auto to_producers_pay = (total_block_pay * apc * PAY_SPLIT_SCALE) / total_weight;
          auto to_standby_pay   = total_block_pay - to_producers_pay;
          {
             if( issue_tokens > 0 ){

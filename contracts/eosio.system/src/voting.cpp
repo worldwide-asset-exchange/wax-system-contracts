@@ -111,7 +111,7 @@ namespace eosiosystem {
 
       using value_type = std::pair<eosio::producer_authority, uint16_t>;
       const uint32_t num_standby_slots = _gstate4.num_standby_slots;
-      const uint32_t active_producer_count = _gstate4.active_producer_count;
+      const uint32_t active_producer_count = *_gstate4.active_producer_count;
 
       const uint32_t max_considered_producers = _gstate6.max_considered_producers;
       const double min_vote_threshold = _gstate6.min_producer_vote_threshold;
@@ -471,7 +471,8 @@ namespace eosiosystem {
          new_unpaid_voteshare += voter_itr->unpaid_voteshare_change_rate * double((ct - voter_itr->unpaid_voteshare_last_updated).count() / 1E6);
       }
       double new_change_rate{0};
-      if(voter_itr->producers.size() >= _gstate4.min_bps_voting_reward || voter_itr->proxy){
+      uint32_t min_bps_required = *_gstate4.min_bps_voting_reward;
+      if(voter_itr->producers.size() >= min_bps_required || voter_itr->proxy){
          new_change_rate = voter_itr->last_vote_weight - voter_itr->proxied_vote_weight;
       }
       double change_rate_delta = new_change_rate - voter_itr->unpaid_voteshare_change_rate;

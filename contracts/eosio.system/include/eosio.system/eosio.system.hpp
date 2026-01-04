@@ -732,10 +732,10 @@ namespace eosiosystem {
       uint64_t          total_standby_share = 0;
       uint64_t          standby_slot_weight = 0;
       uint32_t          num_standby_slots = 0;
-      uint32_t          active_producer_count = 21;
-      uint32_t          min_cooldown_secs     = 86400;
-      uint32_t          last_change_time      = 0;
-      uint32_t          min_bps_voting_reward = 16;
+      binary_extension<uint32_t> active_producer_count;
+      binary_extension<uint32_t> min_cooldown_secs;
+      binary_extension<uint32_t> last_change_time;
+      binary_extension<uint32_t> min_bps_voting_reward;
 
       EOSLIB_SERIALIZE( eosio_global_state4, (last_standby_state_update)(standby_bucket)(total_standby_share)(standby_slot_weight)(num_standby_slots)(active_producer_count)(min_cooldown_secs)(last_change_time)(min_bps_voting_reward) )
    };

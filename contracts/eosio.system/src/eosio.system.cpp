@@ -41,6 +41,21 @@ namespace eosiosystem {
       _gstate5 = _global5.exists() ? _global5.get() : eosio_global_state5{};
       _gstate6 = _global6.exists() ? _global6.get() : eosio_global_state6{};
       _gstate7 = _global7.exists() ? _global7.get() : eosio_global_state7{};
+
+      // Initialize binary_extension fields with defaults if they don't have values
+      // This ensures tests and deployments have consistent behavior
+      if( !_gstate4.active_producer_count.has_value() ) {
+         _gstate4.active_producer_count = 21;
+      }
+      if( !_gstate4.min_cooldown_secs.has_value() ) {
+         _gstate4.min_cooldown_secs = 86400;
+      }
+      if( !_gstate4.last_change_time.has_value() ) {
+         _gstate4.last_change_time = 0;
+      }
+      if( !_gstate4.min_bps_voting_reward.has_value() ) {
+         _gstate4.min_bps_voting_reward = 16;
+      }
    }
 
    eosio_global_state system_contract::get_default_parameters() {
@@ -543,17 +558,18 @@ namespace eosiosystem {
       require_auth( get_self() );
       check( count >= 1 && count <= 21, "count must be between 1 and 21" );
 
-      int delta = int(count) - int(_gstate4.active_producer_count);
+      int delta = int(count) - int(*_gstate4.active_producer_count);
       check(delta == 1 || delta == -1, "must change by exactly ±1");
 
       uint32_t now = current_time_point().sec_since_epoch();
-      check(now - _gstate4.last_change_time >= _gstate4.min_cooldown_secs, "cool-down not elapsed");
+      check(now - *_gstate4.last_change_time >= *_gstate4.min_cooldown_secs, "cool-down not elapsed");
 
       _gstate4.active_producer_count = count;
       _gstate4.last_change_time = now;
 
       // adjust the min_bps_voting_reward accordingly
-      if (_gstate4.min_bps_voting_reward > count) {
+      uint32_t current_min_bps = *_gstate4.min_bps_voting_reward;
+      if (current_min_bps > count) {
          _gstate4.min_bps_voting_reward = count;
       }
    }
@@ -561,7 +577,7 @@ namespace eosiosystem {
    void system_contract::setminbpvote( uint32_t min ) {
       require_auth( get_self() );
       check( min > 0, "min_bps_voting_reward must be greater than 0" );
-      check( min <= _gstate4.active_producer_count, "min_bps_voting_reward must be less than or equal to active_producer_count" );
+      check( min <= *_gstate4.active_producer_count, "min_bps_voting_reward must be less than or equal to active_producer_count" );
 
       _gstate4.min_bps_voting_reward = min;
    }
