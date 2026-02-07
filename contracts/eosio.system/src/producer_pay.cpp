@@ -97,10 +97,10 @@ namespace eosiosystem {
          }
          // else rng_deposit stays 0, funds go to producers instead
 
-         // needs to be 2/5 Savings, 2/5 Voters, 1/5 producers
+         // 3/10 Savings, 4/10 Voters, 3/10 Producers
          auto token_for_producers = distribute_tokens - rng_deposit;
-         auto to_per_block_pay = token_for_producers / 5;
-         auto to_voters        = 2 * to_per_block_pay;
+         auto to_per_block_pay = (token_for_producers * 3) / 10;
+         auto to_voters        = (token_for_producers * 4) / 10;
          auto to_savings       = token_for_producers - (to_voters + to_per_block_pay);
 
          auto total_block_pay = to_per_block_pay;
