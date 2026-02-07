@@ -10,6 +10,7 @@
 #include <eosio/chain/exceptions.hpp>
 
 #include "eosio.system_tester.hpp"
+
 struct _abi_hash {
    name owner;
    fc::sha256 hash;
@@ -384,6 +385,10 @@ BOOST_FIXTURE_TEST_CASE( unstake_all_genesis_balance_after_1_day, eosio_system_t
 
    // completing 3 days wait, staked funds should be paid back
    produce_block( fc::hours(1) );
+
+   // defer transaction is disable, require claim by themself
+   BOOST_REQUIRE_EQUAL(success(),
+      push_action("user11111111"_n, "refund"_n, mvo()("owner", "user11111111"_n)));
    BOOST_REQUIRE_EQUAL( genesis_tokens_user1 , get_balance( "user11111111"_n ) );
 
 } FC_LOG_AND_RETHROW()
@@ -424,6 +429,10 @@ BOOST_FIXTURE_TEST_CASE( unstake_without_decreasing_genesis_balance, eosio_syste
 
    // after 3 days all non-genesis tokens should be paid back (we're asking them back)
    produce_block( fc::hours(3*24) );
+
+   // defer transaction is disable, require claim by themself
+   BOOST_REQUIRE_EQUAL(success(),
+   push_action("user11111111"_n, "refund"_n, mvo()("owner", "user11111111"_n)));
    BOOST_REQUIRE_EQUAL( net_tokens_user1
 		        + cpu_tokens_user1,
 		        get_balance( "user11111111"_n ) );
@@ -493,6 +502,10 @@ BOOST_FIXTURE_TEST_CASE( unstake_decreasing_genesis_balance, eosio_system_tester
 
    // after 3 days all OWNED tokens (staked and genesis-locked) should be paid back
    produce_block( fc::hours(3*24) );
+
+   // defer transaction is disable, require claim by themself
+   BOOST_REQUIRE_EQUAL(success(),
+   push_action("user11111111"_n, "refund"_n, mvo()("owner", "user11111111"_n)));
    BOOST_REQUIRE_EQUAL( genesis_tokens_user1    // <- Genesis Tokens
 		        + net_tokens_user1     // <- Non Genesis Tokens (NET)
 			+ cpu_tokens_user1,     // <- Non Genesis Tokens (CPU)
@@ -631,6 +644,10 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_self, eosio_system_te
    // after 3 days refund takes place
    // so, user1's balance is only liquid tokens
    produce_block( fc::days(3) );
+
+   // defer transaction is disable, require claim by themself
+   BOOST_REQUIRE_EQUAL(success(),
+   push_action("user11111111"_n, "refund"_n, mvo()("owner", "user11111111"_n)));
    BOOST_REQUIRE_EQUAL(  one_day_genesis_rewards
 		       + net_to_stake_user1
 		       + cpu_to_stake_user1, get_balance("user11111111"_n) );
@@ -805,6 +822,10 @@ BOOST_FIXTURE_TEST_CASE( genesis_plus_delegate_extra_bw_to_someone_else, eosio_s
    // after 3 days refund takes place
    // so, user1's balance is only liquid tokens
    produce_block( fc::days(3) );
+
+   // defer transaction is disable, require claim by themself
+   BOOST_REQUIRE_EQUAL(success(),
+   push_action("user11111111"_n, "refund"_n, mvo()("owner", "user11111111"_n)));
    BOOST_REQUIRE_EQUAL( locked_4_net + locked_4_cpu, get_balance("user11111111"_n) );
 
    // while remaining half of awardgenesis'ed remain staked because

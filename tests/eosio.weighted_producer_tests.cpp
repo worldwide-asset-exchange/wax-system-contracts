@@ -169,7 +169,7 @@ struct eosio_weighted_producer_tester : eosio_system_tester {
     }
     produce_blocks(23 * 12 + 20);
 
-    auto producer_keys = control->head_block_state()->active_schedule.producers;
+    auto producer_keys = control->active_producers().producers;
     BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
     BOOST_REQUIRE_EQUAL( name("defproducera"), producer_keys[0].producer_name );
 
@@ -181,7 +181,7 @@ struct eosio_weighted_producer_tester : eosio_system_tester {
 
    // Wait for version change (max 2000 blocks)
    uint32_t blocks_produced = 0;
-   while (control->head_block_state()->active_schedule.producers.size() != expected_count
+   while (control->active_producers().producers.size() != expected_count
       && blocks_produced < max_blocks) {
       produce_block();
       blocks_produced++;
@@ -193,7 +193,7 @@ struct eosio_weighted_producer_tester : eosio_system_tester {
    produce_blocks(stabilization);
 
    // Verify
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL(expected_count, producer_keys.size());
 }
 
@@ -878,7 +878,7 @@ BOOST_FIXTURE_TEST_CASE(test_producer_sorting_with_votes_and_scores, eosio_weigh
    produce_blocks(250);
 
    // Step 6: Get the active producer schedule
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
 
    // Step 7: Verify the selection is based on weighted votes
@@ -1116,7 +1116,7 @@ BOOST_FIXTURE_TEST_CASE(test_weighted_producer_with_standby_selection, eosio_wei
    produce_blocks(250);
 
    // Step 7: Verify active producer selection (top 21)
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
 
    ilog( "=== Active Producers (Top 21 by weighted votes) ===" );
@@ -1378,7 +1378,7 @@ BOOST_FIXTURE_TEST_CASE(test_min_vote_threshold_filters_standby_bps, eosio_weigh
    produce_blocks(250);
 
    // Step 8: Verify active producer selection (should only include high-vote producers)
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
    ilog( "${idx}: ${name}", ("idx", 0)("name", producer_keys[0].producer_name) );
    BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
 
@@ -1607,7 +1607,7 @@ BOOST_FIXTURE_TEST_CASE(test_min_vote_threshold_filters_main_bps, eosio_weighted
    produce_blocks(250);
 
    // Step 8: Verify active producer selection - should only have 15 BPs
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
 
    ilog( "=== Active Producers (should be 15 only) ===" );
    std::set<name> active_producers;
@@ -1806,7 +1806,7 @@ BOOST_FIXTURE_TEST_CASE(test_max_considered_producers_filters_standby_bps, eosio
    produce_blocks(250);
 
    // Step 8: Verify active producer selection - should have 21 BPs
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
 
    ilog( "=== Active Producers (should be 21) ===" );
    std::set<name> active_producers;
@@ -2048,7 +2048,7 @@ BOOST_FIXTURE_TEST_CASE(test_weighted_producer_with_guilds_code_hash_match_one_o
    produce_blocks(250);
 
    // Step 7: Verify active producer selection (top 21)
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
 
    ilog( "=== Active Producers (Top 21 by weighted votes) ===" );
@@ -2313,7 +2313,7 @@ BOOST_FIXTURE_TEST_CASE(test_guild_hash_empty_disabled, eosio_weighted_producer_
    produce_blocks(250);
 
    // Step 7: Verify active producer selection (top 21)
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
 
    ilog( "=== Active Producers (Top 21 by weighted votes) ===" );
@@ -2574,7 +2574,7 @@ BOOST_FIXTURE_TEST_CASE(test_admin_disabled_guild_weight, eosio_weighted_produce
    produce_blocks(250);
 
    // Step 7: Verify active producer selection (top 21)
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
 
    ilog( "=== Active Producers (Top 21 by weighted votes) ===" );
@@ -2826,7 +2826,7 @@ BOOST_FIXTURE_TEST_CASE(test_verify_hash_not_match, eosio_weighted_producer_test
    produce_blocks(250);
 
    // Step 7: Verify active producer selection (top 21)
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
 
    ilog( "=== Active Producers (Top 21 by weighted votes) ===" );
@@ -3048,7 +3048,7 @@ BOOST_FIXTURE_TEST_CASE( test_reduce_active_producer_count, eosio_weighted_produ
    produce_blocks(250);
 
    // Verify initial schedule has 21 producers (default)
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL(21, producer_keys.size());
    ilog( "✓ Initial schedule has 21 producers (default)" );
 
@@ -3070,7 +3070,7 @@ BOOST_FIXTURE_TEST_CASE( test_reduce_active_producer_count, eosio_weighted_produ
       wait_for_schedule_change_and_stabilize(bp_count);
 
       // Verify schedule now has exactly bp_count producers
-      producer_keys = control->head_block_state()->active_schedule.producers;
+      producer_keys = control->active_producers().producers;
       BOOST_REQUIRE_EQUAL(bp_count, producer_keys.size());
       ilog( "✓ Schedule now has exactly bp_count producers" );
 
@@ -3090,7 +3090,7 @@ BOOST_FIXTURE_TEST_CASE( test_reduce_active_producer_count, eosio_weighted_produ
    }
 
    // Verify schedule now has exactly bp_count producers
-   producer_keys = control->head_block_state()->active_schedule.producers;
+   producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL(target_bp_number, producer_keys.size());
    fc::variant state4_after = get_global_state4();
    BOOST_REQUIRE_EQUAL(state4_after["active_producer_count"].as<uint32_t>(), target_bp_number);
@@ -3132,7 +3132,7 @@ BOOST_FIXTURE_TEST_CASE( test_increase_active_producer_count, eosio_weighted_pro
    produce_blocks(250);
 
    // Verify initial schedule has 21 producers (default)
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL(21, producer_keys.size());
    ilog( "✓ Initial schedule has 21 producers (default)" );
 
@@ -3167,7 +3167,7 @@ BOOST_FIXTURE_TEST_CASE( test_increase_active_producer_count, eosio_weighted_pro
       wait_for_schedule_change_and_stabilize(bp_count);
 
       // Verify schedule now has exactly bp_count producers
-      producer_keys = control->head_block_state()->active_schedule.producers;
+      producer_keys = control->active_producers().producers;
       BOOST_REQUIRE_EQUAL(bp_count, producer_keys.size());
       ilog( "✓ Schedule now has exactly bp_count producers" );
 
@@ -3187,7 +3187,7 @@ BOOST_FIXTURE_TEST_CASE( test_increase_active_producer_count, eosio_weighted_pro
    }
 
    // Verify schedule now has exactly bp_count producers
-   producer_keys = control->head_block_state()->active_schedule.producers;
+   producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL(target_bp_number, producer_keys.size());
    fc::variant state4_after = get_global_state4();
    BOOST_REQUIRE_EQUAL(state4_after["active_producer_count"].as<uint32_t>(), target_bp_number);

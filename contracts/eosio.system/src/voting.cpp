@@ -156,25 +156,55 @@ namespace eosiosystem {
             return a.weighted_votes > b.weighted_votes;
          });
 
-      // Select top 21 and standbys based on weighted votes
+      // Select top active_producer_count and standbys based on weighted votes
       std::vector<value_type> top_producers;
+      std::vector< finalizer_auth_info > proposed_finalizers;
+
       size_t num_to_select = std::min(active_producer_count, (uint32_t)weighted_producers.size());
       top_producers.reserve(num_to_select);
+      proposed_finalizers.reserve(num_to_select);
       std::vector<eosio::name> standby_producers;
       standby_producers.reserve(num_standby_slots);
 
+      bool is_savanna = is_savanna_consensus();
       for( size_t i = 0; i < weighted_producers.size(); ++i ) {
-         if( i < num_to_select ) {
-            top_producers.emplace_back(
-               std::move(weighted_producers[i].authority),
-               weighted_producers[i].location
-            );
-         } else if( standby_producers.size() < num_standby_slots ) {
+         if( top_producers.size() < num_to_select ) {
+            if( is_savanna ) {
+               bool finalizer_key_valid = true;
+               auto finalizer = _finalizers.find( weighted_producers[i].producer_name.value );
+               if( finalizer == _finalizers.end() ) {
+                  // The producer is not in finalizers table, indicating it does not have an
+                  // active registered finalizer key. Try next one.
+                  finalizer_key_valid = false;
+               } else if( finalizer->active_key_binary.empty() ) { // This should never happen. Double check just in case
+                  finalizer_key_valid = false;
+               }
+
+               if (finalizer_key_valid) {
+                  proposed_finalizers.emplace_back(*finalizer);
+                  top_producers.emplace_back(
+                     std::move(weighted_producers[i].authority),
+                     weighted_producers[i].location
+                  );
+                  continue;
+               }
+            } else {
+               top_producers.emplace_back(
+                  std::move(weighted_producers[i].authority),
+                  weighted_producers[i].location
+               );
+               continue;
+            }
+         }
+
+         if( standby_producers.size() < num_standby_slots ) {
             // check if producer is not on standbyblock list
             if( !is_disallow_standby( weighted_producers[i].producer_name ) ) {
                standby_producers.emplace_back( weighted_producers[i].producer_name );
             }
-         } else {
+         }
+         
+         if (top_producers.size() == num_to_select && standby_producers.size() == num_standby_slots) {
             break;
          }
       }
@@ -203,6 +233,12 @@ namespace eosiosystem {
       }
       if (standby_producers.size() > 0) {
          update_standby_producers( standby_producers );
+      }
+
+      // set_proposed_finalizers() checks if last proposed finalizer policy
+      // has not changed, it will not call set_finalizers() host function.
+      if( is_savanna ) {
+         set_proposed_finalizers( std::move(proposed_finalizers) );
       }
    }
 
