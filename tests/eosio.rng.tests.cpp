@@ -214,10 +214,10 @@ BOOST_FIXTURE_TEST_CASE(rng_deposit, eosio_rng_tester, * boost::unit_test::toler
       wdump((new_tokens));
 
       BOOST_REQUIRE_EQUAL(new_tokens_org, supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 3), savings - initial_savings);
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5), balance.get_amount() - initial_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens * 3 / 10) - (new_tokens * 4 / 10)), savings - initial_savings);
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens * 3 / 10), balance.get_amount() - initial_balance.get_amount());
 
-      int64_t from_perblock_bucket_org = int64_t( initial_supply.get_amount() * double(secs_between_fills) * (continuous_rate / 5.) / secs_per_year ) ;
+      int64_t from_perblock_bucket_org = int64_t( initial_supply.get_amount() * double(secs_between_fills) * (continuous_rate * 3. / 10.) / secs_per_year ) ;
       int64_t from_perblock_bucket = from_perblock_bucket_org * (10000 - rng_rate) / 10000;
       int64_t from_pervote_bucket  = 0;
 
@@ -331,11 +331,11 @@ BOOST_FIXTURE_TEST_CASE(rng_deposit_max_balance, eosio_rng_tester, * boost::unit
       BOOST_REQUIRE_EQUAL(true, rng_deposit < expected_rng_deposit);
 
       BOOST_REQUIRE_EQUAL(new_tokens_org, supply.get_amount() - initial_supply.get_amount());
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens / 5) * 3), savings - initial_savings);
-      BOOST_REQUIRE_EQUAL(int64_t(new_tokens / 5), balance.get_amount() - initial_balance.get_amount());
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens - (new_tokens * 3 / 10) - (new_tokens * 4 / 10)), savings - initial_savings);
+      BOOST_REQUIRE_EQUAL(int64_t(new_tokens * 3 / 10), balance.get_amount() - initial_balance.get_amount());
 
       int64_t from_perblock_bucket_org = int64_t( initial_supply.get_amount() * double(secs_between_fills) * (continuous_rate) / secs_per_year ) ;
-      int64_t from_perblock_bucket = (from_perblock_bucket_org - rng_deposit) / 5;
+      int64_t from_perblock_bucket = (from_perblock_bucket_org - rng_deposit) * 3 / 10;
       int64_t from_pervote_bucket  = 0;
 
 
@@ -513,12 +513,12 @@ BOOST_FIXTURE_TEST_CASE(rng_rate_maximum, eosio_rng_tester, * boost::unit_test::
   // Verify RNG got 99.99% of inflation
   BOOST_REQUIRE_EQUAL(expected_rng_deposit, treasury_balance.pool_balance);
 
-  // Verify producers only got 0.01% / 5 of total inflation
-  uint64_t expected_producer_pay = remaining_for_producers / 5;
+  // Verify producers got 3/10 of remaining (after RNG)
+  uint64_t expected_producer_pay = remaining_for_producers * 3 / 10;
   BOOST_REQUIRE_EQUAL(expected_producer_pay, balance.get_amount() - initial_balance.get_amount());
 
-  // Verify savings got 2/5 of the remaining (not the RNG portion)
-  uint64_t expected_savings = remaining_for_producers - (remaining_for_producers / 5) * 3;
+  // Verify savings got 3/10 of the remaining (not the RNG portion)
+  uint64_t expected_savings = remaining_for_producers - (remaining_for_producers * 3 / 10) - (remaining_for_producers * 4 / 10);
   BOOST_REQUIRE_EQUAL(expected_savings, savings - initial_savings);
 
   ilog("✓ rng_rate = 9999 correctly allocates 99.99%% to RNG");

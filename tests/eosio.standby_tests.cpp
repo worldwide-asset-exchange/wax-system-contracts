@@ -481,11 +481,11 @@ BOOST_FIXTURE_TEST_CASE(standby_producer_pay, eosio_standby_tester,  * boost::un
     const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * cont_rate / usecs_per_year;
     BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth), supply.get_amount() - initial_supply.get_amount() );
 
-    // saving 2/5
-    BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth)/5 * 3), savings - initial_savings );
+    // saving 3/10
+    BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth) * 3 / 10) - (int64_t(expected_supply_growth) * 4 / 10), savings - initial_savings );
 
-    // perblock 1/5
-    const int64_t original_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (cont_rate / 5.) / usecs_per_year );
+    // perblock 3/10
+    const int64_t original_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (cont_rate * 3. / 10.) / usecs_per_year );
     const int64_t expected_pervote_bucket  = 0;
 
     // producer pay now reduced for standby
@@ -496,8 +496,8 @@ BOOST_FIXTURE_TEST_CASE(standby_producer_pay, eosio_standby_tester,  * boost::un
     const int64_t from_pervote_bucket  = 0;
 
     BOOST_REQUIRE( 1 >= abs(int32_t(initial_tot_unpaid_blocks - tot_unpaid_blocks) - int32_t(initial_unpaid_blocks - unpaid_blocks)) );
-    
-   
+
+
     ilog("Expected Per-block bucket: ${x}", ("x", original_perblock_bucket));
     ilog("Expected expected_producer_pay_bucket: ${x}", ("x", expected_producer_pay_bucket));
     ilog("From perblock bucket: ${x}", ("x", from_perblock_bucket));
@@ -599,11 +599,11 @@ BOOST_FIXTURE_TEST_CASE(standby_producer_pay, eosio_standby_tester,  * boost::un
     const double expected_supply_growth = initial_supply.get_amount() * double(usecs_between_fills) * cont_rate / usecs_per_year;
     BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth), supply.get_amount() - initial_supply.get_amount() );
 
-    // saving 2/5
-    BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth)/5 * 3), savings - initial_savings );
+    // saving 3/10
+    BOOST_REQUIRE_EQUAL( int64_t(expected_supply_growth) - (int64_t(expected_supply_growth) * 3 / 10) - (int64_t(expected_supply_growth) * 4 / 10), savings - initial_savings );
 
-    // perblock 1/5
-    const int64_t original_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (cont_rate / 5.) / usecs_per_year );
+    // perblock 3/10
+    const int64_t original_perblock_bucket = int64_t( double(initial_supply.get_amount()) * double(usecs_between_fills) * (cont_rate * 3. / 10.) / usecs_per_year );
     const int64_t expected_pervote_bucket  = 0;
 
     // producer pay now reduced for standby
