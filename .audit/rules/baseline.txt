@@ -1,0 +1,40 @@
+# WCAP baseline - findings accepted at the time this was written.
+# Keyed on file|class|symbol so it survives line-number churn.
+# Shrink this file; never grow it. Each removal is a fixed finding.
+
+contracts/eosio.bios/include/eosio.bios/eosio.bios.hpp|A1-native|canceldelay
+contracts/eosio.bios/include/eosio.bios/eosio.bios.hpp|A1-native|deleteauth
+contracts/eosio.bios/include/eosio.bios/eosio.bios.hpp|A1-native|linkauth
+contracts/eosio.bios/include/eosio.bios/eosio.bios.hpp|A1-native|setcode
+contracts/eosio.bios/include/eosio.bios/eosio.bios.hpp|A1-native|unlinkauth
+contracts/eosio.bios/include/eosio.bios/eosio.bios.hpp|A1-native|updateauth
+contracts/eosio.bios/include/eosio.bios/eosio.bios.hpp|A1|newaccount
+contracts/eosio.bios/include/eosio.bios/eosio.bios.hpp|A1|onerror
+contracts/eosio.bios/include/eosio.bios/eosio.bios.hpp|A1|reqactivated
+contracts/eosio.bios/include/eosio.bios/eosio.bios.hpp|A1|setabi
+contracts/eosio.boot/include/eosio.boot/eosio.boot.hpp|A1-native|canceldelay
+contracts/eosio.boot/include/eosio.boot/eosio.boot.hpp|A1-native|deleteauth
+contracts/eosio.boot/include/eosio.boot/eosio.boot.hpp|A1-native|linkauth
+contracts/eosio.boot/include/eosio.boot/eosio.boot.hpp|A1-native|setcode
+contracts/eosio.boot/include/eosio.boot/eosio.boot.hpp|A1-native|unlinkauth
+contracts/eosio.boot/include/eosio.boot/eosio.boot.hpp|A1-native|updateauth
+contracts/eosio.boot/include/eosio.boot/eosio.boot.hpp|A1|newaccount
+contracts/eosio.boot/include/eosio.boot/eosio.boot.hpp|A1|onerror
+contracts/eosio.boot/include/eosio.boot/eosio.boot.hpp|A1|reqactivated
+contracts/eosio.boot/include/eosio.boot/eosio.boot.hpp|A1|setabi
+contracts/eosio.system/include/eosio.system/eosio.system.hpp|A1|bidrefund
+contracts/eosio.system/include/eosio.system/native.hpp|A1-native|canceldelay
+contracts/eosio.system/include/eosio.system/native.hpp|A1-native|deleteauth
+contracts/eosio.system/include/eosio.system/native.hpp|A1-native|linkauth
+contracts/eosio.system/include/eosio.system/native.hpp|A1-native|setcode
+contracts/eosio.system/include/eosio.system/native.hpp|A1-native|unlinkauth
+contracts/eosio.system/include/eosio.system/native.hpp|A1-native|updateauth
+contracts/eosio.system/include/eosio.system/native.hpp|A1|newaccount
+contracts/eosio.system/include/eosio.system/native.hpp|A1|onerror
+contracts/eosio.system/include/eosio.system/native.hpp|A1|setabi
+contracts/eosio.system/include/eosio.system/powerup.results.hpp|A1|powupresult
+contracts/eosio.system/src/eosio.system.cpp|C5|check(rng_rate >= 0)
+contracts/eosio.system/src/standby.cpp|C5|check(num_slots >= 0)
+contracts/eosio.system/src/standby.cpp|C5|check(ratio >= 0)
+contracts/eosio.system/src/voting.cpp|C4b|
+contracts/eosio.system/src/voting.cpp|C4|weighted_votes
