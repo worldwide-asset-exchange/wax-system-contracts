@@ -1,0 +1,88 @@
+# WCAP v1 — Antelope/C++ semgrep ruleset
+#
+# One rule per PATTERN-DETECTABLE class in the WCAP taxonomy (Confluence BP/1552646145 §3).
+# Classes that need semantic reasoning (G*, E3, H4) are deliberately absent — a rule that
+# cannot be precise is worse than no rule, because a noisy ruleset gets muted.
+#
+# C5, C4, A1 and E1 are NOT here. They need a variable's declared type, or the link from a
+# header declaration to its .cpp definition, and regex cannot decide either. Expressed as
+# semgrep rules they produced a 100% false-positive rate on A1 and 6/9 on C5, so they live
+# in wcap-check.py instead, where the type is resolved. Run both; see run-sweep.sh.
+#
+# Every rule carries its taxonomy ID in the message so a hit maps straight to a finding.
+# Verification cases live in .audit/rules/testcases/; `make -f .audit/rules/Makefile test`
+# asserts each rule fires on its positive case and stays silent on its negative case.
+#
+# Ticket: WBP-1985
+
+rules:
+
+  # ---------------------------------------------------------------- B1
+  - id: wcap-b1-on-notify-without-first-receiver
+    languages: [generic]
+    severity: ERROR
+    message: >-
+      [WCAP B1] An on_notify handler that never calls get_first_receiver() cannot tell a
+      genuine eosio.token transfer from a notification forged by an arbitrary contract.
+      Any account can deploy a contract that calls require_recipient() on this one.
+    paths:
+      include: ['*.cpp', '*.hpp']
+    patterns:
+      - pattern-regex: '\[\[eosio::on_notify\("(?P<SRC>[^"]+)"\)\]\][\s\S]{0,1200}?\{(?P<BODY>[\s\S]{0,2000}?)\n\s*\}'
+      - pattern-not-regex: '\[\[eosio::on_notify\("[^"]+"\)\]\][\s\S]{0,1200}?\{[\s\S]{0,2000}?get_first_receiver\s*\('
+
+  # ---------------------------------------------------------------- B2
+  - id: wcap-b2-transfer-handler-without-self-check
+    languages: [generic]
+    severity: WARNING
+    message: >-
+      [WCAP B2] A transfer notification handler that does not test `to == get_self()`
+      will also run on transfers this contract merely observes, and on its own outgoing
+      transfers. Both produce state updates the author did not intend.
+    paths:
+      include: ['*.cpp', '*.hpp']
+    patterns:
+      - pattern-regex: '\[\[eosio::on_notify\("[^"]*transfer"\)\]\][\s\S]{0,1500}?\{'
+      - pattern-not-regex: '\[\[eosio::on_notify\("[^"]*transfer"\)\]\][\s\S]{0,2500}?(to\s*==\s*get_self\(\)|get_self\(\)\s*==\s*to|to\s*!=\s*get_self\(\))'
+
+  # ---------------------------------------------------------------- D2
+  - id: wcap-d2-emplace-with-caller-ram-payer
+    languages: [generic]
+    severity: WARNING
+    message: >-
+      [WCAP D2] emplace() billing RAM to an account other than get_self(). If that payer
+      is attacker-controlled the row is a griefing vector; if it is another user, the
+      contract is spending someone else's RAM. Confirm the payer is intended and that
+      the row is erasable by whoever paid for it.
+    paths:
+      include: ['*.cpp']
+    patterns:
+      - pattern-regex: '\.emplace\s*\(\s*(?P<PAYER>[A-Za-z_][A-Za-z0-9_.]*)\s*,'
+      - metavariable-regex:
+          metavariable: $PAYER
+          regex: '^(?!get_self|_self|same_payer|get_first_receiver).*'
+
+  # ---------------------------------------------------------------- D1
+  - id: wcap-d1-unbounded-table-iteration
+    languages: [generic]
+    severity: WARNING
+    message: >-
+      [WCAP D1] Iteration over an entire multi_index with no bound. Table size is
+      attacker-influenceable in most cases, and an unbounded loop inside an action — above
+      all inside onblock — is a chain-halt risk once the table grows. Bound the loop, or
+      justify the bound in a comment and add an I6 CPU test.
+    paths:
+      include: ['*.cpp']
+    pattern-regex: 'for\s*\(\s*auto\s+(?P<IT>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<TBL>[A-Za-z_][A-Za-z0-9_.]*)\s*\.\s*(?:c)?begin\s*\(\s*\)\s*;\s*(?P=IT)\s*!=\s*(?P=TBL)\s*\.\s*(?:c)?end\s*\(\s*\)'
+
+  # ---------------------------------------------------------------- C2
+  - id: wcap-c2-multiply-before-divide-rate
+    languages: [generic]
+    severity: WARNING
+    message: >-
+      [WCAP C2] A rate applied as `x * rate / DENOMINATOR` computes the product first and
+      can overflow the intermediate even when the result would fit. Check the permitted
+      range of `rate` against the maximum of `x`; divide first, or widen to __int128.
+    paths:
+      include: ['*.cpp']
+    pattern-regex: '[A-Za-z_][A-Za-z0-9_.]*\s*\*\s*[A-Za-z_][A-Za-z0-9_.>-]*(?:rate|RATE|_bp|weight|WEIGHT)[A-Za-z0-9_.]*\s*/\s*[A-Za-z_][A-Za-z0-9_.]*(?:DENOMINATOR|SCALE|_denom)'

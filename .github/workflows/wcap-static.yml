@@ -1,0 +1,63 @@
+name: WCAP static analysis
+
+# Contract-security checks that run on every change, not once at audit time.
+# See .audit/README.md. Findings are tracked privately in Jira (WBP) / Confluence.
+#
+# Both steps are RATCHETS, not absolute gates: they pass on the findings that already
+# exist and fail on anything new. A gate that red-lights every build from day one gets
+# switched off, and then it protects nothing. Shrink .audit/rules/baseline.txt over
+# time; never grow it.
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+      - "release/*"
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  wcap-static:
+    name: Antelope contract checks
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    concurrency:
+      group: wcap-static-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # semgrep --baseline-commit needs the base commit present
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # A1, C4, C4b, C5 — needs declared types and decl->def linking. No dependencies.
+      - name: Type-aware contract checks
+        run: |
+          python3 .audit/rules/wcap-check.py contracts \
+            --baseline .audit/rules/baseline.txt
+
+      - name: Install semgrep
+        run: pip install --quiet semgrep
+
+      # B1, B2, C2, D1, D2. On a PR, report only what the PR introduces.
+      - name: Antelope semgrep ruleset (PR — new findings only)
+        if: github.event_name == 'pull_request'
+        run: |
+          semgrep --config .audit/rules/antelope.yaml \
+            --metrics=off --error \
+            --baseline-commit "${{ github.event.pull_request.base.sha }}" \
+            contracts/
+
+      # On a branch push there is no base to diff against, so report without failing.
+      - name: Antelope semgrep ruleset (push — advisory)
+        if: github.event_name != 'pull_request'
+        run: |
+          semgrep --config .audit/rules/antelope.yaml \
+            --metrics=off --quiet contracts/ || true

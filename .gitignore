@@ -36,3 +36,15 @@ build/*
 .vscode/
 .idea/
 cmake-build-debug/
+
+# --- WCAP audit: private artefacts ---
+# Findings, threat models and triage records are tracked in Jira (WBP) and
+# Confluence, never here. Publishing unremediated findings about the contract
+# securing mainnet is a disclosure problem. See .audit/README.md.
+/findings/
+/.audit/findings/
+/.audit/scope.yaml
+/.audit/threat-model.md
+/.audit/auth-inventory.tsv
+/.audit/phase3-leads.md
+/.audit/rules/triage.md
