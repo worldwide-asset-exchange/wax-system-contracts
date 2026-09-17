@@ -57,7 +57,6 @@ namespace eosiosystem {
         check(itr == _proposers.end(), "This account has already been registered as a proposer");
 
         // add to the table
-        // storage is billed to the contract account
         _proposers.emplace(account, [&](auto& proposer){
             proposer.account = account;
             proposer.first_name = first_name;
@@ -182,8 +181,10 @@ namespace eosiosystem {
         //change state based on count
     }
 
-    // Shared by regproposal and editproposal. Every floor and ceiling on a proposal's
-    // fields lives here and nowhere else.
+    // Shared by regproposal and editproposal so the two cannot drift apart again
+    // (WCAP-SYS-2026-003). The duration ceiling comes from wpsenv.max_duration_of_funding;
+    // setwpsenv guarantees it is >= the 30-day floor below. wpsenv.total_iteration_of_funding
+    // is not consulted here or anywhere else - tracked separately.
     void system_contract::validate_proposal_fields( const name& committee, uint16_t subcategory,
                                                     const string& title, const string& summary,
                                                     const string& project_img_url,
@@ -201,20 +202,21 @@ namespace eosiosystem {
         check(roadmap.size() > 0, "roadmap should be more than 0 characters long");
         check(duration >= 30, "duration should be at least 30 days");
         check(members.size() > 0, "member should be more than 0");
-        check(total_iterations >= 3, "total number of iterations must be at least 3");
+        check(total_iterations >= 1, "total number of iterations must be at least 1");
 
         wps_env_singleton _wps_env(get_self(), get_self().value);
         auto env = _wps_env.get();
 
         //verify that the inputs aren't too long
+        //subcategory is not required, so it has no lower bound
         check(subcategory < 10, "invalid sub-category");
         check(title.size() < 256, "title should be shorter than 256 characters.");
-        check(summary.size() < 400, "subtitle should be shorter than 256 characters.");
+        check(summary.size() < 400, "summary should be shorter than 400 characters.");
         check(project_img_url.size() < 128, "URL should be shorter than 128 characters.");
-        check(description.size() < 5000, "description should be shorter than 1024 characters.");
-        check(roadmap.size() < 2000, "financial_roadmap should be shorter than 256 characters.");
+        check(description.size() < 5000, "description should be shorter than 5000 characters.");
+        check(roadmap.size() < 2000, "roadmap should be shorter than 2000 characters.");
         check(duration <= env.max_duration_of_funding, "this proposal is over the maximum duration");
-        check(members.size() < 50, "members should be shorter than 50 characters.");
+        check(members.size() < 50, "members must list fewer than 50 entries");
         check(funding_goal.is_valid(), "invalid quantity" );
         check(funding_goal.amount > 0, "must request positive amount" );
         check(total_iterations < 100, "total iterations must be less than 100");
@@ -254,7 +256,6 @@ namespace eosiosystem {
         check(committee_itr != _committees.end(), "Account not found in committee table");
 
         // add to the table
-        // storage is billed to the contract account
         _proposals.emplace(proposer, [&](auto& proposal) {
             proposal.proposer = proposer;
             proposal.committee = committee;
@@ -550,7 +551,7 @@ namespace eosiosystem {
 
         check(total_voting_percent > 0, "total_voting_percent should be more 0");
         check(duration_of_voting > 0, "duration_of_voting should be more than 0");
-        check(max_duration_of_funding > 0, "max_duration_of_funding should be more than 0");
+        check(max_duration_of_funding >= 30, "max_duration_of_funding must be at least 30 days, the proposal duration floor");
         check(total_iteration_of_funding > 0, "total_iteration_of_funding should be more than 0");
 
         wpsenv env = wpsenv();

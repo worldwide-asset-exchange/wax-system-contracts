@@ -510,16 +510,14 @@ BOOST_REQUIRE_EQUAL(proposal["title"], "First proposal");
 } FC_LOG_AND_RETHROW()
 
 
-// WCAP-SYS-2026-003 (WBP-1989). editproposal must enforce the same input floors as
-// regproposal. Before the fix it required only duration > 0, so a PENDING proposal
-// registered at 30 days could be edited down to 1 and its whole funding goal claimed
-// within 24 hours of approval - collapsing the instalment schedule that rejectfund
-// depends on. Both actions now validate through one helper so they cannot drift again.
+// WCAP-SYS-2026-003 (WBP-1989). editproposal must enforce the same input floors and
+// ceilings as regproposal. Before the fix it required only duration > 0, so a PENDING
+// proposal registered at 30 days could be edited down to 1 and its whole funding goal
+// claimed within 24 hours of approval - collapsing the instalment schedule claimfunds
+// enforces. Both actions now validate through one helper so they cannot drift again.
 BOOST_FIXTURE_TEST_CASE(proposal_edit_enforces_shared_floors, eosio_wps_tester) try {
 
     create_account_with_resources("committee111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
-    core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
-    create_account_with_resources("reviewer1111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
     core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
     create_account_with_resources("proposer1111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
     core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
@@ -528,7 +526,6 @@ BOOST_FIXTURE_TEST_CASE(proposal_edit_enforces_shared_floors, eosio_wps_tester) 
 
     setwpsenv(config::system_account_name, 5, 30, 500, 6);
     regcommittee(config::system_account_name, "committee111"_n, "categoryX", true);
-    regreviewer("committee111"_n, "committee111"_n, "reviewer1111"_n, "bob", "bob");
     regproposer("proposer1111"_n, "proposer1111"_n, "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin");
     regproposer("proposer2222"_n, "proposer2222"_n, "user", "two", "img_url", "bio", "country", "telegram", "website", "linkedin");
 
@@ -544,21 +541,40 @@ BOOST_FIXTURE_TEST_CASE(proposal_edit_enforces_shared_floors, eosio_wps_tester) 
         editproposal("proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
                      "description", "roadmap", 1, {"user"}, core_sym::from_string("9000.0000"), 3));
 
-    // Editing at the floor is still fine, and the stored value is what was asked for.
+    // The register side still holds the floor too - both paths, one helper.
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("duration should be at least 30 days"),
+        regproposal("proposer2222"_n, "proposer2222"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                    "description", "roadmap", 29, {"user"}, core_sym::from_string("9000.0000"), 3));
+
+    // The ceiling (wpsenv.max_duration_of_funding = 500) is enforced on edit with the one
+    // unified message; editproposal previously said "duration maximum exceeded".
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("this proposal is over the maximum duration"),
+        editproposal("proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                     "description", "roadmap", 501, {"user"}, core_sym::from_string("9000.0000"), 3));
+
+    // Editing at the floor is fine, and the stored value is what was asked for.
     BOOST_REQUIRE_EQUAL(success(),
         editproposal("proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
                      "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 3));
     produce_blocks(1);
     BOOST_REQUIRE_EQUAL(30u, get_proposal("proposer1111"_n)["duration"].as_uint64());
 
-    // The iterations floor is unified at 3 on BOTH actions. It was >= 1 on register and
-    // >= 3 on edit - the same pair had already drifted once without anyone noticing.
-    BOOST_REQUIRE_EQUAL(wasm_assert_msg("total number of iterations must be at least 3"),
+    // The iterations floor is 1 on BOTH actions - the value c6c2942 (2020) chose for
+    // register and that editproposal had never picked up. Two instalments is now legal
+    // on edit, as it always was on register; zero is not, on either.
+    BOOST_REQUIRE_EQUAL(success(),
         editproposal("proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
                      "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 2));
-    BOOST_REQUIRE_EQUAL(wasm_assert_msg("total number of iterations must be at least 3"),
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("total number of iterations must be at least 1"),
+        editproposal("proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                     "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 0));
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("total number of iterations must be at least 1"),
         regproposal("proposer2222"_n, "proposer2222"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
-                    "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 1));
+                    "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 0));
+
+    // setwpsenv may not set a ceiling that undercuts the floor.
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("max_duration_of_funding must be at least 30 days, the proposal duration floor"),
+        setwpsenv(config::system_account_name, 5, 30, 29, 6));
 
 } FC_LOG_AND_RETHROW()
 

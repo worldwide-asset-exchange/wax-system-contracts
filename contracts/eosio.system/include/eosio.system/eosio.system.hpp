@@ -1670,9 +1670,7 @@ namespace eosiosystem {
          //defined in wps.cpp
          void update_wps_votes( const name& voter, const std::vector<name>& proposals);
 
-         // Shared input validation for regproposal and editproposal. One helper so the two
-         // actions cannot drift apart again (WCAP-SYS-2026-003: editproposal had silently
-         // dropped the 30-day duration floor and used a different iterations floor).
+         // Shared regproposal/editproposal input validation - defined in wps.cpp (WCAP-SYS-2026-003).
          void validate_proposal_fields( const name& committee, uint16_t subcategory,
                                         const std::string& title, const std::string& summary,
                                         const std::string& project_img_url,
