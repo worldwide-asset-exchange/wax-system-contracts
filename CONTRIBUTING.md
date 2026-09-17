@@ -10,6 +10,7 @@ Interested in contributing? That's awesome! Here are some guidelines to get star
   - [Feature Branches](#feature-branches)
   - [Submitting Pull Requests](#submitting-pull-requests)
   - [Testing and Quality Assurance](#testing-and-quality-assurance)
+    - [Building and running the tests](#building-and-running-the-tests)
 - [Conduct](#conduct)
 - [Contributor License & Acknowledgments](#contributor-license--acknowledgments)
 - [References](#references)
@@ -79,6 +80,15 @@ Pull requests are awesome. If you're looking to raise a PR for something which d
 Never underestimate just how useful quality assurance is. If you're looking to get involved with the code base and don't know where to start, checking out and testing a pull request is one of the most useful things you could do.
 
 Essentially, [check out the latest develop branch](#working-on-wax-system-contracts), take it for a spin, and if you find anything odd, please follow the [bug report guidelines](#bug-reports) and let us know!
+
+#### Building and running the tests
+
+Everything builds inside the docker image pinned in the `Makefile` (`make dev-docker-start` for a shell, `make dev-docker-all` for a clean build and full test run). Two things about the build catch people out:
+
+- **A new test file is not picked up until `cmake` is re-run.** `tests/CMakeLists.txt` collects test sources with `file(GLOB ...)`, which is evaluated at configure time, not at build time. After adding a `tests/*.cpp` file, run `make build` (which re-runs `cmake`) before `make compile`, or the new suite silently does not exist.
+- **The test binary loads the contract WASM from disk at run time.** `build/contracts/*/*.wasm` are separate targets from `unit_test`. After changing contract source, run a full `make compile` (all targets), not just the test target, or the tests run against the previous WASM and a fix looks as if it did nothing. Check the `.wasm` modification time is newer than the source you changed.
+
+Contract-security static checks run on every pull request (`.github/workflows/wcap-static.yml`, see [`.audit/README.md`](.audit/README.md)). They are ratchets: a PR may not add to `.audit/rules/baseline.txt`, and a PR that fixes a baselined finding should remove its line.
 
 ## Conduct
 
