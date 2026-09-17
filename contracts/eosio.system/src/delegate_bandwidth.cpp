@@ -432,10 +432,15 @@ namespace eosiosystem {
    {
       require_auth(_self);
 
+      // WCAP-SYS-2026-004: without these two checks a negative amount passed every guard
+      // below in the wrong direction and `net_amount -= tokens` inflated the refund.
+      check( tokens.symbol == core_symbol(), "tokens must be denominated in the core symbol" );
+      check( tokens.amount > 0, "tokens must be positive" );
+
       const asset zero_asset( 0, core_symbol() );
       refunds_table refunds_tbl( _self, account.value );
       auto& req = refunds_tbl.get( account.value, "no refund found");
-      check(req.net_amount + req.cpu_amount >= tokens, "account does not have enough staked tokens");
+      check(req.net_amount + req.cpu_amount >= tokens, "refund is smaller than the amount to remove");
 
       if(req.net_amount + req.cpu_amount == tokens){
          refunds_tbl.erase(req);
