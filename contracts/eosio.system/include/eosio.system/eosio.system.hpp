@@ -1001,7 +1001,20 @@ namespace eosiosystem {
                             const asset& unstake_net_quantity, const asset& unstake_cpu_quantity );
 
          /**
-          * Removing the amount of tokens from account's refunds
+          * Remove `tokens` from `account`'s pending unstake refund, draining net before cpu and
+          * erasing the row when it reaches zero. The removed amount stays in `eosio.stake`; it
+          * is not returned to `account`. Retained from the GBM era, where `delgenesis` used it
+          * to revert a genesis award; that caller was removed in 2023 and nothing calls it today.
+          *
+          * @param account - the account whose refund is reduced,
+          * @param tokens - the amount to remove from the refund.
+          *
+          * @pre Requires the authority of the contract account itself (msig),
+          * @pre Tokens' symbol must be the system token,
+          * @pre Tokens must be bigger than zero,
+          * @pre A refund request must exist for `account`,
+          * @pre Tokens must not exceed the refund's net + cpu total.
+          * @post The refund shrinks by exactly `tokens`, or is erased when equal to it.
           */
          [[eosio::action]]
          void removerefund( name account, asset tokens );

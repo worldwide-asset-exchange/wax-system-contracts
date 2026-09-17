@@ -432,29 +432,31 @@ namespace eosiosystem {
    {
       require_auth(_self);
 
-      // WCAP-SYS-2026-004: without these two checks a negative amount passed every guard
-      // below in the wrong direction and `net_amount -= tokens` inflated the refund.
+      // WCAP-SYS-2026-004: a negative amount passed every guard below in the wrong direction
+      // and `net_amount -= tokens` inflated the refund. The amount check closes that; the
+      // symbol check states explicitly what operator>= previously refused only by accident.
       check( tokens.symbol == core_symbol(), "tokens must be denominated in the core symbol" );
       check( tokens.amount > 0, "tokens must be positive" );
 
-      const asset zero_asset( 0, core_symbol() );
       refunds_table refunds_tbl( _self, account.value );
       auto& req = refunds_tbl.get( account.value, "no refund found");
-      check(req.net_amount + req.cpu_amount >= tokens, "refund is smaller than the amount to remove");
+      const asset total = req.net_amount + req.cpu_amount;
+      check( total >= tokens, "refund is smaller than the amount to remove" );
 
-      if(req.net_amount + req.cpu_amount == tokens){
+      if( total == tokens ){
          refunds_tbl.erase(req);
          return;
       }
 
+      // Drain net first, then cpu.
       refunds_tbl.modify( req, same_payer, [&]( auto& r ) {
-         if(req.net_amount >= tokens) {
-            r.net_amount -= tokens;
-         }else{
-            r.cpu_amount -= tokens - req.net_amount;
-            r.net_amount = zero_asset;
-         }
+         const asset from_net = std::min( r.net_amount, tokens );
+         r.net_amount -= from_net;
+         r.cpu_amount -= tokens - from_net;
       });
+
+      check( 0 <= req.net_amount.amount && 0 <= req.cpu_amount.amount, "negative refund amount" ); //should never happen
+      check( req.net_amount + req.cpu_amount == total - tokens, "refund did not shrink by the removed amount" ); //should never happen
    }
 
    void system_contract::update_voting_power( const name& voter, const asset& total_update )
