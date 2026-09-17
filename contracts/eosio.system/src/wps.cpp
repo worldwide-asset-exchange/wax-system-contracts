@@ -182,6 +182,44 @@ namespace eosiosystem {
         //change state based on count
     }
 
+    // Shared by regproposal and editproposal. Every floor and ceiling on a proposal's
+    // fields lives here and nowhere else.
+    void system_contract::validate_proposal_fields( const name& committee, uint16_t subcategory,
+                                                    const string& title, const string& summary,
+                                                    const string& project_img_url,
+                                                    const string& description, const string& roadmap,
+                                                    uint64_t duration, const vector<string>& members,
+                                                    const asset& funding_goal, uint32_t total_iterations ) const {
+        // verify that the committee account exists
+        check(is_account(committee), "committee account doesn't exist");
+
+        //verify that the inputs are not too short
+        check(title.size() > 0, "title should be more than 0 characters long");
+        check(summary.size() > 0, "summary should be more than 0 characters long");
+        check(project_img_url.size() > 0, "URL should be more than 0 characters long");
+        check(description.size() > 0, "description should be more than 0 characters long");
+        check(roadmap.size() > 0, "roadmap should be more than 0 characters long");
+        check(duration >= 30, "duration should be at least 30 days");
+        check(members.size() > 0, "member should be more than 0");
+        check(total_iterations >= 3, "total number of iterations must be at least 3");
+
+        wps_env_singleton _wps_env(get_self(), get_self().value);
+        auto env = _wps_env.get();
+
+        //verify that the inputs aren't too long
+        check(subcategory < 10, "invalid sub-category");
+        check(title.size() < 256, "title should be shorter than 256 characters.");
+        check(summary.size() < 400, "subtitle should be shorter than 256 characters.");
+        check(project_img_url.size() < 128, "URL should be shorter than 128 characters.");
+        check(description.size() < 5000, "description should be shorter than 1024 characters.");
+        check(roadmap.size() < 2000, "financial_roadmap should be shorter than 256 characters.");
+        check(duration <= env.max_duration_of_funding, "this proposal is over the maximum duration");
+        check(members.size() < 50, "members should be shorter than 50 characters.");
+        check(funding_goal.is_valid(), "invalid quantity" );
+        check(funding_goal.amount > 0, "must request positive amount" );
+        check(total_iterations < 100, "total iterations must be less than 100");
+    }
+
     void system_contract::regproposal(
             name proposer,
             name committee,
@@ -199,36 +237,9 @@ namespace eosiosystem {
         // authority of the user's account is required
         require_auth(proposer);
 
-        // verify that the committee account exists
-        check(is_account(committee), "committee account doesn't exist");
-
-        //verify that the inputs are not too short
-        //subcategory is not required
-        //eosio_assert(subcategory > 0, "subcategory should be an integer greater than 0");
-        check(title.size() > 0, "title should be more than 0 characters long");
-        check(summary.size() > 0, "summary should be more than 0 characters long");
-        check(project_img_url.size() > 0, "URL should be more than 0 characters long");
-        check(description.size() > 0, "description should be more than 0 characters long");
-        check(roadmap.size() > 0, "roadmap should be more than 0 characters long");
-        check(duration >= 30, "duration should be at least 30 days");
-        check(members.size() > 0, "member should be more than 0");
-        check(total_iterations >= 1, "total number of iterations must be at least 1");
-
-        wps_env_singleton _wps_env(get_self(), get_self().value);
-        auto env = _wps_env.get();
-
-        //verify that the inputs aren't too long
-        check(subcategory < 10, "invalid sub-category");
-        check(title.size() < 256, "title should be shorter than 256 characters.");
-        check(summary.size() < 400, "subtitle should be shorter than 256 characters.");
-        check(project_img_url.size() < 128, "URL should be shorter than 128 characters.");
-        check(description.size() < 5000, "description should be shorter than 1024 characters.");
-        check(roadmap.size() < 2000, "financial_roadmap should be shorter than 256 characters.");
-        check(duration <= env.max_duration_of_funding, "this proposal is over the maximum duration");
-        check(members.size() < 50, "members should be shorter than 50 characters.");
-        check(funding_goal.is_valid(), "invalid quantity" );
-        check(funding_goal.amount > 0, "must request positive amount" );
-        check(total_iterations < 100, "total iterations must be less than 100");
+        validate_proposal_fields( committee, subcategory, title, summary, project_img_url,
+                                  description, roadmap, duration, members, funding_goal,
+                                  total_iterations );
 
         auto itr = _proposers.find(proposer.value);
         // verify that the account is a registered proposer
@@ -284,34 +295,9 @@ namespace eosiosystem {
         // authority of the user's account is required
         require_auth(proposer);
 
-        // verify that the committee account exists
-        check(is_account(committee), "committee account doesn't exist");
-
-        //verify that the inputs are not too short
-        check(title.size() > 0, "title should be more than 0 characters long");
-        check(summary.size() > 0, "summary should be more than 0 characters long");
-        check(project_img_url.size() > 0, "URL should be more than 0 characters long");
-        check(description.size() > 0, "description should be more than 0 characters long");
-        check(roadmap.size() > 0, "roadmap should be more than 0 characters long");
-        check(duration > 0, "duration should be longer than 0 days");
-        check(members.size() > 0, "member should be more than 0");
-        check(total_iterations >= 3, "total number of iterations must be at least 3");
-
-        wps_env_singleton _wps_env(get_self(), get_self().value);
-        auto env = _wps_env.get();
-
-        //verify that the inputs aren't too long
-        check(subcategory < 10, "invalid sub-category");
-        check(title.size() < 256, "title should be shorter than 256 characters.");
-        check(summary.size() < 400, "subtitle should be shorter than 256 characters.");
-        check(project_img_url.size() < 128, "URL should be shorter than 128 characters.");
-        check(description.size() < 5000, "description should be shorter than 1024 characters.");
-        check(roadmap.size() < 2000, "financial_roadmap should be shorter than 256 characters.");
-        check(duration <= env.max_duration_of_funding, "duration maximum exceeded");
-        check(members.size() < 50, "members should be shorter than 50 characters.");
-        check(funding_goal.is_valid(), "invalid quantity" );
-        check(funding_goal.amount > 0, "must request positive amount" );
-        check(total_iterations < 100, "total iterations must be less than 100");
+        validate_proposal_fields( committee, subcategory, title, summary, project_img_url,
+                                  description, roadmap, duration, members, funding_goal,
+                                  total_iterations );
 
         auto itr = _proposers.find(proposer.value);
         // verify that the account is a registered proposer
