@@ -510,6 +510,58 @@ BOOST_REQUIRE_EQUAL(proposal["title"], "First proposal");
 } FC_LOG_AND_RETHROW()
 
 
+// WCAP-SYS-2026-003 (WBP-1989). editproposal must enforce the same input floors as
+// regproposal. Before the fix it required only duration > 0, so a PENDING proposal
+// registered at 30 days could be edited down to 1 and its whole funding goal claimed
+// within 24 hours of approval - collapsing the instalment schedule that rejectfund
+// depends on. Both actions now validate through one helper so they cannot drift again.
+BOOST_FIXTURE_TEST_CASE(proposal_edit_enforces_shared_floors, eosio_wps_tester) try {
+
+    create_account_with_resources("committee111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
+    core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+    create_account_with_resources("reviewer1111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
+    core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+    create_account_with_resources("proposer1111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
+    core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+    create_account_with_resources("proposer2222"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
+    core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+    setwpsenv(config::system_account_name, 5, 30, 500, 6);
+    regcommittee(config::system_account_name, "committee111"_n, "categoryX", true);
+    regreviewer("committee111"_n, "committee111"_n, "reviewer1111"_n, "bob", "bob");
+    regproposer("proposer1111"_n, "proposer1111"_n, "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin");
+    regproposer("proposer2222"_n, "proposer2222"_n, "user", "two", "img_url", "bio", "country", "telegram", "website", "linkedin");
+
+    // Registered exactly at the floor: accepted.
+    BOOST_REQUIRE_EQUAL(success(),
+        regproposal("proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                    "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 3));
+    produce_blocks(1);
+
+    // The defect: editing the PENDING proposal below the floor was accepted. It must be
+    // refused with the same message regproposal uses.
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("duration should be at least 30 days"),
+        editproposal("proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                     "description", "roadmap", 1, {"user"}, core_sym::from_string("9000.0000"), 3));
+
+    // Editing at the floor is still fine, and the stored value is what was asked for.
+    BOOST_REQUIRE_EQUAL(success(),
+        editproposal("proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                     "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 3));
+    produce_blocks(1);
+    BOOST_REQUIRE_EQUAL(30u, get_proposal("proposer1111"_n)["duration"].as_uint64());
+
+    // The iterations floor is unified at 3 on BOTH actions. It was >= 1 on register and
+    // >= 3 on edit - the same pair had already drifted once without anyone noticing.
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("total number of iterations must be at least 3"),
+        editproposal("proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                     "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 2));
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("total number of iterations must be at least 3"),
+        regproposal("proposer2222"_n, "proposer2222"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                    "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 1));
+
+} FC_LOG_AND_RETHROW()
+
 BOOST_FIXTURE_TEST_CASE(reviewer_accept_reject, eosio_wps_tester) try {
 
 create_account_with_resources("committee111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
