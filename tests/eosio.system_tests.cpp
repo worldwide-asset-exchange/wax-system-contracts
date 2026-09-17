@@ -256,54 +256,79 @@ BOOST_FIXTURE_TEST_CASE( stake_unstake, eosio_system_tester ) try {
 BOOST_FIXTURE_TEST_CASE( removerefund_rejects_non_positive_and_reduces_correctly, eosio_system_tester ) try {
    cross_15_percent_threshold();
    const name alice = "alice1111111"_n;
-   transfer( config::system_account_name, alice, core_sym::from_string("1000.0000"), config::system_account_name );
+   const name eosio = config::system_account_name;
+   transfer( eosio, alice, core_sym::from_string("1000.0000"), eosio );
    BOOST_REQUIRE_EQUAL( success(), stake( alice, alice, core_sym::from_string("100.0000"), core_sym::from_string("100.0000") ) );
-   BOOST_REQUIRE_EQUAL( success(), unstake( alice, alice, core_sym::from_string("10.0000"), core_sym::from_string("5.0000") ) );
-   produce_blocks( 2 );
 
-   auto refund_total = [&]() -> int64_t {
+   auto open_refund = [&]( const char* net, const char* cpu ) {
+      BOOST_REQUIRE_EQUAL( success(), unstake( alice, alice, core_sym::from_string(net), core_sym::from_string(cpu) ) );
+   };
+   auto expect_row = [&]( const char* net, const char* cpu ) {
       auto r = get_refund_request( alice );
-      return r.is_null() ? 0 : r["net_amount"].as<asset>().get_amount() + r["cpu_amount"].as<asset>().get_amount();
-   };
-   auto removerefund = [&]( const name& signer, const asset& tokens ) {
-      return push_action( signer, "removerefund"_n, mvo()("account", alice)("tokens", tokens) );
+      BOOST_REQUIRE( !r.is_null() );
+      BOOST_REQUIRE_EQUAL( core_sym::from_string(net), r["net_amount"].as<asset>() );
+      BOOST_REQUIRE_EQUAL( core_sym::from_string(cpu), r["cpu_amount"].as<asset>() );
    };
 
-   BOOST_REQUIRE_EQUAL( 150000, refund_total() );    // net 10.0000 + cpu 5.0000
+   open_refund( "10.0000", "5.0000" );
+   BOOST_REQUIRE_EQUAL( 150000, refund_total( alice ) );
+   // Unstaking moves nothing; the tokens sit in eosio.stake until refund pays them out.
+   const asset stake_pool_before = get_balance( "eosio.stake"_n );
 
    // Privileged: the msig only.
    BOOST_REQUIRE_EQUAL( error("missing authority of eosio"),
-                        removerefund( alice, core_sym::from_string("1.0000") ) );
+                        removerefund( alice, alice, core_sym::from_string("1.0000") ) );
 
    // The defect: a negative amount used to be accepted and grow the refund. Now refused,
    // and the row is untouched.
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("tokens must be positive"),
-                        removerefund( config::system_account_name, core_sym::from_string("-5.0000") ) );
-   BOOST_REQUIRE_EQUAL( 150000, refund_total() );
+                        removerefund( eosio, alice, core_sym::from_string("-5.0000") ) );
+   expect_row( "10.0000", "5.0000" );
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("tokens must be positive"),
-                        removerefund( config::system_account_name, core_sym::from_string("0.0000") ) );
+                        removerefund( eosio, alice, core_sym::from_string("0.0000") ) );
 
    // A different symbol is refused explicitly rather than by accident inside operator>=.
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("tokens must be denominated in the core symbol"),
-                        removerefund( config::system_account_name, asset::from_string("1.0000 XYZ") ) );
+                        removerefund( eosio, alice, asset::from_string("1.0000 XYZ") ) );
 
    // Removing more than the whole refund is refused with a message that says what was compared.
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("refund is smaller than the amount to remove"),
-                        removerefund( config::system_account_name, core_sym::from_string("20.0000") ) );
+                        removerefund( eosio, alice, core_sym::from_string("20.0000") ) );
+   expect_row( "10.0000", "5.0000" );
 
-   // Positive path, unchanged: 12 against net 10 / cpu 5 drains net first, then 2 from cpu.
-   BOOST_REQUIRE_EQUAL( success(), removerefund( config::system_account_name, core_sym::from_string("12.0000") ) );
-   {
-      auto r = get_refund_request( alice );
-      BOOST_REQUIRE_EQUAL( core_sym::from_string("0.0000"), r["net_amount"].as<asset>() );
-      BOOST_REQUIRE_EQUAL( core_sym::from_string("3.0000"), r["cpu_amount"].as<asset>() );
-   }
-
-   // Removing exactly what remains erases the row.
-   BOOST_REQUIRE_EQUAL( success(), removerefund( config::system_account_name, core_sym::from_string("3.0000") ) );
+   // Positive path, unchanged. Row 1 (net 10, cpu 5): 12 drains net and takes 2 from cpu;
+   // 3 then equals what is left and erases the row.
+   BOOST_REQUIRE_EQUAL( success(), removerefund( eosio, alice, core_sym::from_string("12.0000") ) );
+   expect_row( "0.0000", "3.0000" );
+   BOOST_REQUIRE_EQUAL( success(), removerefund( eosio, alice, core_sym::from_string("3.0000") ) );
    BOOST_REQUIRE( get_refund_request( alice ).is_null() );
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("no refund found"),
-                        removerefund( config::system_account_name, core_sym::from_string("1.0000") ) );
+                        removerefund( eosio, alice, core_sym::from_string("1.0000") ) );
+
+   // Row 2 (10, 5): 10 empties net exactly and keeps the row; 3 then comes from cpu alone.
+   open_refund( "10.0000", "5.0000" );
+   BOOST_REQUIRE_EQUAL( success(), removerefund( eosio, alice, core_sym::from_string("10.0000") ) );
+   expect_row( "0.0000", "5.0000" );
+   BOOST_REQUIRE_EQUAL( success(), removerefund( eosio, alice, core_sym::from_string("3.0000") ) );
+   expect_row( "0.0000", "2.0000" );
+   BOOST_REQUIRE_EQUAL( success(), removerefund( eosio, alice, core_sym::from_string("2.0000") ) );
+   BOOST_REQUIRE( get_refund_request( alice ).is_null() );
+
+   // Row 3 (10, 5): 4 comes from net alone and leaves cpu untouched.
+   open_refund( "10.0000", "5.0000" );
+   BOOST_REQUIRE_EQUAL( success(), removerefund( eosio, alice, core_sym::from_string("4.0000") ) );
+   expect_row( "6.0000", "5.0000" );
+
+   // removerefund moves no tokens: eosio.stake still holds everything alice unstaked...
+   BOOST_REQUIRE_EQUAL( stake_pool_before, get_balance( "eosio.stake"_n ) );
+   // ...and the ordinary refund pays out exactly what the row says, not what was unstaked.
+   produce_block( fc::days(3) );
+   produce_blocks(1);
+   const asset alice_before = get_balance( alice );
+   BOOST_REQUIRE_EQUAL( success(), push_action( alice, "refund"_n, mvo()("owner", alice) ) );
+   BOOST_REQUIRE_EQUAL( alice_before + core_sym::from_string("11.0000"), get_balance( alice ) );
+   BOOST_REQUIRE_EQUAL( stake_pool_before - core_sym::from_string("11.0000"), get_balance( "eosio.stake"_n ) );
+   BOOST_REQUIRE( get_refund_request( alice ).is_null() );
 
 } FC_LOG_AND_RETHROW()
 
