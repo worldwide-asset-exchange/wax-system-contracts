@@ -1334,4 +1334,107 @@ BOOST_FIXTURE_TEST_CASE( wcap_016_untallied_votes_are_never_subtracted, eosio_wp
    BOOST_REQUIRE_EQUAL( successor_tally, get_proposal( "proposer1111"_n )["total_votes"].as_double() );
 } FC_LOG_AND_RETHROW()
 
+// WCAP-SYS-2026-011 (WBP-2008). regproposal and editproposal validated funding_goal only
+// as is_valid() and amount > 0, which says nothing about which symbol it is in. A proposal
+// denominated in a foreign token, or in the core token at the wrong precision, was stored,
+// reviewed, voted on and approvable, and failed only at claimfunds - the eosio.token
+// transfer from eosio.saving throws for a symbol it holds no balance of - leaving the
+// proposal APPROVED and unclaimable, removable only by the committee (rejectfund, then
+// rmvreject), never by the proposer. Both actions now refuse a funding_goal that is not
+// denominated in the core symbol at the core precision.
+BOOST_FIXTURE_TEST_CASE( wcap_011_funding_goal_must_be_core_denominated, eosio_wps_tester ) try {
+   create_account_with_resources("committee111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+   create_account_with_resources("proposer1111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+   setwpsenv(config::system_account_name, 5, 30, 500, 6);
+   regcommittee(config::system_account_name, "committee111"_n, "categoryX", true);
+   regproposer("proposer1111"_n, "proposer1111"_n, "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin");
+
+   const name proposer = "proposer1111"_n;
+   const char* refused = "funding goal must be denominated in the core symbol at its precision";
+   auto reg = [&]( const asset& goal ) {
+      return regproposal( proposer, proposer, "committee111"_n, 1, "title", "summary", "project_img_url",
+                          "description", "roadmap", 30, {"user"}, goal, 3 );
+   };
+   auto edit = [&]( const asset& goal ) {
+      return editproposal( proposer, proposer, "committee111"_n, 1, "edited title", "summary", "project_img_url",
+                           "description", "roadmap", 30, {"user"}, goal, 3 );
+   };
+
+   // All well-formed assets (is_valid() holds): a foreign symbol, and the core symbol code at
+   // a precision one above and one below the core's - each a different symbol to eosio.token.
+   const asset foreign_symbol   = asset::from_string("9000.0000 XYZ");
+   const asset precision_above  = asset( 9000 * 10 * 10000, symbol( CORE_SYM_PRECISION + 1, CORE_SYM_NAME ) );
+   const asset precision_below  = asset( 9000 * 10000 / 10, symbol( CORE_SYM_PRECISION - 1, CORE_SYM_NAME ) );
+   BOOST_REQUIRE_EQUAL( "9000.00000 " CORE_SYM_NAME, precision_above.to_string() );
+   BOOST_REQUIRE_EQUAL( "9000.000 "   CORE_SYM_NAME, precision_below.to_string() );
+
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg(refused), reg( foreign_symbol ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg(refused), reg( precision_above ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg(refused), reg( precision_below ) );
+   BOOST_REQUIRE( get_proposal( proposer ).is_null() );
+
+   BOOST_REQUIRE_EQUAL( success(), reg( core_sym::from_string("9000.0000") ) );
+   produce_blocks(1);
+
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg(refused), edit( foreign_symbol ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg(refused), edit( precision_above ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg(refused), edit( precision_below ) );
+   auto proposal = get_proposal( proposer );
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("9000.0000"), proposal["funding_goal"].as<asset>() );
+   BOOST_REQUIRE_EQUAL( proposal["title"], "title" );
+
+   // A core-denominated goal still edits normally.
+   BOOST_REQUIRE_EQUAL( success(), edit( core_sym::from_string("8000.0000") ) );
+   produce_blocks(1);
+   proposal = get_proposal( proposer );
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("8000.0000"), proposal["funding_goal"].as<asset>() );
+   BOOST_REQUIRE_EQUAL( proposal["title"], "edited title" );
+} FC_LOG_AND_RETHROW()
+
+// WCAP-SYS-2026-015, degenerate case (WBP-2008 review). claimfunds pays
+// funding_goal / total_iterations per instalment with truncating division, and eosio.token
+// refuses a zero transfer. A core-denominated goal smaller than total_iterations minimum
+// units passed every entry check and reached the same approved-but-unclaimable state as
+// WCAP-SYS-2026-011 through arithmetic instead of the symbol. Both actions now require at
+// least one minimum unit per instalment. (The rounding remainder of larger goals is the
+// open part of 015 and is not changed here.)
+BOOST_FIXTURE_TEST_CASE( wcap_015_goal_must_cover_every_instalment, eosio_wps_tester ) try {
+   create_account_with_resources("committee111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+   create_account_with_resources("proposer1111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
+                                 core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+
+   setwpsenv(config::system_account_name, 5, 30, 500, 6);
+   regcommittee(config::system_account_name, "committee111"_n, "categoryX", true);
+   regproposer("proposer1111"_n, "proposer1111"_n, "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin");
+
+   const name proposer = "proposer1111"_n;
+   const char* refused = "funding goal must be at least one minimum unit per iteration";
+   auto reg = [&]( const asset& goal, uint32_t iterations ) {
+      return regproposal( proposer, proposer, "committee111"_n, 1, "title", "summary", "project_img_url",
+                          "description", "roadmap", 30, {"user"}, goal, iterations );
+   };
+   auto edit = [&]( const asset& goal, uint32_t iterations ) {
+      return editproposal( proposer, proposer, "committee111"_n, 1, "title", "summary", "project_img_url",
+                           "description", "roadmap", 30, {"user"}, goal, iterations );
+   };
+
+   // 50 minimum units over 99 instalments truncates to a zero instalment.
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg(refused), reg( core_sym::from_string("0.0050"), 99 ) );
+   BOOST_REQUIRE( get_proposal( proposer ).is_null() );
+   // Exactly one unit per instalment is the floor.
+   BOOST_REQUIRE_EQUAL( success(), reg( core_sym::from_string("0.0099"), 99 ) );
+   produce_blocks(1);
+
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg(refused), edit( core_sym::from_string("0.0098"), 99 ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg(refused), edit( core_sym::from_string("0.0050"), 51 ) );
+   BOOST_REQUIRE_EQUAL( 99u, get_proposal( proposer )["total_iterations"].as<uint32_t>() );
+   BOOST_REQUIRE_EQUAL( success(), edit( core_sym::from_string("0.0050"), 50 ) );
+   produce_blocks(1);
+   BOOST_REQUIRE_EQUAL( core_sym::from_string("0.0050"), get_proposal( proposer )["funding_goal"].as<asset>() );
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()

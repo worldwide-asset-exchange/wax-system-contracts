@@ -66,6 +66,16 @@ BUG FIXES:
   proposal that was not yet (or no longer) taking votes can no longer be subtracted later
   from a proposal that never received it.
 
+- `regproposal` and `editproposal` now refuse a `funding_goal` that is not denominated in
+  the core symbol at the core precision (WCAP-SYS-2026-011). Previously only `is_valid()`
+  and `amount > 0` were checked, so a proposal in a foreign token, or in the core token at
+  the wrong precision, could be registered, reviewed, voted on and approved, and failed only
+  at `claimfunds` - leaving it APPROVED and unclaimable, removable only by the committee
+  (`rejectfund`, then `rmvreject`) and never by the proposer. Both actions also require at
+  least one minimum unit per instalment: `claimfunds` pays `funding_goal / total_iterations`
+  with truncating division and `eosio.token` refuses a zero transfer, so a smaller goal
+  reached the same approved-but-unclaimable state through arithmetic.
+
 ## wax-2.10.12-3.0.0
 
 BREAKING CHANGES:
