@@ -75,6 +75,9 @@ namespace eosiosystem {
    static constexpr int64_t  inflation_pay_factor  = 5;                // 20% of the inflation
    static constexpr int64_t  votepay_factor        = 4;                // 25% of the producer pay
    static constexpr uint32_t refund_delay_sec      = 3 * seconds_per_day;
+   // Ceiling on wpsenv.max_duration_of_funding, in days (WCAP-SYS-2026-010): a century. Far
+   // above any real proposal, and far below where the cadence arithmetic ever wrapped.
+   static constexpr uint32_t max_wps_funding_days  = 36'500;
 
    static constexpr uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022
    static const time_point gbm_initial_time(eosio::seconds(1561939200));     // July 1st 2019 00:00:00
@@ -422,7 +425,7 @@ namespace eosiosystem {
         uint32_t total_voting_percent = 5;           // 5%
         uint32_t duration_of_voting = 30;            // voting duration (days)
         uint32_t max_duration_of_funding = 500;      // funding duration (days)
-        uint32_t total_iteration_of_funding = 6;     //
+        uint32_t total_iteration_of_funding = 6;     // set and validated by setwpsenv, in the ABI, read by no code path; kept for ABI compatibility (WCAP-SYS-2026-010)
         uint64_t primary_key() const { return 0; }
         EOSLIB_SERIALIZE( wpsenv, (total_voting_percent)(duration_of_voting)(max_duration_of_funding)(total_iteration_of_funding) )
     };
