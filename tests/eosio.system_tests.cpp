@@ -4753,4 +4753,62 @@ BOOST_FIXTURE_TEST_CASE( buy_pin_sell_ram, eosio_system_tester ) try {
 
 } FC_LOG_AND_RETHROW()
 
+// ---------------------------------------------------------------------------
+// WCAP-SYS-2026-007 (WBP-1995). Each producer's total_votes is clamped at zero when
+// floating-point residue drives it negative, but global.total_producer_vote_weight took the
+// same delta unclamped, so after every vote was withdrawn the global read -2^56 while every
+// producer read 0. The global is a published table field read by nothing in the contract.
+// ---------------------------------------------------------------------------
+namespace {
+   // Eight vote / withdraw-all cycles by three voters over three producers: the sequence
+   // from the audit's proof, which accumulates the residue that the clamp now absorbs.
+   template<typename Tester>
+   std::vector<account_name> vote_withdraw_cycles( Tester& t, int rounds, bool leave_votes_in_place ) {
+      t.cross_15_percent_threshold();
+      const std::vector<account_name> prods = { "defproducera"_n, "defproducerb"_n, "defproducerc"_n };
+      t.setup_producer_accounts( prods );
+      for( const auto& p : prods ) BOOST_REQUIRE_EQUAL( t.success(), t.regproducer( p ) );
+      const std::vector<account_name> voters = { "alice1111111"_n, "bob111111111"_n, "carol1111111"_n };
+      for( const auto& v : voters ) {
+         t.transfer( config::system_account_name, v, core_sym::from_string("100000.0000"), config::system_account_name );
+         BOOST_REQUIRE_EQUAL( t.success(), t.stake( v, v, core_sym::from_string("30000.0000"), core_sym::from_string("30000.0000") ) );
+      }
+      for( int round = 0; round < rounds; ++round ) {
+         for( const auto& v : voters ) BOOST_REQUIRE_EQUAL( t.success(), t.vote( v, prods ) );
+         t.produce_blocks( 3 );
+         if( leave_votes_in_place && round == rounds - 1 ) break;
+         for( const auto& v : voters ) BOOST_REQUIRE_EQUAL( t.success(), t.vote( v, std::vector<account_name>{} ) );
+         t.produce_blocks( 3 );
+      }
+      return prods;
+   }
+}
+
+BOOST_FIXTURE_TEST_CASE( vote_weight_global_never_negative_after_full_withdrawal, eosio_system_tester ) try {
+   const auto prods = vote_withdraw_cycles( *this, 8, false );
+   double sum_producer_votes = 0;
+   for( const auto& p : prods ) {
+      const double tv = get_producer_info( p )["total_votes"].as_double();
+      BOOST_REQUIRE_GE( tv, 0 );
+      sum_producer_votes += tv;
+   }
+   const double global_weight = get_global_state()["total_producer_vote_weight"].as_double();
+   BOOST_TEST_MESSAGE( "sum(total_votes) = " << sum_producer_votes << "  total_producer_vote_weight = " << global_weight );
+   BOOST_REQUIRE_GE( global_weight, 0 );
+   BOOST_REQUIRE_LT( std::abs( global_weight - sum_producer_votes ), 1.0 );
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( vote_weight_global_unchanged_while_positive, eosio_system_tester ) try {
+   // The clamp engages only at zero. With votes left in place the published value must be
+   // bit-identical to what the unclamped accumulator produced: pinned from a run of this
+   // exact sequence on 715ddba, the audited commit, so a client predicting the field sees
+   // no change on any chain whose vote weight stays positive.
+   vote_withdraw_cycles( *this, 8, true );
+   const double global_weight = get_global_state()["total_producer_vote_weight"].as_double();
+   char buf[64]; std::snprintf( buf, sizeof(buf), "%.17g", global_weight );
+   BOOST_TEST_MESSAGE( "total_producer_vote_weight = " << buf );
+   BOOST_REQUIRE_GT( global_weight, 0 );
+   BOOST_REQUIRE_EQUAL( std::string( "1.9151459753352051e+33" ), std::string( buf ) );
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()
