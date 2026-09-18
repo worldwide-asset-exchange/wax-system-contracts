@@ -721,6 +721,17 @@ public:
       return unstake( account_name(acnt), net, cpu );
    }
 
+   action_result removerefund( const account_name& signer, const account_name& account, const asset& tokens ) {
+      return push_action( signer, "removerefund"_n, mvo()("account", account)("tokens", tokens) );
+   }
+
+   // net + cpu of an account's pending refund row, or 0 when there is none.
+   int64_t refund_total( const account_name& account ) {
+      auto r = get_refund_request( account );
+      if( r.is_null() ) return 0;
+      return r["net_amount"].as<asset>().get_amount() + r["cpu_amount"].as<asset>().get_amount();
+   }
+
    int64_t bancor_convert( int64_t S, int64_t R, int64_t T ) { return double(R) * T  / ( double(S) + T ); };
 
    int64_t get_net_limit( account_name a ) {

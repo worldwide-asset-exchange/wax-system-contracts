@@ -10,6 +10,12 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+- `removerefund` now rejects a non-positive amount and a non-core symbol
+  (WCAP-SYS-2026-004). Previously a negative amount passed every guard in the wrong
+  direction and *inflated* the refund it was meant to reduce; zero was a silent no-op and
+  is now refused too. The insufficiency message now reads "refund is smaller than the
+  amount to remove". msig-only; no behaviour change for positive amounts.
+
 ## wax-2.10.12-3.0.0
 
 BREAKING CHANGES:
