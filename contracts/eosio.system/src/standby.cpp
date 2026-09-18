@@ -151,27 +151,34 @@ namespace eosiosystem {
     const auto ct = current_time_point();
     check( ct - itr->last_claim_time > microseconds(useconds_per_day), "already claimed rewards within past day" );
 
-    double share = itr->standby_share;
-    check(share > 0, "no standby share to claim");
+    const uint64_t share = itr->standby_share;
+    check( share > 0, "no standby share to claim" );
 
-    double total_share = _gstate4.total_standby_share;
-    double amount = 0;
-    if (total_share > 0){
-        double total_bucket = _gstate4.standby_bucket;
-        amount = total_bucket * share / total_share;
+    // WCAP-SYS-2026-006: integer arithmetic, and the bucket defended the way
+    // collect_voter_reward defends voters_bucket. Neither a share above the total nor a
+    // payout above the bucket is reachable through this contract's own accounting; the two
+    // clamps are the safety net the sibling function already had. The old double
+    // arithmetic would have trapped on the uint64 narrowing instead.
+    const uint64_t total_share = _gstate4.total_standby_share;
+    const uint64_t paid_share  = std::min( share, total_share );
+    uint64_t amount = 0;
+    if( total_share > 0 ) {
+        amount = static_cast<uint64_t>( (unsigned __int128)_gstate4.standby_bucket * paid_share / total_share );
     }
-    check(amount > 0, "no standby reward to claim");
+    if( amount > _gstate4.standby_bucket ) {
+        amount = _gstate4.standby_bucket;
+    }
+    check( amount >= 1, "no standby reward to claim" );
 
-    _gstate4.standby_bucket -= amount;
-    _gstate4.total_standby_share -= share;
+    _gstate4.standby_bucket      -= amount;
+    _gstate4.total_standby_share -= paid_share;
 
     _standbys.modify( itr, same_payer, [&](auto& row) {
         row.standby_share = 0;
         row.last_standby_share_update = ct;
         row.last_claim_time = ct;
     });
-    // amount already > 0
     token::transfer_action transfer_act{ token_account, { {bpay_account, active_permission}, {owner, active_permission} } };
-    transfer_act.send( bpay_account, owner, asset(amount, core_symbol()), "standby producer pay" );
+    transfer_act.send( bpay_account, owner, asset( static_cast<int64_t>(amount), core_symbol() ), "standby producer pay" );
    }
 }
