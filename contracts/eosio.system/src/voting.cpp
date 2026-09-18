@@ -18,6 +18,13 @@
 
 namespace eosiosystem {
 
+   // Vote weights are doubles, and subtracting a recomputed weight can leave a small
+   // negative residue where zero is meant (WCAP-SYS-2026-007). One rule for every site that
+   // stores one: anything that is not a non-negative number becomes zero (NaN included).
+   inline double non_negative_vote_weight( double v ) {
+      return v >= 0 ? v : 0;
+   }
+
    using eosio::const_mem_fun;
    using eosio::current_time_point;
    using eosio::indexed_by;
@@ -350,12 +357,16 @@ namespace eosiosystem {
             }
             double init_total_votes = pitr->total_votes;
             _producers.modify( pitr, same_payer, [&]( auto& p ) {
-               p.total_votes += pd.second.first;
-               if ( p.total_votes < 0 ) { // floating point arithmetics can give small negative numbers
-                  p.total_votes = 0;
-               }
-               _gstate.total_producer_vote_weight += pd.second.first;
-               //check( p.total_votes >= 0, "something bad happened" );
+               p.total_votes = non_negative_vote_weight( p.total_votes + pd.second.first );
+               // WCAP-SYS-2026-007: the global takes the same raw delta and the same clamp,
+               // so it can no longer carry a negative residue after every vote is withdrawn.
+               // Deliberately the raw delta, not the producer's post-clamp change: that keeps
+               // the published value identical to what it was until the first time it would
+               // have gone negative. Nothing in the contract reads it; it is a running
+               // accumulator, not a recomputed sum. Reconciling it to sum(total_votes) is a
+               // separate, deferred change because off-chain consumers read the field.
+               _gstate.total_producer_vote_weight = non_negative_vote_weight( _gstate.total_producer_vote_weight + pd.second.first );
+               check( p.total_votes >= 0, "producer total_votes must be a non-negative number" ); //should never happen
             });
             auto prod2 = _producers2.find( pd.first.value );
             if( prod2 != _producers2.end() ) {
@@ -517,8 +528,10 @@ namespace eosiosystem {
                auto& prod = _producers.get( acnt.value, "producer not found" ); //data corruption
                const double init_total_votes = prod.total_votes;
                _producers.modify( prod, same_payer, [&]( auto& p ) {
-                  p.total_votes += delta;
-                  _gstate.total_producer_vote_weight += delta;
+                  // WCAP-SYS-2026-007: same rule as update_votes for both values; this path
+                  // (proxy weight changes) previously clamped neither.
+                  p.total_votes                      = non_negative_vote_weight( p.total_votes + delta );
+                  _gstate.total_producer_vote_weight = non_negative_vote_weight( _gstate.total_producer_vote_weight + delta );
                });
                auto prod2 = _producers2.find( acnt.value );
                if ( prod2 != _producers2.end() ) {

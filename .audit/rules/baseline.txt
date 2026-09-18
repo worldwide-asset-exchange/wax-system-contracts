@@ -36,5 +36,4 @@ contracts/eosio.system/include/eosio.system/powerup.results.hpp|A1|powupresult
 contracts/eosio.system/src/eosio.system.cpp|C5|check(rng_rate >= 0)
 contracts/eosio.system/src/standby.cpp|C5|check(num_slots >= 0)
 contracts/eosio.system/src/standby.cpp|C5|check(ratio >= 0)
-contracts/eosio.system/src/voting.cpp|C4b|
 contracts/eosio.system/src/voting.cpp|C4|weighted_votes
