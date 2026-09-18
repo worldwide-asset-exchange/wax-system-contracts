@@ -27,6 +27,12 @@ BUG FIXES:
   the limit the check actually enforces; and `setwpsenv` rejects a
   `max_duration_of_funding` below 30.
 
+- BP guild scores are capped at 100,000,000 (WCAP-SYS-2026-005): `setbpdefscore` rejects a
+  larger default, and `get_bp_weight_multiplier` clamps both the default and any score read
+  from the guilds table before computing the vote multiplier. The ceiling is 38x the largest
+  live score, so no current multiplier changes; it only stops an absurd value from reordering
+  the producer schedule. Zero remains valid.
+
 ## wax-2.10.12-3.0.0
 
 BREAKING CHANGES:
