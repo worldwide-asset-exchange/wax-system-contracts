@@ -531,26 +531,32 @@ namespace eosiosystem {
         auto itr = _reviewers.find(reviewer.value);
         check(itr != _reviewers.end(), "Account not found in reviewers table");
 
-        check(end > begin, "Invalid range");
+        // WCAP-SYS-2026-016: this action edits voters' lists and nothing else - not the
+        // proposal's tally, not a voter's stored weight - so it may not touch a proposal
+        // that is taking votes: cleaning a live proposal let a re-vote count twice, and the
+        // voter could never withdraw. ON_VOTE is the only state with a live tally, so any
+        // other state (including a same-named successor still PENDING) may be cleaned by a
+        // reviewer of the proposal's committee, like every other reviewer action; if the
+        // row is already gone (rmvreject / rmvcompleted ran) there is nothing left to protect.
+        auto itr_proposal = _proposals.find(proposer.value);
+        if( itr_proposal != _proposals.end() ) {
+            check( itr_proposal->committee == itr->committee, "Reviewer is not part of this proposal's responsible committee" );
+            check( itr_proposal->status != PROPOSAL_STATUS::ON_VOTE, "votes cannot be cleaned while the proposal is taking votes" );
+        }
 
-        for (auto wpsvoter = std::next(_wpsvoters.begin(), begin); wpsvoter != std::next(_wpsvoters.begin(), end); wpsvoter++){
+        check(end > begin, "Invalid range");
+        // Positional range over the name-ordered voter table, bounded by the table itself
+        // so a range past the end cleans what exists instead of aborting.
+        auto wpsvoter = _wpsvoters.begin();
+        for( uint64_t i = 0; i < begin && wpsvoter != _wpsvoters.end(); ++i ) ++wpsvoter;
+        for( uint64_t i = begin; i < end && wpsvoter != _wpsvoters.end(); ++i, ++wpsvoter ) {
             std::vector<name> votes = wpsvoter->proposals;
-            auto it = votes.begin();
-            if(votes.begin() != votes.end()){
-                int count = 0;
-                while(it != votes.end()){
-                    if(*it == proposer){
-                        it = votes.erase(it);
-                        count++;
-                        break;
-                    }
-                    ++it;
-                }
-                if(count != 0){
-                    _wpsvoters.modify(wpsvoter, same_payer, [&](auto& wv){
-                        wv.proposals = votes;
-                    });
-                }
+            auto found = std::find( votes.begin(), votes.end(), proposer );
+            if( found != votes.end() ) {
+                votes.erase( found );
+                _wpsvoters.modify( wpsvoter, same_payer, [&]( auto& wv ) {
+                    wv.proposals = votes;
+                });
             }
         }
     }
@@ -718,6 +724,13 @@ namespace eosiosystem {
             }
         }
 
+        // WCAP-SYS-2026-016: remember which of the new votes were actually tallied. The stored
+        // list is what a later action subtracts from, so a name that was not ON_VOTE when it
+        // was voted for (pending, finished, absent) must not be stored, or it comes back as a
+        // never-added weight subtracted from whatever proposal carries that name by then.
+        std::vector<name> tallied;
+        tallied.reserve( proposals.size() );
+
         const auto ct = current_time_point();
         for( const auto& pd : proposal_deltas ) {
             auto pitr = _proposals.find( pd.first.value );
@@ -741,6 +754,9 @@ namespace eosiosystem {
                                 p.total_votes = 0;
                             }
                         });
+                        if( pd.second.second ) {   // from the new set: this vote was tallied
+                            tallied.push_back( pd.first );
+                        }
                         double total_activated_vote = stake2vote(_wps_state.total_stake);
                         if((*pitr).total_votes > total_activated_vote * double(wps_env.total_voting_percent)/100.0){
                             if((*pitr).status == PROPOSAL_STATUS::ON_VOTE){
@@ -757,13 +773,13 @@ namespace eosiosystem {
         if(wpsvoter == _wpsvoters.end()){
             _wpsvoters.emplace(voter_name, [&](auto& wv){
                 wv.owner = voter_name;
-                wv.proposals = proposals;
+                wv.proposals = tallied;
                 wv.last_vote_weight = new_vote_weight;
             });
         }
         else{
             _wpsvoters.modify(wpsvoter, same_payer, [&](auto& wv){
-               wv.proposals = proposals;
+               wv.proposals = tallied;
                wv.last_vote_weight = new_vote_weight;
             });
         }
