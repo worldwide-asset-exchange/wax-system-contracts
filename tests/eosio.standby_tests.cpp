@@ -8,6 +8,8 @@
 #include <fc/log/logger.hpp>
 #include <iostream>
 #include <sstream>
+#include <random>
+#include <set>
 
 #include "eosio.system_tester.hpp"
 
@@ -76,7 +78,7 @@ struct eosio_standby_tester : eosio_system_tester {
     standby_producer_state r;
 
     auto lower = idx.lower_bound(boost::make_tuple(table_id, 0));
-    for (auto itr = lower; itr->t_id == table_id && itr != idx.end(); ++itr){
+    for (auto itr = lower; itr != idx.end() && itr->t_id == table_id; ++itr){
          fc::datastream<const char*> ds(itr->value.data(), itr->value.size());
          fc::raw::unpack(ds, r);
          result.push_back(r);
@@ -152,12 +154,12 @@ BOOST_FIXTURE_TEST_CASE(standby_config_tests, eosio_standby_tester ) try {
 
   // Test invalid values for setsbratio
   BOOST_REQUIRE_EQUAL( 
-    wasm_assert_msg("ratio must be between 0 and RATIO_DENOMINATOR"),
+    wasm_assert_msg("ratio cannot exceed PAY_SPLIT_SCALE (10000)"),
     push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", -1) )
   );
 
   BOOST_REQUIRE_EQUAL( 
-    wasm_assert_msg("ratio must be between 0 and RATIO_DENOMINATOR"),
+    wasm_assert_msg("ratio cannot exceed PAY_SPLIT_SCALE (10000)"),
     push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", 10001) )
   );
 
@@ -624,5 +626,161 @@ BOOST_FIXTURE_TEST_CASE(standby_producer_pay, eosio_standby_tester,  * boost::un
 
 }
 FC_LOG_AND_RETHROW()
+
+// ---------------------------------------------------------------------------
+// WCAP-SYS-2026-002 (WBP-1990). Three privileged setters compared an unsigned parameter
+// with `>= 0`, which is always true, so the lower bound they promised was never enforced
+// and one message named a constant the code did not compare against. Each now enforces
+// only a real bound and says which one. setsbslot also gains the ceiling it never had.
+// ---------------------------------------------------------------------------
+BOOST_FIXTURE_TEST_CASE( wcap_002_unsigned_setters_enforce_real_bounds, eosio_standby_tester ) try {
+   const name eosio = config::system_account_name;
+   auto setsbratio = [&]( int64_t ratio )   { return push_action( eosio, "setsbratio"_n, mvo()("ratio", ratio) ); };
+   auto setsbslot  = [&]( int64_t slots )   { return push_action( eosio, "setsbslot"_n,  mvo()("num_slots", slots) ); };
+   auto setrngrate = [&]( int64_t rate )    { return push_action( eosio, "setrngrate"_n, mvo()("rng_rate", rate)("max_pool_rng", 1000000000) ); };
+
+   // setsbratio: the only meaningful bound is the upper one, and the message names it.
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("ratio cannot exceed PAY_SPLIT_SCALE (10000)"), setsbratio( 10001 ) );
+   BOOST_REQUIRE_EQUAL( success(), setsbratio( 10000 ) );
+   BOOST_REQUIRE_EQUAL( success(), setsbratio( 0 ) );
+
+   // setsbslot: zero is valid (disables standbys); the list is capped at the active-schedule size.
+   BOOST_REQUIRE_EQUAL( success(), setsbslot( 0 ) );
+   BOOST_REQUIRE_EQUAL( 0u, get_global_state4()["num_standby_slots"].as_uint64() );
+   BOOST_REQUIRE_EQUAL( success(), setsbslot( 21 ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("num_slots cannot exceed 21"), setsbslot( 22 ) );
+   BOOST_REQUIRE_EQUAL( 21u, get_global_state4()["num_standby_slots"].as_uint64() );
+
+   // setrngrate: the upper bound is exclusive and the message says so.
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("rng_rate must be less than 10000"), setrngrate( 10000 ) );
+   BOOST_REQUIRE_EQUAL( success(), setrngrate( 9999 ) );
+   BOOST_REQUIRE_EQUAL( success(), setrngrate( 0 ) );
+} FC_LOG_AND_RETHROW()
+
+// ---------------------------------------------------------------------------
+// WCAP-SYS-2026-006 (WBP-1994). claimstandby computed its payout in doubles with no upper
+// clamp, then subtracted the double from a uint64 bucket; collect_voter_reward, the same
+// computation one file over, clamps. Filed as a missing safety net, not a demonstrated
+// exploit. Two tests: the one observable pre/post difference (a reward that rounds to zero
+// is refused before the bucket is touched, instead of failing inside the token transfer),
+// and the property both claim paths must hold.
+// ---------------------------------------------------------------------------
+BOOST_FIXTURE_TEST_CASE( wcap_006_fractional_standby_reward_is_refused_cleanly, eosio_standby_tester ) try {
+   // Four standbys accrue share for a day; a fifth slot is then opened and its new standby
+   // claims within a block or two of promotion. Its share is seconds against days, so its
+   // cut of the bucket is a fraction of a unit. Before the fix `amount > 0` passed, the
+   // bucket was decremented by the fraction, and the action died inside eosio.token with
+   // "must transfer positive quantity"; now the guard refuses before the bucket is touched.
+   const name eosio = config::system_account_name;
+   BOOST_REQUIRE_EQUAL( success(), push_action( eosio, "setsbratio"_n, mvo()("ratio", 1) ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( eosio, "setsbslot"_n,  mvo()("num_slots", 4) ) );
+   active_and_vote_producers_and_standbys();
+   std::set<name> first_four;
+   for( const auto& s : get_standby_table() ) if( s.is_active ) first_four.insert( s.owner );
+   BOOST_REQUIRE_EQUAL( 4u, first_four.size() );
+   produce_block( fc::days(1) );
+
+   BOOST_REQUIRE_EQUAL( success(), push_action( eosio, "setsbslot"_n, mvo()("num_slots", 5) ) );
+   name fifth;
+   for( int i = 0; i < 400 && fifth == name(); ++i ) {
+      produce_blocks(1);
+      for( const auto& s : get_standby_table() )
+         if( s.is_active && !first_four.count( s.owner ) ) fifth = s.owner;
+   }
+   BOOST_REQUIRE( fifth != name() );
+   produce_blocks(4);   // two seconds of share against four standby-days
+
+   const uint64_t bucket_before = get_global_state4()["standby_bucket"].as_uint64();
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("no standby reward to claim"),
+                        push_action( fifth, "claimstandby"_n, mvo()("owner", fifth) ) );
+   // Refused before the bucket was touched.
+   BOOST_REQUIRE_EQUAL( bucket_before, get_global_state4()["standby_bucket"].as_uint64() );
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( wcap_006_bucket_solvency_property, eosio_standby_tester ) try {
+   // Property, over a fixed-seed random sequence of claims by standbys and voters with random
+   // gaps: a claim never pays more than its bucket held plus what the claim itself credited,
+   // the bucket after the claim accounts for exactly what was paid, and neither bucket nor
+   // share total ever wraps. Buckets are filled only inside claims, for the time since
+   // global.last_pervote_bucket_fill, so that timestamp bounds each claim's credit from the
+   // inflation formula. Held to both claimstandby and collect_voter_reward, because they are
+   // the same computation.
+   const name eosio = config::system_account_name;
+   BOOST_REQUIRE_EQUAL( success(), push_action( eosio, "setsbratio"_n, mvo()("ratio", 5000) ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( eosio, "setsbslot"_n,  mvo()("num_slots", 5) ) );
+   active_and_vote_producers_and_standbys();
+   std::vector<name> standby_names;
+   for( const auto& s : get_standby_table() ) if( s.is_active ) standby_names.push_back( s.owner );
+   BOOST_REQUIRE_EQUAL( 5u, standby_names.size() );
+   const std::vector<name> voters = { "producvotera"_n, "producvoterb"_n, "producvoterc"_n, "producvoterd"_n };
+
+   // Upper bound on what one claim can credit to a bucket: `share` of the continuous 5%/yr
+   // inflation over the gap since the last fill, with 5% slack for the claim's own block.
+   auto fill_bound = [&]( double share ) -> int64_t {
+      const auto last_fill = get_global_state()["last_pervote_bucket_fill"].as<time_point>();
+      const auto gap_us    = ( control->head_block_time() + fc::milliseconds(500) - last_fill ).count();
+      const double supply  = double( get_token_supply().get_amount() );
+      return int64_t( share * 0.04879 * supply * double(gap_us) / ( 365.0 * 24 * 3600 * 1e6 ) * 1.05 ) + 1;
+   };
+   const uint64_t wrap_guard = 1ull << 62;
+
+   std::mt19937 rng( 20260918 );
+   std::uniform_int_distribution<int> pick_standby( 0, 4 ), pick_voter( 0, 3 ), gap_hours( 1, 60 ), coin( 0, 1 );
+   int64_t paid_to_standbys = 0, paid_to_voters = 0;
+   int     standby_claims = 0, voter_claims = 0;
+
+   for( int round = 0; round < 40; ++round ) {
+      produce_block( fc::hours( gap_hours( rng ) ) );
+      produce_blocks(1);
+      if( coin( rng ) ) {
+         const name who = standby_names[ pick_standby( rng ) ];
+         const int64_t  credit_bound = fill_bound( 0.3 );    // block pay is 3/10; standbys get part of it
+         const uint64_t pre_bucket   = get_global_state4()["standby_bucket"].as_uint64();
+         const asset    before       = get_balance( who );
+         const auto     result       = push_action( who, "claimstandby"_n, mvo()("owner", who) );
+         const int64_t  paid         = ( get_balance( who ) - before ).get_amount();
+         const uint64_t post_bucket  = get_global_state4()["standby_bucket"].as_uint64();
+         const uint64_t post_total   = get_global_state4()["total_standby_share"].as_uint64();
+         if( result == success() ) { BOOST_REQUIRE_GT( paid, 0 ); ++standby_claims; }
+         else {
+            BOOST_REQUIRE_EQUAL( 0, paid );
+            BOOST_REQUIRE( result == wasm_assert_msg("already claimed rewards within past day")
+                        || result == wasm_assert_msg("no standby share to claim")
+                        || result == wasm_assert_msg("no standby reward to claim") );
+         }
+         BOOST_REQUIRE_LT( post_bucket, wrap_guard );
+         BOOST_REQUIRE_LT( post_total,  wrap_guard );
+         BOOST_REQUIRE_LE( uint64_t(paid), pre_bucket + uint64_t(credit_bound) );          // never more than held + credited
+         BOOST_REQUIRE_GE( post_bucket + uint64_t(paid), pre_bucket );                      // credit is never negative
+         BOOST_REQUIRE_LE( post_bucket + uint64_t(paid), pre_bucket + uint64_t(credit_bound) ); // and never more than inflation allows
+         paid_to_standbys += paid;
+      } else {
+         const name who = voters[ pick_voter( rng ) ];
+         const int64_t credit_bound = fill_bound( 0.4 );     // voters get 4/10
+         const int64_t pre_bucket   = get_global_state()["voters_bucket"].as<int64_t>();
+         const asset   before       = get_balance( who );
+         const auto    result       = push_action( who, "voterclaim"_n, mvo()("owner", who) );
+         const int64_t paid         = ( get_balance( who ) - before ).get_amount();
+         const int64_t post_bucket  = get_global_state()["voters_bucket"].as<int64_t>();
+         if( result == success() ) { BOOST_REQUIRE_GT( paid, 0 ); ++voter_claims; }
+         else {
+            BOOST_REQUIRE_EQUAL( 0, paid );
+            BOOST_REQUIRE( result == wasm_assert_msg("already claimed rewards within past day")
+                        || result == wasm_assert_msg("no rewards available.") );
+         }
+         BOOST_REQUIRE_GE( pre_bucket, 0 );
+         BOOST_REQUIRE_GE( post_bucket, 0 );
+         BOOST_REQUIRE_LE( paid, pre_bucket + credit_bound );
+         BOOST_REQUIRE_GE( post_bucket + paid, pre_bucket );
+         BOOST_REQUIRE_LE( post_bucket + paid, pre_bucket + credit_bound );
+         paid_to_voters += paid;
+      }
+   }
+   // The property must have been exercised, not vacuously satisfied.
+   BOOST_REQUIRE_GT( standby_claims, 5 );
+   BOOST_REQUIRE_GT( voter_claims, 5 );
+   BOOST_REQUIRE_GT( paid_to_standbys, 0 );
+   BOOST_REQUIRE_GT( paid_to_voters, 0 );
+} FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
