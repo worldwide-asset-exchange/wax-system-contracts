@@ -793,4 +793,22 @@ BOOST_FIXTURE_TEST_CASE( wcap_006_bucket_solvency_property, eosio_standby_tester
    BOOST_REQUIRE_GT( paid_to_voters, 0 );
 } FC_LOG_AND_RETHROW()
 
+// WBP-2001: allowsb had no test reference. The pair is msig-only and fails closed on both
+// sides - double disallow and allow-without-disallow are refused with the message that
+// says why.
+BOOST_FIXTURE_TEST_CASE( standby_allow_disallow_round_trip, eosio_standby_tester ) try {
+   const name eosio = config::system_account_name;
+   BOOST_REQUIRE_EQUAL( error("missing authority of eosio"), push_action( alice, "disallowsb"_n, mvo()("account", alice) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("account not exist in standby disallow list"),
+                        push_action( eosio, "allowsb"_n, mvo()("account", alice) ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( eosio, "disallowsb"_n, mvo()("account", alice) ) );
+   BOOST_REQUIRE_EQUAL( alice, get_standby_disallow_state( alice ).owner );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("account already in standby disallow list"),
+                        push_action( eosio, "disallowsb"_n, mvo()("account", alice) ) );
+   BOOST_REQUIRE_EQUAL( error("missing authority of eosio"), push_action( alice, "allowsb"_n, mvo()("account", alice) ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( eosio, "allowsb"_n, mvo()("account", alice) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("account not exist in standby disallow list"),
+                        push_action( eosio, "allowsb"_n, mvo()("account", alice) ) );
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()
