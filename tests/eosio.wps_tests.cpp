@@ -750,6 +750,12 @@ core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
     BOOST_REQUIRE_EQUAL(wasm_assert_msg("Proposal::status is not PROPOSAL_STATUS::APPROVED"), claimfunds("proposer1111"_n, "proposer1111"_n));
 
+    // WBP-2001: a COMPLETED row can be removed by a reviewer of its committee, and only once.
+    BOOST_REQUIRE_EQUAL(success(), push_action("reviewer1111"_n, "rmvcompleted"_n, mvo()("reviewer", "reviewer1111")("proposer", "proposer1111")));
+    BOOST_REQUIRE(get_proposal("proposer1111"_n).is_null());
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("Proposal not found in completed proposals table"),
+        push_action("reviewer1111"_n, "rmvcompleted"_n, mvo()("reviewer", "reviewer1111")("proposer", "proposer1111")));
+
 } FC_LOG_AND_RETHROW()
 
 
@@ -1167,7 +1173,9 @@ BOOST_FIXTURE_TEST_CASE(proposal_cleanvotes, eosio_wps_tester) try {
 } FC_LOG_AND_RETHROW()
 
 // WBP-2001: rmvreject, rmvcompleted and setwpsstate had no test reference in the public
-// suite. Each is exercised on its guard and its effect.
+// suite. rmvreject and setwpsstate are exercised on guard and effect here; rmvcompleted's
+// guard here and its effect at the end of proposal_vote_claim, the one test that reaches
+// COMPLETED.
 BOOST_FIXTURE_TEST_CASE( wps_terminal_row_removal_and_state, eosio_wps_tester ) try {
    const name eosio = config::system_account_name;
    for( const auto& a : { "committee111"_n, "reviewer1111"_n, "reviewer2222"_n, "proposer1111"_n } )
@@ -1203,6 +1211,12 @@ BOOST_FIXTURE_TEST_CASE( wps_terminal_row_removal_and_state, eosio_wps_tester ) 
    BOOST_REQUIRE_EQUAL( error("missing authority of eosio"), push_action( "proposer1111"_n, "setwpsstate"_n, mvo()("total_stake", 1.0) ) );
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("total_stake should be more 0"), push_action( eosio, "setwpsstate"_n, mvo()("total_stake", 0.0) ) );
    BOOST_REQUIRE_EQUAL( success(), push_action( eosio, "setwpsstate"_n, mvo()("total_stake", 1000000.0) ) );
+   {
+      vector<char> data = get_row_by_account( eosio, eosio, "wpsstate"_n, "wpsstate"_n );
+      BOOST_REQUIRE( !data.empty() );
+      const auto state = abi_ser.binary_to_variant( "wps_global_state", data, abi_serializer::create_yield_function( abi_serializer_max_time ) );
+      BOOST_REQUIRE_EQUAL( 1000000.0, state["total_stake"].as_double() );
+   }
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()

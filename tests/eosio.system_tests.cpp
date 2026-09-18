@@ -4825,42 +4825,6 @@ BOOST_FIXTURE_TEST_CASE( vote_weight_global_unchanged_while_positive, eosio_syst
    BOOST_TEST_MESSAGE( "total_producer_vote_weight = " << std::setprecision(17) << global_weight );
    BOOST_REQUIRE_GT( global_weight, 0 );
    BOOST_REQUIRE_EQUAL( global_weight, 1.9151459753352051e+33 );
-
-// WBP-2001: claimgbmprod was the one state-mutating action with no test reference. Since
-// GBM ended (2022-07-01) it is claimrewards by another name: same daily gate, same pay,
-// same last_claim_time. This pins that equivalence so a regression in either path shows.
-BOOST_FIXTURE_TEST_CASE( claimgbmprod_is_claimrewards_after_gbm, eosio_system_tester ) try {
-   const asset large_asset = core_sym::from_string("80.0000");
-   create_account_with_resources( "defproducera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-   create_account_with_resources( "producvotera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
-   BOOST_REQUIRE_EQUAL( success(), regproducer( "defproducera"_n ) );
-   produce_block( fc::hours(24) );
-   transfer( config::system_account_name, "producvotera", core_sym::from_string("400000000.0000"), config::system_account_name );
-   BOOST_REQUIRE_EQUAL( success(), stake( "producvotera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000") ) );
-   BOOST_REQUIRE_EQUAL( success(), vote( "producvotera"_n, { "defproducera"_n } ) );
-   produce_blocks(50);
-   const uint32_t unpaid_before = get_producer_info( "defproducera"_n )["unpaid_blocks"].as<uint32_t>();
-   BOOST_REQUIRE( 1 < unpaid_before );
-
-   const asset before = get_balance( "defproducera"_n );
-   BOOST_REQUIRE_EQUAL( success(), push_action( "defproducera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera") ) );
-   BOOST_REQUIRE_LT( before, get_balance( "defproducera"_n ) );
-   // Reset by the claim; the block that carried the claim is the only one counted since.
-   BOOST_REQUIRE_LE( get_producer_info( "defproducera"_n )["unpaid_blocks"].as<uint32_t>(), 1u );
-
-   // One claim per day, and the two actions share the gate.
-   BOOST_REQUIRE_EQUAL( wasm_assert_msg("already claimed rewards within past day"),
-                        push_action( "defproducera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera") ) );
-   BOOST_REQUIRE_EQUAL( wasm_assert_msg("already claimed rewards within past day"),
-                        push_action( "defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera") ) );
-
-   // Requires the producer's own authority, and an active producer.
-   BOOST_REQUIRE_EQUAL( error("missing authority of defproducera"),
-                        push_action( "producvotera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera") ) );
-   produce_block( fc::hours(24) );
-   BOOST_REQUIRE_EQUAL( success(), push_action( "defproducera"_n, "unregprod"_n, mvo()("producer", "defproducera") ) );
-   BOOST_REQUIRE_EQUAL( wasm_assert_msg("producer does not have an active key"),
-                        push_action( "defproducera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera") ) );
 } FC_LOG_AND_RETHROW()
 
 // WBP-2010 (WCAP-SYS-2026-004, -012). The msig-only action removerefund is removed: its only
@@ -4908,6 +4872,55 @@ BOOST_FIXTURE_TEST_CASE( wcap_004_removerefund_is_gone, eosio_system_tester ) tr
    BOOST_REQUIRE_EQUAL( row_before["cpu_amount"].as<asset>(), get_refund_request( alice )["cpu_amount"].as<asset>() );
    BOOST_REQUIRE_EQUAL( row_before["request_time"].as_string(), get_refund_request( alice )["request_time"].as_string() );
    BOOST_REQUIRE_EQUAL( stake_pool_before, get_balance( "eosio.stake"_n ) );
+} FC_LOG_AND_RETHROW()
+
+// WBP-2001: claimgbmprod was the one state-mutating action with no test reference. Since
+// GBM ended (2022-07-01) it runs the same claim path as claimrewards. Asserted here: it
+// pays, it stamps last_claim_time, and the two actions share the daily gate, the
+// active-key check and the producer's own authority.
+BOOST_FIXTURE_TEST_CASE( claimgbmprod_is_claimrewards_after_gbm, eosio_system_tester ) try {
+   const asset large_asset = core_sym::from_string("80.0000");
+   create_account_with_resources( "defproducera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   create_account_with_resources( "producvotera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
+   BOOST_REQUIRE_EQUAL( success(), regproducer( "defproducera"_n ) );
+   produce_block( fc::hours(24) );
+   transfer( config::system_account_name, "producvotera", core_sym::from_string("400000000.0000"), config::system_account_name );
+   BOOST_REQUIRE_EQUAL( success(), stake( "producvotera", core_sym::from_string("100000000.0000"), core_sym::from_string("100000000.0000") ) );
+   BOOST_REQUIRE_EQUAL( success(), vote( "producvotera"_n, { "defproducera"_n } ) );
+   produce_blocks(50);
+   const uint32_t unpaid_before = get_producer_info( "defproducera"_n )["unpaid_blocks"].as<uint32_t>();
+   BOOST_REQUIRE( 1 < unpaid_before );
+
+   const asset before = get_balance( "defproducera"_n );
+   const uint64_t claim_time_before = microseconds_since_epoch_of_iso_string( get_producer_info( "defproducera"_n )["last_claim_time"] );
+   BOOST_REQUIRE_EQUAL( success(), push_action( "defproducera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera") ) );
+   BOOST_REQUIRE_LT( before, get_balance( "defproducera"_n ) );
+   BOOST_REQUIRE_LT( claim_time_before, microseconds_since_epoch_of_iso_string( get_producer_info( "defproducera"_n )["last_claim_time"] ) );
+   // Reset by the claim; the block that carried the claim is the only one counted since.
+   BOOST_REQUIRE_LE( get_producer_info( "defproducera"_n )["unpaid_blocks"].as<uint32_t>(), 1u );
+
+   // One claim per day, and the two actions share the gate.
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("already claimed rewards within past day"),
+                        push_action( "defproducera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera") ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("already claimed rewards within past day"),
+                        push_action( "defproducera"_n, "claimrewards"_n, mvo()("owner", "defproducera") ) );
+
+   // Requires the producer's own authority, and an active producer.
+   BOOST_REQUIRE_EQUAL( error("missing authority of defproducera"),
+                        push_action( "producvotera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera") ) );
+   produce_block( fc::hours(24) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( "defproducera"_n, "unregprod"_n, mvo()("producer", "defproducera") ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("producer does not have an active key"),
+                        push_action( "defproducera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera") ) );
+} FC_LOG_AND_RETHROW()
+
+// WBP-2001: wasmcfg had no test reference. msig only; the two named profiles apply and
+// anything else is refused.
+BOOST_FIXTURE_TEST_CASE( wasmcfg_profiles, eosio_system_tester ) try {
+   BOOST_REQUIRE_EQUAL( error("missing authority of eosio"), push_action( "alice1111111"_n, "wasmcfg"_n, mvo()("settings", "default") ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("Unkown configuration"), push_action( config::system_account_name, "wasmcfg"_n, mvo()("settings", "bogus") ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "wasmcfg"_n, mvo()("settings", "high") ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "wasmcfg"_n, mvo()("settings", "default") ) );
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()

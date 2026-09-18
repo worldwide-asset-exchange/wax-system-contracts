@@ -41,6 +41,7 @@ jobs:
       # WBP-2001: what can be measured without instrumentation (cdt-cpp 4.1 has none for
       # wasm) - action references and asserted check() guards. Advisory, never gating.
       - name: Test coverage report (advisory)
-        if: always()
+        if: ${{ !cancelled() }}
+        continue-on-error: true
         run: |
-          python3 .audit/rules/test-coverage.py --list || true
+          python3 .audit/rules/test-coverage.py --list | tee -a "$GITHUB_STEP_SUMMARY"
