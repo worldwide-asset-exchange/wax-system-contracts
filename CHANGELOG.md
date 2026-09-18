@@ -92,6 +92,12 @@ BUG FIXES:
   split in force before changing it, so a new value applies from that point rather than
   to the whole unfilled interval.
 
+- `claimfunds` computes the instalment cadence in 64 bits and applies it to a 64-bit time
+  point (WCAP-SYS-2026-010). Previously `duration * seconds_per_day` was narrowed into a
+  `uint32` and the instalment offset was added to a 32-bit `time_point_sec`, so a permitted
+  but very long duration wrapped and made instalments claimable early. `setwpsenv` now also
+  caps `max_duration_of_funding` at 36,500 days.
+
 ## wax-2.10.12-3.0.0
 
 BREAKING CHANGES:

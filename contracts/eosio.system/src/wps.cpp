@@ -147,12 +147,17 @@ namespace eosiosystem {
         check(proposal.status == PROPOSAL_STATUS::APPROVED, "Proposal::status is not PROPOSAL_STATUS::APPROVED");
         check(proposal.iteration_of_funding <= proposal.total_iterations, "all funds for this proposal have already been claimed");
 
-        uint32_t funding_duration_seconds = proposal.duration * seconds_per_day;
-        uint32_t seconds_per_claim_interval = funding_duration_seconds / proposal.total_iterations;
-        time_point_sec start_funding_round = proposal.fund_start_time +
-                (uint32_t) (proposal.iteration_of_funding * seconds_per_claim_interval);
+        // WCAP-SYS-2026-010: the cadence is computed in 64 bits and applied to a 64-bit
+        // time point. `duration * seconds_per_day` exceeded uint32 at 49,711 days, and adding
+        // a 32-bit offset to a time_point_sec wrapped past 2^32, so a long-but-permitted
+        // duration collapsed the instalment schedule. setwpsenv also caps the duration now;
+        // this arithmetic is correct for any value regardless.
+        const uint64_t funding_duration_seconds   = proposal.duration * seconds_per_day;
+        const uint64_t seconds_per_claim_interval = funding_duration_seconds / proposal.total_iterations;
+        const time_point start_funding_round      = time_point( proposal.fund_start_time )
+                + eosio::seconds( int64_t( proposal.iteration_of_funding * seconds_per_claim_interval ) );
 
-        check(current_time > start_funding_round, "Please wait until the end of this interval to claim funding");
+        check( time_point( current_time ) > start_funding_round, "Please wait until the end of this interval to claim funding" );
 
         asset transfer_amount = proposal.funding_goal / proposal.total_iterations;
 
@@ -565,6 +570,9 @@ namespace eosiosystem {
         check(total_voting_percent > 0, "total_voting_percent should be more 0");
         check(duration_of_voting > 0, "duration_of_voting should be more than 0");
         check(max_duration_of_funding >= 30, "max_duration_of_funding must be at least 30 days, the proposal duration floor");
+        // WCAP-SYS-2026-010: a ceiling as well, so no permitted duration comes anywhere near
+        // the arithmetic limits of the instalment cadence.
+        check(max_duration_of_funding <= max_wps_funding_days, "max_duration_of_funding cannot exceed " + std::to_string( max_wps_funding_days ) + " days");
         check(total_iteration_of_funding > 0, "total_iteration_of_funding should be more than 0");
 
         wpsenv env = wpsenv();
