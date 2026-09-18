@@ -682,6 +682,12 @@ core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
 
     BOOST_REQUIRE_EQUAL(wasm_assert_msg("Proposal::status is not PROPOSAL_STATUS::APPROVED"), claimfunds("proposer1111"_n, "proposer1111"_n));
 
+    // WBP-2001: a COMPLETED row can be removed by a reviewer of its committee, and only once.
+    BOOST_REQUIRE_EQUAL(success(), push_action("reviewer1111"_n, "rmvcompleted"_n, mvo()("reviewer", "reviewer1111")("proposer", "proposer1111")));
+    BOOST_REQUIRE(get_proposal("proposer1111"_n).is_null());
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("Proposal not found in completed proposals table"),
+        push_action("reviewer1111"_n, "rmvcompleted"_n, mvo()("reviewer", "reviewer1111")("proposer", "proposer1111")));
+
 } FC_LOG_AND_RETHROW()
 
 
@@ -1096,6 +1102,53 @@ BOOST_FIXTURE_TEST_CASE(proposal_cleanvotes, eosio_wps_tester) try {
     BOOST_REQUIRE_EQUAL(voter1111111["proposals"].size(), 0);
     BOOST_REQUIRE_EQUAL(voter2222222["proposals"].size(), 0);
     BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 0);
+} FC_LOG_AND_RETHROW()
+
+// WBP-2001: rmvreject, rmvcompleted and setwpsstate had no test reference in the public
+// suite. rmvreject and setwpsstate are exercised on guard and effect here; rmvcompleted's
+// guard here and its effect at the end of proposal_vote_claim, the one test that reaches
+// COMPLETED.
+BOOST_FIXTURE_TEST_CASE( wps_terminal_row_removal_and_state, eosio_wps_tester ) try {
+   const name eosio = config::system_account_name;
+   for( const auto& a : { "committee111"_n, "reviewer1111"_n, "reviewer2222"_n, "proposer1111"_n } )
+      create_account_with_resources( a, eosio, core_sym::from_string("100.0000"), false,
+                                     core_sym::from_string("10.0000"), core_sym::from_string("10.0000") );
+   BOOST_REQUIRE_EQUAL( success(), setwpsenv( eosio, 35, 30, 365, 3 ) );
+   regcommittee( eosio, "committee111"_n, "categoryX", true );
+   regreviewer( "committee111"_n, "committee111"_n, "reviewer1111"_n, "bob", "bob" );
+   regproposer( "proposer1111"_n, "proposer1111"_n, "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin" );
+   BOOST_REQUIRE_EQUAL( success(), regproposal( "proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                                                 "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 3 ) );
+
+   // A PENDING proposal is neither rejected nor completed, so neither removal applies.
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("Proposal::status is not PROPOSAL_STATUS::REJECTED"),
+                        push_action( "reviewer1111"_n, "rmvreject"_n, mvo()("reviewer", "reviewer1111")("proposer", "proposer1111") ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("Proposal::status is not PROPOSAL_STATUS::COMPLETED"),
+                        push_action( "reviewer1111"_n, "rmvcompleted"_n, mvo()("reviewer", "reviewer1111")("proposer", "proposer1111") ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("Account not found in reviewers table"),
+                        push_action( "reviewer2222"_n, "rmvreject"_n, mvo()("reviewer", "reviewer2222")("proposer", "proposer1111") ) );
+
+   // Reject it, then remove the rejected row; the proposer's slot is free again.
+   BOOST_REQUIRE_EQUAL( success(), rejectprop( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n, "reason" ) );
+   BOOST_REQUIRE_EQUAL( 2, get_proposal( "proposer1111"_n )["status"].as<int>() );
+   BOOST_REQUIRE_EQUAL( error("missing authority of reviewer1111"),
+                        push_action( "proposer1111"_n, "rmvreject"_n, mvo()("reviewer", "reviewer1111")("proposer", "proposer1111") ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( "reviewer1111"_n, "rmvreject"_n, mvo()("reviewer", "reviewer1111")("proposer", "proposer1111") ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("Proposal not found in rejected proposal table"),
+                        push_action( "reviewer1111"_n, "rmvreject"_n, mvo()("reviewer", "reviewer1111")("proposer", "proposer1111") ) );
+   BOOST_REQUIRE_EQUAL( success(), regproposal( "proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                                                 "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 3 ) );
+
+   // setwpsstate: msig only, positive only.
+   BOOST_REQUIRE_EQUAL( error("missing authority of eosio"), push_action( "proposer1111"_n, "setwpsstate"_n, mvo()("total_stake", 1.0) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("total_stake should be more 0"), push_action( eosio, "setwpsstate"_n, mvo()("total_stake", 0.0) ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( eosio, "setwpsstate"_n, mvo()("total_stake", 1000000.0) ) );
+   {
+      vector<char> data = get_row_by_account( eosio, eosio, "wpsstate"_n, "wpsstate"_n );
+      BOOST_REQUIRE( !data.empty() );
+      const auto state = abi_ser.binary_to_variant( "wps_global_state", data, abi_serializer::create_yield_function( abi_serializer_max_time ) );
+      BOOST_REQUIRE_EQUAL( 1000000.0, state["total_stake"].as_double() );
+   }
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
