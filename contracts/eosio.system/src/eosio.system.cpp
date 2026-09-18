@@ -45,7 +45,7 @@ namespace eosiosystem {
       // Initialize binary_extension fields with defaults if they don't have values
       // This ensures tests and deployments have consistent behavior
       if( !_gstate4.active_producer_count.has_value() ) {
-         _gstate4.active_producer_count = 21;
+         _gstate4.active_producer_count = max_active_producers;
       }
       if( !_gstate4.min_cooldown_secs.has_value() ) {
          _gstate4.min_cooldown_secs = 86400;
@@ -535,7 +535,7 @@ namespace eosiosystem {
    void system_contract::setmaxprod( uint32_t max_considered_producers ) {
       require_auth( get_self() );
 
-      check( max_considered_producers >= 21, "max_considered_producers must be at least 21" );
+      check( max_considered_producers >= max_active_producers, "max_considered_producers must be at least " + std::to_string( max_active_producers ) );
       check( max_considered_producers <= 500, "max_considered_producers cannot exceed 500" );
       _gstate6.max_considered_producers = max_considered_producers;
    }

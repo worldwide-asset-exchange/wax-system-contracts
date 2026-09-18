@@ -84,9 +84,10 @@ namespace eosiosystem {
    // live value ("unrated") - and no timelock: that is a consensus design change, roadmapped
    // separately.
    static constexpr uint32_t max_bp_score          = 100'000'000;
-   static constexpr uint32_t max_active_producers  = 21;                // setprodcnt ceiling
-   // A standby is a runner-up for an active slot, so the standby list is capped at the same
-   // size as the active schedule (WCAP-SYS-2026-002). Zero is valid and disables standbys.
+   static constexpr uint32_t max_active_producers  = 21;                // largest active schedule setprodcnt allows
+   // A standby is a runner-up for an active slot, so the standby list gets the same ceiling
+   // as the active schedule can ever have (WCAP-SYS-2026-002). It is a constant, not the
+   // live active_producer_count, so the two setters stay order-independent. Zero is valid.
    static constexpr uint32_t max_standby_slots     = max_active_producers;
 
    static constexpr uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022
