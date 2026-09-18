@@ -58,6 +58,14 @@ BUG FIXES:
   lists without touching the proposal's tally, so on a proposal still taking votes it let a
   re-vote count twice and left the voter unable to withdraw.
 
+- `cleanvotes` may not be run on a proposal that is taking votes, and only a reviewer of the
+  proposal's committee may run it while the row exists (WCAP-SYS-2026-016). It edits voters'
+  lists without touching the proposal's tally, so on a live proposal it let a re-vote count
+  twice and left the voter unable to withdraw. Its range is now bounded by the voter table.
+  `voteproposal` stores only the votes that were actually tallied, so a vote cast for a
+  proposal that was not yet (or no longer) taking votes can no longer be subtracted later
+  from a proposal that never received it.
+
 ## wax-2.10.12-3.0.0
 
 BREAKING CHANGES:
