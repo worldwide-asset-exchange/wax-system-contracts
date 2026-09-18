@@ -3196,4 +3196,208 @@ BOOST_FIXTURE_TEST_CASE( test_increase_active_producer_count, eosio_weighted_pro
 
 } FC_LOG_AND_RETHROW()
 
+// ---------------------------------------------------------------------------
+// WCAP-SYS-2026-005 (WBP-1993): BP guild scores are capped at max_bp_score.
+//
+// The multiplier is score / scaling_factor with no bound anywhere: setbpdefscore stored any
+// uint32, and a score read from the external guilds table was applied verbatim. Against the
+// live scaling factor of 1000, a default of 4,000,000,000 is a 4,000,000x multiplier - every
+// producer absent from the guilds table outranks every producer present in it, regardless of
+// votes, at the next schedule update. Ceiling only, no floor: zero is a live value.
+// ---------------------------------------------------------------------------
+
+namespace {
+   // Shared configuration for the three tests below: guilds contract, 1.0x scaling, 1.0x
+   // default, and the mock contract's hash approved so the table is actually read.
+   template<typename Tester>
+   void configure_weighted_voting( Tester& t ) {
+      BOOST_REQUIRE_EQUAL( t.success(), t.push_action( config::system_account_name, "setguildcont"_n, mvo()("contract", GUILDS_OIG) ) );
+      BOOST_REQUIRE_EQUAL( t.success(), t.push_action( config::system_account_name, "setbpscale"_n, mvo()("scaling_factor", 1000) ) );
+      BOOST_REQUIRE_EQUAL( t.success(), t.push_action( config::system_account_name, "setbpdefscore"_n, mvo()("default_score", 1000) ) );
+      auto wasm = contracts::util::guild_test_wasm();
+      auto hash = fc::sha256::hash( reinterpret_cast<const char*>(wasm.data()), wasm.size() );
+      BOOST_REQUIRE_EQUAL( t.success(), t.push_action( config::system_account_name, "addguildhash"_n, mvo()("hash", hash.str()) ) );
+      t.produce_blocks(1);
+   }
+
+   template<typename Tester>
+   void add_guild_score( Tester& t, const name& producer, uint32_t score ) {
+      BOOST_REQUIRE_EQUAL( t.success(), t.push_guild_action( GUILDS_OIG, "addguild"_n, mvo()
+         ("producer", producer)
+         ("score", score)
+         ("target", time_point::from_iso_string( "2035-12-18T14:18:38" ))
+         ("eligibility", core_sym::from_string("1.0000")) ) );
+   }
+
+   template<typename Tester>
+   void make_voter( Tester& t, const name& voter, const asset& net, const asset& cpu ) {
+      t.create_account_with_resources( voter, config::system_account_name, core_sym::from_string("1.0000"), false,
+                                       core_sym::from_string("80.0000"), core_sym::from_string("80.0000") );
+      t.transfer( config::system_account_name, voter, core_sym::from_string("100000000.0000"), config::system_account_name );
+      BOOST_REQUIRE_EQUAL( t.success(), t.stake( voter, net, cpu ) );
+   }
+
+   template<typename Tester>
+   std::set<name> active_schedule( Tester& t ) {
+      std::set<name> out;
+      for( const auto& p : t.control->head_block_state()->active_schedule.producers ) out.insert( p.producer_name );
+      return out;
+   }
+
+   template<typename Tester>
+   std::set<name> active_standbys( Tester& t ) {
+      std::set<name> out;
+      for( const auto& s : t.get_standby_table() ) if( s.is_active ) out.insert( s.owner );
+      return out;
+   }
+}
+
+BOOST_FIXTURE_TEST_CASE( test_bp_score_ceiling_on_default_score, eosio_weighted_producer_tester ) try {
+   // The absurd value is refused with a message that says what the check enforces...
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("default_score cannot exceed 100000000"),
+                        push_action( config::system_account_name, "setbpdefscore"_n, mvo()("default_score", 4000000000u) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("default_score cannot exceed 100000000"),
+                        push_action( config::system_account_name, "setbpdefscore"_n, mvo()("default_score", 100000001u) ) );
+   // ...the ceiling itself and zero ("unrated") are both allowed.
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setbpdefscore"_n, mvo()("default_score", 100000000u) ) );
+   BOOST_REQUIRE_EQUAL( 100000000u, get_global_state6()["bp_default_score"].as<uint32_t>() );
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setbpdefscore"_n, mvo()("default_score", 0u) ) );
+   BOOST_REQUIRE_EQUAL( 0u, get_global_state6()["bp_default_score"].as<uint32_t>() );
+   // The scaling factor keeps its existing floor and gets no ceiling: a large divisor scales
+   // every multiplier uniformly and cannot reorder anything.
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("scaling factor must be greater than 0"),
+                        push_action( config::system_account_name, "setbpscale"_n, mvo()("scaling_factor", 0u) ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setbpscale"_n, mvo()("scaling_factor", 4000000000u) ) );
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( test_bp_score_clamp_on_guild_table_score, eosio_weighted_producer_tester ) try {
+   // A score in the guilds table above the ceiling is clamped to it, so an absurd score
+   // cannot outrank a ceiling score that has more votes. Twenty-two producers compete for
+   // twenty-one slots:
+   //   absurd   score 4,000,000,000  votes V
+   //   ceiling  score   100,000,000  votes 2V
+   //   fillers  score   100,000,000  votes 3V  (20 of them)
+   // Unclamped, `absurd` weighs 4,000,000 V and `ceiling` is the one left out; clamped, `absurd`
+   // weighs 100,000 V and is the one left out.
+   configure_weighted_voting( *this );
+
+   const name absurd  = "absurdscore1"_n;
+   const name ceiling = "ceilingscore"_n;
+   std::vector<name> fillers;
+   for( char c = 'a'; c < 'a' + 20; ++c ) fillers.emplace_back( std::string("filler") + c );
+
+   std::vector<name> all = fillers; all.push_back( absurd ); all.push_back( ceiling );
+   setup_producer_accounts( all );
+   for( const auto& p : all ) BOOST_REQUIRE_EQUAL( success(), regproducer( p ) );
+   produce_blocks(1);
+
+   add_guild_score( *this, absurd,  4000000000u );
+   add_guild_score( *this, ceiling,  100000000u );
+   for( const auto& p : fillers ) add_guild_score( *this, p, 100000000u );
+   produce_blocks(1);
+
+   // Voters staked 1 : 2 : 3, all in the same block so stake2vote weights them identically.
+   const name v1 = "voter1111111"_n, v2 = "voter2222222"_n, v3 = "voter3333333"_n;
+   make_voter( *this, v1, core_sym::from_string("15000000.0000"), core_sym::from_string("15000000.0000") );
+   make_voter( *this, v2, core_sym::from_string("30000000.0000"), core_sym::from_string("30000000.0000") );
+   make_voter( *this, v3, core_sym::from_string("45000000.0000"), core_sym::from_string("45000000.0000") );
+   produce_block( fc::hours(24) );
+   BOOST_REQUIRE_EQUAL( success(), vote( v1, { absurd } ) );
+   BOOST_REQUIRE_EQUAL( success(), vote( v2, { ceiling } ) );
+   BOOST_REQUIRE_EQUAL( success(), vote( v3, fillers ) );
+   produce_blocks(250);
+
+   const auto active = active_schedule( *this );
+   BOOST_REQUIRE_EQUAL( 21u, active.size() );
+   BOOST_REQUIRE_MESSAGE( active.count( ceiling ) == 1, "ceiling-score producer with 2x the votes must be elected" );
+   BOOST_REQUIRE_MESSAGE( active.count( absurd ) == 0,  "absurd-score producer must be clamped to the ceiling and lose on votes" );
+} FC_LOG_AND_RETHROW()
+
+// The live guilds.oig table on 2026-09-17 (39 rows, public chain state; `cleos get table
+// guilds.oig guilds.oig guilds`). Mainnet's 8-producer schedule that day was exactly the top
+// 8 of this list in score order. The system contract reads only `score`.
+static const std::vector<std::pair<name, uint32_t>> guilds_snapshot_2026_09_17 = {
+   { "waxswedenorg"_n, 2600000 }, { "eosphereiobp"_n, 2550000 }, { "ivote4waxusa"_n, 2410000 },
+   { "waxhiveguild"_n, 2165000 }, { "sentnlagents"_n, 2100000 }, { "cryptolions1"_n, 2050000 },
+   { "eosiodetroit"_n, 2040000 }, { "bp.alcor"_n,     1875000 }, { "blacklusionx"_n, 1725000 },
+   { "amsterdamwax"_n, 1700000 }, { "nation.wax"_n,   1650000 }, { "alohaeosprod"_n, 1600000 },
+   { "bountyblokbp"_n, 1550000 }, { "eosriobrazil"_n, 1550000 }, { "eosdacserver"_n, 1535000 },
+   { "dapplica"_n,     1500000 }, { "ledgerwiseio"_n, 1500000 }, { "waxmadrid111"_n, 1400000 },
+   { "eosauthority"_n, 1350000 }, { "bp.wecan"_n,     1300000 },
+   { "3dkrenderwax"_n, 0 }, { "blokcrafters"_n, 0 }, { "bp.adex"_n,      0 }, { "bp.box"_n,       0 },
+   { "eosarabianet"_n, 0 }, { "eosdublinwow"_n, 0 }, { "greeneosiobp"_n, 0 }, { "guild.nefty"_n,  0 },
+   { "guild.taco"_n,   0 }, { "guild.waxdao"_n, 0 }, { "liquidstudio"_n, 0 }, { "oneinacilian"_n, 0 },
+   { "pink.gg"_n,      0 }, { "qaraqolblock"_n, 0 }, { "teamgreymass"_n, 0 }, { "tokengamerio"_n, 0 },
+   { "wax.eastern"_n,  0 }, { "wizardsguild"_n, 0 }, { "wombatblockx"_n, 0 },
+};
+
+namespace {
+   // Load every live score, give every producer an identical vote weight so the election is
+   // decided by score alone, and require the active set and the standby set to be exactly
+   // what the raw snapshot predicts. The active count is walked down before any producer is
+   // registered, as test_configurable_active_producer_count does: shrinking a live
+   // 21-producer schedule needs two irreversibility lags and trips the fork database in
+   // the tester.
+   template<typename Tester>
+   void replay_snapshot_at( Tester& t, uint32_t active_count ) {
+      configure_weighted_voting( t );
+      BOOST_REQUIRE_EQUAL( t.success(), t.push_action( config::system_account_name, "setsbslot"_n,   mvo()("num_slots", 5) ) );
+      BOOST_REQUIRE_EQUAL( t.success(), t.push_action( config::system_account_name, "setsbratio"_n,  mvo()("ratio", 5000) ) );
+      BOOST_REQUIRE_EQUAL( t.success(), t.push_action( config::system_account_name, "setprodctrl"_n, mvo()("cooldown_secs", 600) ) );
+      for( uint32_t count = 20; count >= active_count; --count ) {
+         t.produce_block( fc::minutes(11) );
+         BOOST_REQUIRE_EQUAL( t.success(), t.push_action( config::system_account_name, "setprodcnt"_n, mvo()("count", count) ) );
+      }
+
+      std::vector<name> producers;
+      for( const auto& row : guilds_snapshot_2026_09_17 ) producers.push_back( row.first );
+      std::sort( producers.begin(), producers.end() );   // voteproducer requires sorted, unique lists
+      t.setup_producer_accounts( producers );
+      for( const auto& p : producers ) BOOST_REQUIRE_EQUAL( t.success(), t.regproducer( p ) );
+      for( const auto& row : guilds_snapshot_2026_09_17 ) add_guild_score( t, row.first, row.second );
+      t.produce_blocks(1);
+      for( const auto& row : guilds_snapshot_2026_09_17 )
+         BOOST_REQUIRE_EQUAL( row.second, t.get_guild_table( row.first ).score );
+
+      // Two equal voters split the 39 producers (one vote carries at most 30), staked in the
+      // same block, so every producer receives exactly one identical vote weight.
+      const name va = "voteraaaaaaa"_n, vb = "voterbbbbbbb"_n;
+      make_voter( t, va, core_sym::from_string("45000000.0000"), core_sym::from_string("45000000.0000") );
+      make_voter( t, vb, core_sym::from_string("45000000.0000"), core_sym::from_string("45000000.0000") );
+      t.produce_block( fc::hours(24) );
+      BOOST_REQUIRE_EQUAL( t.success(), t.vote( va, std::vector<name>( producers.begin(), producers.begin() + 20 ) ) );
+      BOOST_REQUIRE_EQUAL( t.success(), t.vote( vb, std::vector<name>( producers.begin() + 20, producers.end() ) ) );
+      t.produce_blocks(250);
+
+      // Expected order: the contract's own comparator - weighted votes descending, name
+      // ascending on ties - applied to the raw snapshot, i.e. what a client predicts today.
+      std::vector<std::pair<name, uint32_t>> ranked = guilds_snapshot_2026_09_17;
+      std::sort( ranked.begin(), ranked.end(), []( const auto& a, const auto& b ) {
+         if( a.second == b.second ) return a.first < b.first;
+         return a.second > b.second;
+      });
+      std::set<name> expected_active, expected_standby;
+      for( size_t i = 0; i < active_count; ++i )                    expected_active.insert( ranked[i].first );
+      for( size_t i = active_count; i < active_count + 5; ++i )     expected_standby.insert( ranked[i].first );
+
+      const auto active = active_schedule( t );
+      BOOST_REQUIRE_EQUAL( active_count, active.size() );
+      BOOST_REQUIRE( expected_active == active );
+      BOOST_REQUIRE( expected_standby == active_standbys( t ) );
+   }
+}
+
+BOOST_FIXTURE_TEST_CASE( test_bp_score_ceiling_leaves_live_snapshot_unchanged_at_21_slots, eosio_weighted_producer_tester ) try {
+   replay_snapshot_at( *this, 21 );
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( test_bp_score_ceiling_leaves_live_snapshot_unchanged_at_mainnet_8_slots, eosio_weighted_producer_tester ) try {
+   // Mainnet's composition on 2026-09-17: the top 8 by score were the active schedule.
+   replay_snapshot_at( *this, 8 );
+   const std::set<name> live_schedule_2026_09_17 = {
+      "waxswedenorg"_n, "eosphereiobp"_n, "ivote4waxusa"_n, "waxhiveguild"_n,
+      "sentnlagents"_n, "cryptolions1"_n, "eosiodetroit"_n, "bp.alcor"_n };
+   BOOST_REQUIRE( live_schedule_2026_09_17 == active_schedule( *this ) );
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()
