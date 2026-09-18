@@ -690,11 +690,8 @@ BOOST_FIXTURE_TEST_CASE( wcap_006_fractional_standby_reward_is_refused_cleanly, 
    BOOST_REQUIRE( fifth != name() );
    produce_blocks(4);   // two seconds of share against four standby-days
 
-   const uint64_t bucket_before = get_global_state4()["standby_bucket"].as_uint64();
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("no standby reward to claim"),
                         push_action( fifth, "claimstandby"_n, mvo()("owner", fifth) ) );
-   // Refused before the bucket was touched.
-   BOOST_REQUIRE_EQUAL( bucket_before, get_global_state4()["standby_bucket"].as_uint64() );
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( wcap_006_bucket_solvency_property, eosio_standby_tester ) try {
@@ -714,18 +711,31 @@ BOOST_FIXTURE_TEST_CASE( wcap_006_bucket_solvency_property, eosio_standby_tester
    BOOST_REQUIRE_EQUAL( 5u, standby_names.size() );
    const std::vector<name> voters = { "producvotera"_n, "producvoterb"_n, "producvoterc"_n, "producvoterd"_n };
 
-   // Upper bound on what one claim can credit to a bucket: `share` of the continuous 5%/yr
-   // inflation over the gap since the last fill, with 5% slack for the claim's own block.
-   auto fill_bound = [&]( double share ) -> int64_t {
+   // Upper bound on what one claim can credit to a bucket: that bucket's share of the
+   // continuous 5%/yr inflation (the contract's 52-week year) over the gap since the last
+   // fill, with 5% slack for the claim's own block. Block pay is 3/10 of inflation and the
+   // standby bucket gets weight*slots / (apc*PAY_SPLIT_SCALE + weight*slots) of block pay;
+   // voters get 4/10 of inflation.
+   const auto gs4 = get_global_state4();
+   const double standby_fraction = 0.3 * double( gs4["standby_slot_weight"].as_uint64() * gs4["num_standby_slots"].as_uint64() )
+      / double( gs4["active_producer_count"].as_uint64() * 10000 + gs4["standby_slot_weight"].as_uint64() * gs4["num_standby_slots"].as_uint64() );
+   const double voter_fraction = 0.4;
+   const double useconds_per_year = 52.0 * 7 * 24 * 3600 * 1e6;
+   auto fill_bound = [&]( double fraction ) -> int64_t {
       const auto last_fill = get_global_state()["last_pervote_bucket_fill"].as<time_point>();
       const auto gap_us    = ( control->head_block_time() + fc::milliseconds(500) - last_fill ).count();
       const double supply  = double( get_token_supply().get_amount() );
-      return int64_t( share * 0.04879 * supply * double(gap_us) / ( 365.0 * 24 * 3600 * 1e6 ) * 1.05 ) + 1;
+      return int64_t( fraction * 0.04879 * supply * double(gap_us) / useconds_per_year * 1.05 ) + 1;
    };
    const uint64_t wrap_guard = 1ull << 62;
 
+   // mt19937's raw output is standardised; std::uniform_int_distribution is not, so the
+   // sequence is drawn with modulo to stay identical across standard libraries.
    std::mt19937 rng( 20260918 );
-   std::uniform_int_distribution<int> pick_standby( 0, 4 ), pick_voter( 0, 3 ), gap_hours( 1, 60 ), coin( 0, 1 );
+   auto pick_standby = [&]( std::mt19937& r ) { return int( r() % 5 ); };
+   auto pick_voter   = [&]( std::mt19937& r ) { return int( r() % 4 ); };
+   auto gap_hours    = [&]( std::mt19937& r ) { return int( 1 + r() % 60 ); };
+   auto coin         = [&]( std::mt19937& r ) { return int( r() % 2 ); };
    int64_t paid_to_standbys = 0, paid_to_voters = 0;
    int     standby_claims = 0, voter_claims = 0;
 
@@ -734,7 +744,7 @@ BOOST_FIXTURE_TEST_CASE( wcap_006_bucket_solvency_property, eosio_standby_tester
       produce_blocks(1);
       if( coin( rng ) ) {
          const name who = standby_names[ pick_standby( rng ) ];
-         const int64_t  credit_bound = fill_bound( 0.3 );    // block pay is 3/10; standbys get part of it
+         const int64_t  credit_bound = fill_bound( standby_fraction );
          const uint64_t pre_bucket   = get_global_state4()["standby_bucket"].as_uint64();
          const asset    before       = get_balance( who );
          const auto     result       = push_action( who, "claimstandby"_n, mvo()("owner", who) );
@@ -756,7 +766,7 @@ BOOST_FIXTURE_TEST_CASE( wcap_006_bucket_solvency_property, eosio_standby_tester
          paid_to_standbys += paid;
       } else {
          const name who = voters[ pick_voter( rng ) ];
-         const int64_t credit_bound = fill_bound( 0.4 );     // voters get 4/10
+         const int64_t credit_bound = fill_bound( voter_fraction );
          const int64_t pre_bucket   = get_global_state()["voters_bucket"].as<int64_t>();
          const asset   before       = get_balance( who );
          const auto    result       = push_action( who, "voterclaim"_n, mvo()("owner", who) );

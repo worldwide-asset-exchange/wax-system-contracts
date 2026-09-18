@@ -75,9 +75,10 @@ namespace eosiosystem {
    static constexpr int64_t  inflation_pay_factor  = 5;                // 20% of the inflation
    static constexpr int64_t  votepay_factor        = 4;                // 25% of the producer pay
    static constexpr uint32_t refund_delay_sec      = 3 * seconds_per_day;
-   static constexpr uint32_t max_active_producers  = 21;                // setprodcnt ceiling
-   // A standby is a runner-up for an active slot, so the standby list is capped at the same
-   // size as the active schedule (WCAP-SYS-2026-002). Zero is valid and disables standbys.
+   static constexpr uint32_t max_active_producers  = 21;                // largest active schedule setprodcnt allows
+   // A standby is a runner-up for an active slot, so the standby list gets the same ceiling
+   // as the active schedule can ever have (WCAP-SYS-2026-002). It is a constant, not the
+   // live active_producer_count, so the two setters stay order-independent. Zero is valid.
    static constexpr uint32_t max_standby_slots     = max_active_producers;
 
    static constexpr uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022

@@ -50,10 +50,12 @@ namespace eosiosystem {
    void system_contract::setsbslot( uint32_t num_slots ){
       require_auth( get_self() );
       // WCAP-SYS-2026-002: `num_slots >= 0` was always true while the message promised
-      // `> 0`. Zero is a valid value - it is the struct default and disables standbys (none
-      // elected, none paid; the pay split stays well-defined because apc >= 1). What the
-      // action lacked was a ceiling: until now only max_considered_producers, in another
-      // file, kept the standby list bounded.
+      // `> 0`. Zero is a valid value: it is the struct default, no standbys are elected and
+      // no block pay is routed to the standby bucket (producer_pay.cpp keeps the split free
+      // of a zero divisor because apc >= 1). Rows elected before a switch to zero persist
+      // until the next non-empty election - tracked separately. What the action lacked was
+      // a ceiling: until now only max_considered_producers, in another file, kept the
+      // standby list bounded.
       check( num_slots <= max_standby_slots, "num_slots cannot exceed " + std::to_string( max_standby_slots ) );
       _gstate4.num_standby_slots = num_slots;
    }
@@ -155,23 +157,19 @@ namespace eosiosystem {
     check( share > 0, "no standby share to claim" );
 
     // WCAP-SYS-2026-006: integer arithmetic, and the bucket defended the way
-    // collect_voter_reward defends voters_bucket. Neither a share above the total nor a
-    // payout above the bucket is reachable through this contract's own accounting; the two
-    // clamps are the safety net the sibling function already had. The old double
-    // arithmetic would have trapped on the uint64 narrowing instead.
+    // collect_voter_reward defends voters_bucket. A share above the total is not reachable
+    // through this contract's own accounting, so it is treated as corruption and refused
+    // (fail closed) rather than paid out. With share <= total_share the exact integer
+    // division cannot exceed the bucket; the last check states that invariant. The old
+    // double arithmetic would have trapped on the uint64 narrowing instead.
     const uint64_t total_share = _gstate4.total_standby_share;
-    const uint64_t paid_share  = std::min( share, total_share );
-    uint64_t amount = 0;
-    if( total_share > 0 ) {
-        amount = static_cast<uint64_t>( (unsigned __int128)_gstate4.standby_bucket * paid_share / total_share );
-    }
-    if( amount > _gstate4.standby_bucket ) {
-        amount = _gstate4.standby_bucket;
-    }
+    check( share <= total_share, "standby share exceeds the total standby share" ); //should never happen
+    const uint64_t amount = static_cast<uint64_t>( (uint128_t)_gstate4.standby_bucket * share / total_share );
     check( amount >= 1, "no standby reward to claim" );
+    check( amount <= _gstate4.standby_bucket, "standby reward exceeds the standby bucket" ); //should never happen
 
     _gstate4.standby_bucket      -= amount;
-    _gstate4.total_standby_share -= paid_share;
+    _gstate4.total_standby_share -= share;
 
     _standbys.modify( itr, same_payer, [&](auto& row) {
         row.standby_share = 0;
