@@ -4754,8 +4754,9 @@ BOOST_FIXTURE_TEST_CASE( buy_pin_sell_ram, eosio_system_tester ) try {
 } FC_LOG_AND_RETHROW()
 
 // WBP-2001: claimgbmprod was the one state-mutating action with no test reference. Since
-// GBM ended (2022-07-01) it is claimrewards by another name: same daily gate, same pay,
-// same last_claim_time. This pins that equivalence so a regression in either path shows.
+// GBM ended (2022-07-01) it runs the same claim path as claimrewards. Asserted here: it
+// pays, it stamps last_claim_time, and the two actions share the daily gate, the
+// active-key check and the producer's own authority.
 BOOST_FIXTURE_TEST_CASE( claimgbmprod_is_claimrewards_after_gbm, eosio_system_tester ) try {
    const asset large_asset = core_sym::from_string("80.0000");
    create_account_with_resources( "defproducera"_n, config::system_account_name, core_sym::from_string("1.0000"), false, large_asset, large_asset );
@@ -4770,8 +4771,10 @@ BOOST_FIXTURE_TEST_CASE( claimgbmprod_is_claimrewards_after_gbm, eosio_system_te
    BOOST_REQUIRE( 1 < unpaid_before );
 
    const asset before = get_balance( "defproducera"_n );
+   const uint64_t claim_time_before = microseconds_since_epoch_of_iso_string( get_producer_info( "defproducera"_n )["last_claim_time"] );
    BOOST_REQUIRE_EQUAL( success(), push_action( "defproducera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera") ) );
    BOOST_REQUIRE_LT( before, get_balance( "defproducera"_n ) );
+   BOOST_REQUIRE_LT( claim_time_before, microseconds_since_epoch_of_iso_string( get_producer_info( "defproducera"_n )["last_claim_time"] ) );
    // Reset by the claim; the block that carried the claim is the only one counted since.
    BOOST_REQUIRE_LE( get_producer_info( "defproducera"_n )["unpaid_blocks"].as<uint32_t>(), 1u );
 
@@ -4788,6 +4791,15 @@ BOOST_FIXTURE_TEST_CASE( claimgbmprod_is_claimrewards_after_gbm, eosio_system_te
    BOOST_REQUIRE_EQUAL( success(), push_action( "defproducera"_n, "unregprod"_n, mvo()("producer", "defproducera") ) );
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("producer does not have an active key"),
                         push_action( "defproducera"_n, "claimgbmprod"_n, mvo()("owner", "defproducera") ) );
+} FC_LOG_AND_RETHROW()
+
+// WBP-2001: wasmcfg had no test reference. msig only; the two named profiles apply and
+// anything else is refused.
+BOOST_FIXTURE_TEST_CASE( wasmcfg_profiles, eosio_system_tester ) try {
+   BOOST_REQUIRE_EQUAL( error("missing authority of eosio"), push_action( "alice1111111"_n, "wasmcfg"_n, mvo()("settings", "default") ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("Unkown configuration"), push_action( config::system_account_name, "wasmcfg"_n, mvo()("settings", "bogus") ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "wasmcfg"_n, mvo()("settings", "high") ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "wasmcfg"_n, mvo()("settings", "default") ) );
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
