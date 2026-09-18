@@ -45,7 +45,7 @@ namespace eosiosystem {
       // Initialize binary_extension fields with defaults if they don't have values
       // This ensures tests and deployments have consistent behavior
       if( !_gstate4.active_producer_count.has_value() ) {
-         _gstate4.active_producer_count = 21;
+         _gstate4.active_producer_count = max_active_producers;
       }
       if( !_gstate4.min_cooldown_secs.has_value() ) {
          _gstate4.min_cooldown_secs = 86400;
@@ -534,7 +534,7 @@ namespace eosiosystem {
    void system_contract::setmaxprod( uint32_t max_considered_producers ) {
       require_auth( get_self() );
 
-      check( max_considered_producers >= 21, "max_considered_producers must be at least 21" );
+      check( max_considered_producers >= max_active_producers, "max_considered_producers must be at least " + std::to_string( max_active_producers ) );
       check( max_considered_producers <= 500, "max_considered_producers cannot exceed 500" );
       _gstate6.max_considered_producers = max_considered_producers;
    }
@@ -547,7 +547,8 @@ namespace eosiosystem {
 
    void system_contract::setrngrate( uint64_t rng_rate, uint64_t max_pool_rng ) {
       require_auth( get_self() );
-      check( rng_rate >= 0 && rng_rate < 10000, "rng_rate must be between 0 and 10000");
+      // WCAP-SYS-2026-002: `rng_rate >= 0` was always true for an unsigned value.
+      check( rng_rate < uint64_t(RATE_DENOMINATOR), "rng_rate must be less than " + std::to_string( RATE_DENOMINATOR ) );
       _gstate5.rng_rate = rng_rate;
       _gstate5.max_pool_rng = max_pool_rng;
       
@@ -556,7 +557,7 @@ namespace eosiosystem {
 
    void system_contract::setprodcnt( uint32_t count ) {
       require_auth( get_self() );
-      check( count >= 1 && count <= 21, "count must be between 1 and 21" );
+      check( count >= 1 && count <= max_active_producers, "count must be between 1 and " + std::to_string( max_active_producers ) );
 
       int delta = int(count) - int(*_gstate4.active_producer_count);
       check(delta == 1 || delta == -1, "must change by exactly ±1");
