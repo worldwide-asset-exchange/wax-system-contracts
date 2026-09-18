@@ -354,8 +354,15 @@ namespace eosiosystem {
                if ( p.total_votes < 0 ) { // floating point arithmetics can give small negative numbers
                   p.total_votes = 0;
                }
+               // WCAP-SYS-2026-007: the global accumulator takes the same delta and gets the
+               // same clamp, so it can no longer carry a negative residual after every vote
+               // is withdrawn. It is a running accumulator, not a recomputed sum; nothing in
+               // the contract reads it.
                _gstate.total_producer_vote_weight += pd.second.first;
-               //check( p.total_votes >= 0, "something bad happened" );
+               if ( _gstate.total_producer_vote_weight < 0 ) {
+                  _gstate.total_producer_vote_weight = 0;
+               }
+               check( p.total_votes >= 0, "producer total_votes cannot be negative" );
             });
             auto prod2 = _producers2.find( pd.first.value );
             if( prod2 != _producers2.end() ) {
@@ -519,6 +526,9 @@ namespace eosiosystem {
                _producers.modify( prod, same_payer, [&]( auto& p ) {
                   p.total_votes += delta;
                   _gstate.total_producer_vote_weight += delta;
+                  if ( _gstate.total_producer_vote_weight < 0 ) { // WCAP-SYS-2026-007, as in update_votes
+                     _gstate.total_producer_vote_weight = 0;
+                  }
                });
                auto prod2 = _producers2.find( acnt.value );
                if ( prod2 != _producers2.end() ) {

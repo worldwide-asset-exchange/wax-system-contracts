@@ -33,5 +33,4 @@ contracts/eosio.system/include/eosio.system/native.hpp|A1|newaccount
 contracts/eosio.system/include/eosio.system/native.hpp|A1|onerror
 contracts/eosio.system/include/eosio.system/native.hpp|A1|setabi
 contracts/eosio.system/include/eosio.system/powerup.results.hpp|A1|powupresult
-contracts/eosio.system/src/voting.cpp|C4b|
 contracts/eosio.system/src/voting.cpp|C4|weighted_votes
