@@ -227,7 +227,14 @@ namespace eosiosystem {
         check(duration <= env.max_duration_of_funding, "this proposal is over the maximum duration");
         check(members.size() < 50, "members should be shorter than 50 characters.");
         check(funding_goal.is_valid(), "invalid quantity" );
+        // WCAP-SYS-2026-011: is_valid() says nothing about which symbol. claimfunds pays
+        // funding_goal from eosio.saving via eosio.token, so any other symbol (or the core
+        // code at another precision) is approvable but never claimable.
+        check(funding_goal.symbol == core_symbol(), "funding goal must be denominated in the core symbol at its precision" );
         check(funding_goal.amount > 0, "must request positive amount" );
+        // claimfunds pays funding_goal / total_iterations with truncating division and
+        // eosio.token refuses a zero transfer (WCAP-SYS-2026-015, degenerate case).
+        check(funding_goal.amount >= total_iterations, "funding goal must be at least one minimum unit per iteration" );
         check(total_iterations < 100, "total iterations must be less than 100");
 
         auto itr = _proposers.find(proposer.value);
@@ -310,7 +317,14 @@ namespace eosiosystem {
         check(duration <= env.max_duration_of_funding, "duration maximum exceeded");
         check(members.size() < 50, "members should be shorter than 50 characters.");
         check(funding_goal.is_valid(), "invalid quantity" );
+        // WCAP-SYS-2026-011: is_valid() says nothing about which symbol. claimfunds pays
+        // funding_goal from eosio.saving via eosio.token, so any other symbol (or the core
+        // code at another precision) is approvable but never claimable.
+        check(funding_goal.symbol == core_symbol(), "funding goal must be denominated in the core symbol at its precision" );
         check(funding_goal.amount > 0, "must request positive amount" );
+        // claimfunds pays funding_goal / total_iterations with truncating division and
+        // eosio.token refuses a zero transfer (WCAP-SYS-2026-015, degenerate case).
+        check(funding_goal.amount >= total_iterations, "funding goal must be at least one minimum unit per iteration" );
         check(total_iterations < 100, "total iterations must be less than 100");
 
         auto itr = _proposers.find(proposer.value);
