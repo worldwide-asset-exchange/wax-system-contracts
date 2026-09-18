@@ -1046,7 +1046,7 @@ BOOST_FIXTURE_TEST_CASE(proposal_cleanvotes, eosio_wps_tester) try {
 
     BOOST_REQUIRE_EQUAL(voter1111111["proposals"].size(), 1);
     BOOST_REQUIRE_EQUAL(voter2222222["proposals"].size(), 1);
-    BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 1);
+    BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 0);
 
     produce_blocks(1);
 
@@ -1061,7 +1061,7 @@ BOOST_FIXTURE_TEST_CASE(proposal_cleanvotes, eosio_wps_tester) try {
 
     BOOST_REQUIRE_EQUAL(voter1111111["proposals"].size(), 0);
     BOOST_REQUIRE_EQUAL(voter2222222["proposals"].size(), 1);
-    BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 1);
+    BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 0);
 
     produce_blocks(1);
 
@@ -1073,7 +1073,7 @@ BOOST_FIXTURE_TEST_CASE(proposal_cleanvotes, eosio_wps_tester) try {
 
     BOOST_REQUIRE_EQUAL(voter1111111["proposals"].size(), 0);
     BOOST_REQUIRE_EQUAL(voter2222222["proposals"].size(), 0);
-    BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 1);
+    BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 0);
 
     produce_blocks(1);
 
@@ -1085,7 +1085,7 @@ BOOST_FIXTURE_TEST_CASE(proposal_cleanvotes, eosio_wps_tester) try {
 
     BOOST_REQUIRE_EQUAL(voter1111111["proposals"].size(), 0);
     BOOST_REQUIRE_EQUAL(voter2222222["proposals"].size(), 0);
-    BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 1);
+    BOOST_REQUIRE_EQUAL(voter3333333["proposals"].size(), 0);
 
     produce_blocks(1);
 
@@ -1137,7 +1137,7 @@ BOOST_FIXTURE_TEST_CASE( wcap_016_cleanvotes_cannot_touch_a_live_proposal, eosio
    BOOST_REQUIRE_GT( one_vote, 0 );
 
    // Live proposal: refused. Before the fix this succeeded, and the re-vote below doubled the tally.
-   BOOST_REQUIRE_EQUAL( wasm_assert_msg("votes can only be cleaned for a rejected or completed proposal"),
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("votes cannot be cleaned while the proposal is taking votes"),
                         cleanvotes( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n, 0, 1 ) );
    BOOST_REQUIRE_EQUAL( success(), voteproposal( "voter1111111"_n, "voter1111111"_n, { "proposer1111"_n } ) );
    BOOST_REQUIRE_EQUAL( one_vote, get_proposal( "proposer1111"_n )["total_votes"].as_double() );
@@ -1153,9 +1153,64 @@ BOOST_FIXTURE_TEST_CASE( wcap_016_cleanvotes_cannot_touch_a_live_proposal, eosio
    BOOST_REQUIRE_EQUAL( success(), cleanvotes( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n, 0, 1 ) );
    BOOST_REQUIRE_EQUAL( 0u, get_wpsvoter( "voter1111111"_n )["proposals"].size() );
 
-   // Removed: the row is gone, nothing is left to protect, any reviewer may tidy the lists.
+   // Removed: the row is gone, nothing is left to protect, any reviewer may tidy the lists -
+   // and a range past the end of the voter table cleans what exists instead of aborting.
    BOOST_REQUIRE_EQUAL( success(), push_action( "reviewer1111"_n, "rmvreject"_n, mvo()("reviewer", "reviewer1111")("proposer", "proposer1111") ) );
-   BOOST_REQUIRE_EQUAL( success(), cleanvotes( "reviewer2222"_n, "reviewer2222"_n, "proposer1111"_n, 0, 1 ) );
+   BOOST_REQUIRE_EQUAL( success(), voteproposal( "whale1111111"_n, "whale1111111"_n, {} ) );   // a second voter row, list empty
+   BOOST_REQUIRE_EQUAL( success(), cleanvotes( "reviewer2222"_n, "reviewer2222"_n, "proposer1111"_n, 0, 50 ) );
+} FC_LOG_AND_RETHROW()
+
+// The same root cause in the other direction: entries a voter's list carries for a proposal
+// that never tallied them (pending, finished, rejected, or a same-named successor) used to
+// be subtracted on the voter's next action from whichever row carried the name by then.
+BOOST_FIXTURE_TEST_CASE( wcap_016_untallied_votes_are_never_subtracted, eosio_wps_tester ) try {
+   const name eosio = config::system_account_name;
+   for( const auto& a : { "committee111"_n, "reviewer1111"_n, "proposer1111"_n } )
+      create_account_with_resources( a, eosio, core_sym::from_string("100.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000") );
+   cross_15_percent_threshold();
+   BOOST_REQUIRE_EQUAL( success(), setwpsenv( eosio, 35, 30, 365, 3 ) );
+   regcommittee( eosio, "committee111"_n, "categoryX", false );
+   regreviewer( "committee111"_n, "committee111"_n, "reviewer1111"_n, "bob", "bob" );
+   regproposer( "proposer1111"_n, "proposer1111"_n, "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin" );
+   for( const auto& v : { "voter1111111"_n, "voter2222222"_n, "whale1111111"_n } ) {
+      create_account_with_resources( v, eosio, core_sym::from_string("10000.0000"), false, core_sym::from_string("10.0000"), core_sym::from_string("10.0000") );
+      issue_and_transfer( v, core_sym::from_string("2000000.0000"), eosio );
+   }
+   BOOST_REQUIRE_EQUAL( success(), stake( "whale1111111", core_sym::from_string("500000.0000"), core_sym::from_string("500000.0000") ) );
+   BOOST_REQUIRE_EQUAL( success(), stake( "voter1111111", core_sym::from_string("100000.0000"), core_sym::from_string("100000.0000") ) );
+   BOOST_REQUIRE_EQUAL( success(), stake( "voter2222222", core_sym::from_string("100000.0000"), core_sym::from_string("100000.0000") ) );
+   auto regprop = [&]() {
+      return regproposal( "proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                          "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 3 );
+   };
+
+   // Phantom pre-vote: voter1 votes while PENDING (nothing tallied), the proposal goes live,
+   // voter2's vote is the whole tally, and voter1's withdrawal must not subtract anything.
+   BOOST_REQUIRE_EQUAL( success(), regprop() );
+   BOOST_REQUIRE_EQUAL( success(), voteproposal( "voter1111111"_n, "voter1111111"_n, { "proposer1111"_n } ) );
+   BOOST_REQUIRE_EQUAL( 0u, get_wpsvoter( "voter1111111"_n )["proposals"].size() );   // not tallied, not stored
+   BOOST_REQUIRE_EQUAL( success(), acceptprop( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n ) );
+   BOOST_REQUIRE_EQUAL( success(), voteproposal( "voter2222222"_n, "voter2222222"_n, { "proposer1111"_n } ) );
+   const double tally = get_proposal( "proposer1111"_n )["total_votes"].as_double();
+   BOOST_REQUIRE_GT( tally, 0 );
+   BOOST_REQUIRE_EQUAL( success(), voteproposal( "voter1111111"_n, "voter1111111"_n, {} ) );
+   BOOST_REQUIRE_EQUAL( tally, get_proposal( "proposer1111"_n )["total_votes"].as_double() );
+
+   // Successor: voter2's tallied entry survives rejection and removal; the proposer registers
+   // again under the same name. While the successor is PENDING the committee's reviewer can
+   // clean the stale entry; once it is live, voter2 withdrawing or re-voting cannot bleed it.
+   BOOST_REQUIRE_EQUAL( success(), rejectprop( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n, "reason" ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( "reviewer1111"_n, "rmvreject"_n, mvo()("reviewer", "reviewer1111")("proposer", "proposer1111") ) );
+   BOOST_REQUIRE_EQUAL( success(), regprop() );
+   BOOST_REQUIRE_EQUAL( 1u, get_wpsvoter( "voter2222222"_n )["proposals"].size() );
+   BOOST_REQUIRE_EQUAL( success(), cleanvotes( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n, 0, 50 ) );
+   BOOST_REQUIRE_EQUAL( 0u, get_wpsvoter( "voter2222222"_n )["proposals"].size() );
+   BOOST_REQUIRE_EQUAL( success(), acceptprop( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n ) );
+   BOOST_REQUIRE_EQUAL( success(), voteproposal( "voter1111111"_n, "voter1111111"_n, { "proposer1111"_n } ) );
+   const double successor_tally = get_proposal( "proposer1111"_n )["total_votes"].as_double();
+   BOOST_REQUIRE_GT( successor_tally, 0 );
+   BOOST_REQUIRE_EQUAL( success(), voteproposal( "voter2222222"_n, "voter2222222"_n, {} ) );
+   BOOST_REQUIRE_EQUAL( successor_tally, get_proposal( "proposer1111"_n )["total_votes"].as_double() );
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
