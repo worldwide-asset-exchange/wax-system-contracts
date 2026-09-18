@@ -10,6 +10,11 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+- Three privileged setters compared an unsigned parameter with `>= 0`, which is always true
+  (WCAP-SYS-2026-002). `setsbratio` and `setrngrate` now enforce only their real upper
+  bounds, with messages that name the constant compared against; `setsbslot` accepts zero
+  (disables standbys, as before) and gains a ceiling of 21, the same as the active schedule.
+
 ## wax-2.10.12-3.0.0
 
 BREAKING CHANGES:

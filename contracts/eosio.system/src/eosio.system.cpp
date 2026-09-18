@@ -547,7 +547,8 @@ namespace eosiosystem {
 
    void system_contract::setrngrate( uint64_t rng_rate, uint64_t max_pool_rng ) {
       require_auth( get_self() );
-      check( rng_rate >= 0 && rng_rate < 10000, "rng_rate must be between 0 and 10000");
+      // WCAP-SYS-2026-002: `rng_rate >= 0` was always true for an unsigned value.
+      check( rng_rate < uint64_t(RATE_DENOMINATOR), "rng_rate must be less than " + std::to_string( RATE_DENOMINATOR ) );
       _gstate5.rng_rate = rng_rate;
       _gstate5.max_pool_rng = max_pool_rng;
       
@@ -556,7 +557,7 @@ namespace eosiosystem {
 
    void system_contract::setprodcnt( uint32_t count ) {
       require_auth( get_self() );
-      check( count >= 1 && count <= 21, "count must be between 1 and 21" );
+      check( count >= 1 && count <= max_active_producers, "count must be between 1 and " + std::to_string( max_active_producers ) );
 
       int delta = int(count) - int(*_gstate4.active_producer_count);
       check(delta == 1 || delta == -1, "must change by exactly ±1");

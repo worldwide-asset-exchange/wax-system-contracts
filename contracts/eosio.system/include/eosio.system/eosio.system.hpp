@@ -75,6 +75,10 @@ namespace eosiosystem {
    static constexpr int64_t  inflation_pay_factor  = 5;                // 20% of the inflation
    static constexpr int64_t  votepay_factor        = 4;                // 25% of the producer pay
    static constexpr uint32_t refund_delay_sec      = 3 * seconds_per_day;
+   static constexpr uint32_t max_active_producers  = 21;                // setprodcnt ceiling
+   // A standby is a runner-up for an active slot, so the standby list is capped at the same
+   // size as the active schedule (WCAP-SYS-2026-002). Zero is valid and disables standbys.
+   static constexpr uint32_t max_standby_slots     = max_active_producers;
 
    static constexpr uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022
    static const time_point gbm_initial_time(eosio::seconds(1561939200));     // July 1st 2019 00:00:00
@@ -1469,11 +1473,24 @@ namespace eosiosystem {
          void powerup( const name& payer, const name& receiver, uint32_t days, int64_t net_frac, int64_t cpu_frac, const asset& max_payment );
 
 
-         /** set standby ratio */
+         /**
+          * Set the pay weight of one standby slot relative to one active slot, in units of
+          * `PAY_SPLIT_SCALE` (10000 = a standby slot is paid like an active slot).
+          * @param ratio - the weight.
+          *
+          * @pre Requires the authority of the contract account itself (msig),
+          * @pre Ratio must not exceed `PAY_SPLIT_SCALE`.
+          */
          [[eosio::action]]
          void setsbratio( uint64_t ratio );
 
-         /** set standby slots */
+         /**
+          * Set the number of standby slots elected behind the active schedule.
+          * @param num_slots - the slot count; zero disables standbys.
+          *
+          * @pre Requires the authority of the contract account itself (msig),
+          * @pre Slot count must not exceed `max_standby_slots`.
+          */
          [[eosio::action]]
          void setsbslot( uint32_t num_slots );
 

@@ -41,13 +41,20 @@ namespace eosiosystem {
 
    void system_contract::setsbratio( uint64_t ratio ){
       require_auth( get_self() );
-      check(ratio >= 0 && ratio <= PAY_SPLIT_SCALE, "ratio must be between 0 and RATIO_DENOMINATOR");
+      // WCAP-SYS-2026-002: `ratio >= 0` was always true for an unsigned value, and the
+      // message named a constant the code did not compare against.
+      check( ratio <= PAY_SPLIT_SCALE, "ratio cannot exceed PAY_SPLIT_SCALE (" + std::to_string( PAY_SPLIT_SCALE ) + ")" );
       _gstate4.standby_slot_weight = ratio;
    }
 
    void system_contract::setsbslot( uint32_t num_slots ){
       require_auth( get_self() );
-      check(num_slots >= 0, "num_slots must be greater than 0");
+      // WCAP-SYS-2026-002: `num_slots >= 0` was always true while the message promised
+      // `> 0`. Zero is a valid value - it is the struct default and disables standbys (none
+      // elected, none paid; the pay split stays well-defined because apc >= 1). What the
+      // action lacked was a ceiling: until now only max_considered_producers, in another
+      // file, kept the standby list bounded.
+      check( num_slots <= max_standby_slots, "num_slots cannot exceed " + std::to_string( max_standby_slots ) );
       _gstate4.num_standby_slots = num_slots;
    }
    
