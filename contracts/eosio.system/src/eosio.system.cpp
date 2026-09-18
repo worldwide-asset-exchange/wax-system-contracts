@@ -528,6 +528,7 @@ namespace eosiosystem {
 
    void system_contract::setbpdefscore( uint32_t default_score ) {
       require_auth( get_self() );
+      check( default_score <= max_bp_score, "default_score cannot exceed " + std::to_string( max_bp_score ) );
       _gstate6.bp_default_score = default_score;
    }
 

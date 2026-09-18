@@ -10,6 +10,13 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+- BP guild scores are capped at 100,000,000 (WCAP-SYS-2026-005): `setbpdefscore` rejects a
+  larger default, and `get_bp_weight_multiplier` clamps any score read from the guilds table
+  before computing the vote multiplier. The ceiling is 38x the largest live score, so no
+  current multiplier changes. It bounds the magnitude of a bad value, not the ranking - a
+  score near the ceiling still outweighs every live score - so the control over who writes
+  the guilds table is unchanged by this. Zero remains valid.
+
 ## wax-2.10.12-3.0.0
 
 BREAKING CHANGES:

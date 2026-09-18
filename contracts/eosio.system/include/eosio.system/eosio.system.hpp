@@ -75,6 +75,15 @@ namespace eosiosystem {
    static constexpr int64_t  inflation_pay_factor  = 5;                // 20% of the inflation
    static constexpr int64_t  votepay_factor        = 4;                // 25% of the producer pay
    static constexpr uint32_t refund_delay_sec      = 3 * seconds_per_day;
+   // Ceiling on a BP guild score, whether stored as the default or read from the external
+   // guilds table (WCAP-SYS-2026-005). Taken from the live table on 2026-09-17: scores run
+   // 0 - 2,600,000 against a scaling factor of 1000, so 100,000,000 (a 100,000x multiplier)
+   // changes no live multiplier while refusing the absurd. It bounds the magnitude, not the
+   // ranking: a score near the ceiling still outweighs every live score, so who may write
+   // the table remains the real control (guilds.oig audit). Ceiling only - 0 is a legitimate
+   // live value ("unrated") - and no timelock: that is a consensus design change, roadmapped
+   // separately.
+   static constexpr uint32_t max_bp_score          = 100'000'000;
 
    static constexpr uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022
    static const time_point gbm_initial_time(eosio::seconds(1561939200));     // July 1st 2019 00:00:00
@@ -1493,11 +1502,24 @@ namespace eosiosystem {
          [[eosio::action]]
          void setguildcont( const name& contract );
 
-         /** set BP score scaling factor for weighted voting */
+         /**
+          * Set the divisor that turns a BP guild score into a vote multiplier
+          * (multiplier = score / scaling_factor; 1000 means a score of 1000 is 1.0x).
+          * @param scaling_factor - the divisor.
+          *
+          * @pre Requires the authority of the contract account itself (msig),
+          * @pre Scaling factor must be greater than zero.
+          */
          [[eosio::action]]
          void setbpscale( uint32_t scaling_factor );
 
-         /** set default BP score for unacknowledged producers */
+         /**
+          * Set the guild score applied to a producer that has no row in the guilds table.
+          * @param default_score - the score, in the same units as the guilds table.
+          *
+          * @pre Requires the authority of the contract account itself (msig),
+          * @pre Default score must not exceed `max_bp_score`; zero is allowed.
+          */
          [[eosio::action]]
          void setbpdefscore( uint32_t default_score );
 
