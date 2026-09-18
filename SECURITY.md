@@ -14,11 +14,19 @@ receive security fixes.
 
 | Version | Supported | Notes |
 |---|---|---|
-| `wax-3.3.0` (`develop`) | Yes | Deployed on mainnet as `eosio`. A reproducible build of this tag matches the on-chain code hash bit-for-bit — see [`.audit/verify-hashes.sh`](.audit/verify-hashes.sh). |
+| `wax-3.3.0` (`develop`) | Yes | Deployed on mainnet as `eosio` (`eosio.system`). A reproducible build of this tag matches the on-chain code hash bit-for-bit — see [`.audit/verify-hashes.sh`](.audit/verify-hashes.sh). |
 | `wax-3.2.x` and older | No | Superseded. Upgrade to the current tag. |
 
-Which tag is live is verifiable at any time: build the tag inside the image pinned in the
-`Makefile` and compare the SHA-256 of the WASM with `get_code_hash` for the `eosio` account.
+Which tag is live is verifiable at any time for `eosio.system`: build the tag inside the image
+pinned in the `Makefile` and compare the SHA-256 of the WASM with `get_code_hash` for the
+`eosio` account.
+
+The other three deployed contracts — `eosio.msig`, `eosio.token`, `eosio.wrap` — were deployed
+from earlier source and **do not** currently reproduce from this tag, so `verify-hashes.sh`
+reports a mismatch for them and exits non-zero until they are either traced to their deployed
+commit or redeployed from this repository (tracked as WBP-1991). A report against the deployed
+code of those three is still in scope; we will identify the source they were built from as part
+of triage.
 
 ## Reporting a vulnerability
 
@@ -42,7 +50,7 @@ a first plain email and we will arrange a channel.
 |---|---|
 | Acknowledgement of your report | within **2 business days** |
 | Triage and severity assignment | within **5 business days** |
-| Fix on a private branch, with a regression test | Critical/High: as fast as a safe fix allows · Medium: within 30 days · Low: next scheduled release |
+| Fix prepared in private, with a regression test, and published when deployed | Critical/High: as fast as a safe fix allows · Medium: within 30 days · Low: next scheduled release |
 | Status updates while a fix is in progress | at least every 14 days |
 
 Severity is assessed on impact and likelihood using the matrix in the WAX Contract Audit
@@ -70,8 +78,9 @@ We practise coordinated disclosure.
 
 ## Scope
 
-**In scope:** the contracts under `contracts/` in this repository as deployed on WAX mainnet
-under the accounts `eosio`, `eosio.msig`, `eosio.token` and `eosio.wrap`; the tests under
+**In scope:** the contracts under `contracts/` in this repository, and the code deployed on WAX
+mainnet under the accounts `eosio`, `eosio.msig`, `eosio.token` and `eosio.wrap` (see
+"Supported versions" for which of those currently reproduce from this source); the tests under
 `tests/`; the CI workflows under `.github/workflows/`; and `deploy-system-contract.bash`.
 
 **Out of scope here, but still please report it to the same address:** the WAX node software
@@ -89,7 +98,10 @@ precondition.
 
 ## Security tooling in this repository
 
-Contract-security checks run on every pull request, not once at audit time:
+Contract-security checks run on every pull request, not once at audit time. The first two
+below are wired into CI as ratchets in `.github/workflows/wcap-static.yml`: they pass on the
+known baseline and fail on anything new. The third is run by hand, quarterly and at every
+system-contract deployment.
 
 - [`.audit/rules/wcap-check.py`](.audit/rules/wcap-check.py) — type-aware checks for the
   Antelope defect classes that regex cannot decide (missing authorisation, dead unsigned
@@ -100,8 +112,7 @@ Contract-security checks run on every pull request, not once at audit time:
 - [`.audit/verify-hashes.sh`](.audit/verify-hashes.sh) — verifies that the WASM from a
   reproducible build matches the code hash live on mainnet.
 
-They are wired into CI as ratchets in `.github/workflows/wcap-static.yml`: they pass on the
-known baseline and fail on anything new. See [`.audit/README.md`](.audit/README.md).
+See [`.audit/README.md`](.audit/README.md).
 
 Findings from our own reviews are tracked privately until they are fixed and deployed, and are
 referenced in this repository by tracker ID only. Publishing an unremediated finding against the

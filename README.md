@@ -10,7 +10,9 @@ The Worldwide Asset eXchange™ (WAX) is a purpose-built blockchain and protocol
 3. [Incentives and mechanics to address voter apathy](https://wax.io/blog/staking-and-voting-on-wax-a-technical-deep-dive)
 
 Dependencies — pinned by the build image `waxteam/waxdev:v5.0.3wax02-v4.1.0` declared in the
-[`Makefile`](Makefile), which is the only supported way to build and test these contracts:
+[`Makefile`](Makefile). That image is the reference build: it is what CI uses and what
+reproduces the WASM deployed on mainnet. The host builds described further down are
+best-effort and must use the same versions:
 * [WAX blockchain v5.0.3wax01](https://github.com/worldwide-asset-exchange/wax-blockchain/tree/v5.0.3wax01) (Antelope Leap 5.0.3 fork; the image tag says `wax02`, `nodeos --version` inside it reports `v5.0.3wax01`)
 * [WAX CDT v4.1.0](https://github.com/worldwide-asset-exchange/wax-cdt/tree/v4.1.0)
 

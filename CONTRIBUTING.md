@@ -85,7 +85,7 @@ Essentially, [check out the latest develop branch](#working-on-wax-system-contra
 
 Everything builds inside the docker image pinned in the `Makefile` (`make dev-docker-start` for a shell, `make dev-docker-all` for a clean build and full test run). Two things about the build catch people out:
 
-- **A new test file is not picked up until `cmake` is re-run.** `tests/CMakeLists.txt` collects test sources with `file(GLOB ...)`, which is evaluated at configure time, not at build time. After adding a `tests/*.cpp` file, run `make build` (which re-runs `cmake`) before `make compile`, or the new suite silently does not exist.
+- **A new test file is not picked up until `cmake` is re-run.** `tests/CMakeLists.txt` collects test sources with `file(GLOB ...)`, which is evaluated at configure time, not at build time. The top-level `make compile` re-runs `cmake` for you (its `build` prerequisite does), but if you iterate with `make` directly inside `build/` — the usual thing to do in the docker shell — a new `tests/*.cpp` file silently does not exist until you re-run `cmake ..` there.
 - **The test binary loads the contract WASM from disk at run time.** `build/contracts/*/*.wasm` are separate targets from `unit_test`. After changing contract source, run a full `make compile` (all targets), not just the test target, or the tests run against the previous WASM and a fix looks as if it did nothing. Check the `.wasm` modification time is newer than the source you changed.
 
 Contract-security static checks run on every pull request (`.github/workflows/wcap-static.yml`, see [`.audit/README.md`](.audit/README.md)). They are ratchets: a PR may not add to `.audit/rules/baseline.txt`, and a PR that fixes a baselined finding should remove its line.
