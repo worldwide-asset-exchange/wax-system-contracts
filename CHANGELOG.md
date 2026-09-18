@@ -10,6 +10,11 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+- `cleanvotes` may only be run on a rejected or completed proposal (or one already removed),
+  and only by a reviewer of that proposal's committee (WCAP-SYS-2026-016). It edits voters'
+  lists without touching the proposal's tally, so on a proposal still taking votes it let a
+  re-vote count twice and left the voter unable to withdraw.
+
 ## wax-2.10.12-3.0.0
 
 BREAKING CHANGES:

@@ -531,6 +531,19 @@ namespace eosiosystem {
         auto itr = _reviewers.find(reviewer.value);
         check(itr != _reviewers.end(), "Account not found in reviewers table");
 
+        // WCAP-SYS-2026-016: this action edits voters' lists and nothing else - not the
+        // proposal's tally, not a voter's stored weight - so it may only touch a proposal
+        // that no longer takes votes. Cleaning a live proposal let a re-vote count twice,
+        // and the voter could never withdraw. If the row still exists it must be terminal
+        // and the reviewer must sit on its committee, like every other reviewer action; if
+        // it is already gone (rmvreject / rmvcompleted ran) there is nothing left to protect.
+        auto itr_proposal = _proposals.find(proposer.value);
+        if( itr_proposal != _proposals.end() ) {
+            check( itr_proposal->committee == itr->committee, "Reviewer is not part of this proposal's responsible committee" );
+            check( itr_proposal->status == PROPOSAL_STATUS::REJECTED || itr_proposal->status == PROPOSAL_STATUS::COMPLETED,
+                   "votes can only be cleaned for a rejected or completed proposal" );
+        }
+
         check(end > begin, "Invalid range");
 
         for (auto wpsvoter = std::next(_wpsvoters.begin(), begin); wpsvoter != std::next(_wpsvoters.begin(), end); wpsvoter++){
