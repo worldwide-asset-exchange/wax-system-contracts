@@ -15,18 +15,111 @@ using namespace fc;
 
 using mvo = fc::mutable_variant_object;
 
-#ifndef TESTER
-#ifdef NON_VALIDATING_TEST
-#define TESTER tester_no_disable_deferred_trx
-#else
-#define TESTER validating_tester_no_disable_deferred_trx
-#endif
-#endif
+class genesis_time_tester : public base_tester {
+   public:
+      virtual ~genesis_time_tester() {
+         if( !validating_node ) {
+            elog( "~validating_tester() called with empty validating_node; likely in the middle of failure" );
+            return;
+         }
+         try {
+            if (!skip_validate && std::uncaught_exceptions() == 0)
+               BOOST_CHECK_EQUAL( validate(), true );
+         } catch( const fc::exception& e ) {
+            wdump((e.to_detail_string()));
+         }
+      }
+      controller::config vcfg;
+
+      genesis_time_tester() {
+         auto def_conf = default_config(tempdir);
+
+         vcfg = def_conf.first;
+         config_validator(vcfg);
+         vcfg.trusted_producers = flat_set<account_name>();
+
+         def_conf.second.initial_timestamp = fc::time_point::from_iso_string("2019-06-30T00:00:00.000");
+         validating_node = create_validating_node(vcfg, def_conf.second);
+
+         init(def_conf.first, def_conf.second, call_startup_t::yes);
+         execute_setup_policy(setup_policy::full);
+      }
+
+      static void config_validator(controller::config& vcfg) {
+         FC_ASSERT( vcfg.blocks_dir.filename().generic_string() != "."
+                    && vcfg.state_dir.filename().generic_string() != ".", "invalid path names in controller::config" );
+
+         vcfg.finalizers_dir = vcfg.blocks_dir.parent_path() / std::string("v_").append( vcfg.finalizers_dir.filename().generic_string() );
+         vcfg.blocks_dir = vcfg.blocks_dir.parent_path() / std::string("v_").append( vcfg.blocks_dir.filename().generic_string() );
+         vcfg.state_dir  = vcfg.state_dir.parent_path() / std::string("v_").append( vcfg.state_dir.filename().generic_string() );
+
+         vcfg.contracts_console = false;
+      }
+
+      static unique_ptr<controller> create_validating_node(controller::config vcfg, const genesis_state& genesis) {
+         unique_ptr<controller> validating_node = std::make_unique<controller>(vcfg, make_protocol_feature_set(), genesis.compute_chain_id());
+         validating_node->add_indices();
+         validating_node->startup( [](){}, []() { return false; }, genesis );
+         return validating_node;
+      }
+
+      produce_block_result_t produce_block_ex( fc::microseconds skip_time = default_skip_time, bool no_throw = false ) override {
+         auto produce_block_result = _produce_block(skip_time, false, no_throw);
+         validate_push_block(produce_block_result.block);
+         return produce_block_result;
+      }
+
+      signed_block_ptr produce_block( fc::microseconds skip_time = default_skip_time, bool no_throw = false ) override {
+         return produce_block_ex(skip_time, no_throw).block;
+      }
+
+      signed_block_ptr produce_block_no_validation( fc::microseconds skip_time = default_skip_time ) {
+         return _produce_block(skip_time, false, false).block;
+      }
+
+      void validate_push_block(const signed_block_ptr& sb) {
+         auto [best_head, obh] = validating_node->accept_block( sb->calculate_id(), sb );
+         EOS_ASSERT(obh, unlinkable_block_exception, "block did not link ${b}", ("b", sb->calculate_id()));
+         validating_node->apply_blocks( {}, trx_meta_cache_lookup{} );
+         _check_for_vote_if_needed(*validating_node, *obh);
+      }
+
+      signed_block_ptr produce_empty_block( fc::microseconds skip_time = default_skip_time )override {
+         unapplied_transactions.add_aborted( control->abort_block() );
+         auto sb = _produce_block(skip_time, true);
+         validate_push_block(sb);
+         return sb;
+      }
+
+      signed_block_ptr finish_block()override {
+         return _finish_block();
+      }
+
+      bool validate() {
+        const block_header hbh = control->head().header();
+        const block_header vn_hbh = validating_node->head().header();
+        bool ok = control->head().id() == validating_node->head().id() &&
+               hbh.previous == vn_hbh.previous &&
+               hbh.timestamp == vn_hbh.timestamp &&
+               hbh.transaction_mroot == vn_hbh.transaction_mroot &&
+               hbh.action_mroot == vn_hbh.action_mroot &&
+               hbh.producer == vn_hbh.producer;
+
+        validating_node.reset();
+        validating_node = std::make_unique<controller>(vcfg, make_protocol_feature_set(), control->get_chain_id());
+        validating_node->add_indices();
+        validating_node->startup( [](){}, []() { return false; } );
+
+        return ok;
+      }
+
+      unique_ptr<controller>      validating_node;
+      bool                        skip_validate = false;
+};
 
 namespace eosio_system {
 
-
-class eosio_system_tester : public TESTER {
+class eosio_system_tester : public genesis_time_tester {
 public:
 
    void basic_setup() {
@@ -1328,7 +1421,7 @@ public:
       return msig_abi_ser;
    }
 
-   vector<name> active_and_vote_producers() {
+   vector<name> active_and_vote_producers(uint32_t num_producers = 21) {
       //stake more than 15% of total EOS supply to activate chain
       transfer( "eosio"_n, "alice1111111"_n, core_sym::from_string("650000000.0000"), config::system_account_name );
       BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111"_n, "alice1111111"_n, core_sym::from_string("300000000.0000"), core_sym::from_string("300000000.0000") ) );
@@ -1338,7 +1431,7 @@ public:
       {
          producer_names.reserve('z' - 'a' + 1);
          const std::string root("defproducer");
-         for ( char c = 'a'; c < 'a'+21; ++c ) {
+         for ( char c = 'a'; c < 'a'+num_producers; ++c ) {
             producer_names.emplace_back(root + std::string(1, c));
          }
          setup_producer_accounts(producer_names);
@@ -1349,7 +1442,7 @@ public:
       }
       produce_blocks( 250);
 
-      auto trace_auth = TESTER::push_action(config::system_account_name, updateauth::get_name(), config::system_account_name, mvo()
+      auto trace_auth = genesis_time_tester::push_action(config::system_account_name, updateauth::get_name(), config::system_account_name, mvo()
                                             ("account", name(config::system_account_name).to_string())
                                             ("permission", name(config::active_name).to_string())
                                             ("parent", name(config::owner_name).to_string())
@@ -1369,14 +1462,14 @@ public:
          BOOST_REQUIRE_EQUAL(success(), push_action("alice1111111"_n, "voteproducer"_n, mvo()
                                                     ("voter",  "alice1111111")
                                                     ("proxy", name(0).to_string())
-                                                    ("producers", vector<account_name>(producer_names.begin(), producer_names.begin()+21))
+                                                    ("producers", vector<account_name>(producer_names.begin(), producer_names.begin()+num_producers))
                              )
          );
       }
       produce_blocks( 250 );
 
-      auto producer_keys = control->head_block_state()->active_schedule.producers;
-      BOOST_REQUIRE_EQUAL( 21, producer_keys.size() );
+      auto producer_keys = control->active_producers().producers;
+      BOOST_REQUIRE_EQUAL( std::min(21u, num_producers), producer_keys.size() );
       BOOST_REQUIRE_EQUAL( name("defproducera"), producer_keys[0].producer_name );
 
       return producer_names;

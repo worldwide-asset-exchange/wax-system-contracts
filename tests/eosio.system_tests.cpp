@@ -852,7 +852,7 @@ BOOST_FIXTURE_TEST_CASE( producer_wtmsig, eosio_system_tester ) try {
 
    produce_block();
    produce_block( fc::minutes(2) );
-   produce_blocks(2);
+   produce_blocks(config::producer_repetitions * 2);
    BOOST_REQUIRE_EQUAL( control->active_producers().version, 1u );
    produce_block();
    BOOST_REQUIRE_EQUAL( control->pending_block_producer(), "alice1111111"_n );
@@ -910,7 +910,7 @@ BOOST_FIXTURE_TEST_CASE( producer_wtmsig, eosio_system_tester ) try {
 
    produce_block();
    produce_block( fc::minutes(2) );
-   produce_blocks(2);
+   produce_blocks(config::producer_repetitions * 2);
    BOOST_REQUIRE_EQUAL( control->active_producers().version, 2u );
    produce_block();
    BOOST_REQUIRE_EQUAL( control->pending_block_producer(), "alice1111111"_n );
@@ -3594,6 +3594,10 @@ BOOST_FIXTURE_TEST_CASE(producer_onblock_check, eosio_system_tester) try {
    BOOST_REQUIRE_EQUAL(success(), vote( "producvoterb"_n, vector<account_name>(producer_names.begin(), producer_names.begin()+21)));
    BOOST_REQUIRE_EQUAL(success(), vote( "producvoterc"_n, vector<account_name>(producer_names.begin(), producer_names.end())));
 
+   int retries = 50;
+   while (produce_block()->producer == config::system_account_name && --retries);
+   BOOST_REQUIRE(retries > 0);
+
    // give a chance for everyone to produce blocks
    {
       produce_blocks(21 * 12);
@@ -3856,7 +3860,7 @@ BOOST_FIXTURE_TEST_CASE( elect_producers /*_and_parameters*/, eosio_system_teste
    //vote for producers
    BOOST_REQUIRE_EQUAL( success(), vote( "alice1111111"_n, { "defproducer1"_n } ) );
    produce_blocks(250);
-   auto producer_keys = control->head_block_state()->active_schedule.producers;
+   auto producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL( 1, producer_keys.size() );
    BOOST_REQUIRE_EQUAL( name("defproducer1"), producer_keys[0].producer_name );
 
@@ -3872,7 +3876,7 @@ BOOST_FIXTURE_TEST_CASE( elect_producers /*_and_parameters*/, eosio_system_teste
    BOOST_REQUIRE_EQUAL( success(), vote( "bob111111111"_n, { "defproducer2"_n } ) );
    ilog(".");
    produce_blocks(250);
-   producer_keys = control->head_block_state()->active_schedule.producers;
+   producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL( 2, producer_keys.size() );
    BOOST_REQUIRE_EQUAL( name("defproducer1"), producer_keys[0].producer_name );
    BOOST_REQUIRE_EQUAL( name("defproducer2"), producer_keys[1].producer_name );
@@ -3883,7 +3887,7 @@ BOOST_FIXTURE_TEST_CASE( elect_producers /*_and_parameters*/, eosio_system_teste
    // elect 3 producers
    BOOST_REQUIRE_EQUAL( success(), vote( "bob111111111"_n, { "defproducer2"_n, "defproducer3"_n } ) );
    produce_blocks(250);
-   producer_keys = control->head_block_state()->active_schedule.producers;
+   producer_keys = control->active_producers().producers;
    BOOST_REQUIRE_EQUAL( 3, producer_keys.size() );
    BOOST_REQUIRE_EQUAL( name("defproducer1"), producer_keys[0].producer_name );
    BOOST_REQUIRE_EQUAL( name("defproducer2"), producer_keys[1].producer_name );
@@ -3895,7 +3899,7 @@ BOOST_FIXTURE_TEST_CASE( elect_producers /*_and_parameters*/, eosio_system_teste
    // try to go back to 2 producers and fail
    // BOOST_REQUIRE_EQUAL( success(), vote( "bob111111111"_n, { "defproducer3"_n } ) );
    // produce_blocks(250);
-   // producer_keys = control->head_block_state()->active_schedule.producers;
+   // producer_keys = control->active_producers().producers;
    // BOOST_REQUIRE_EQUAL( 3, producer_keys.size() );
 
    // The test below is invalid now, producer schedule is not updated if there are

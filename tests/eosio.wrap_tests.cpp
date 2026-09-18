@@ -68,7 +68,7 @@ public:
                      { get_private_key( config::system_account_name, "active" ) }
                    );
 
-      set_producers( {"prod1"_n, "prod2"_n, "prod3"_n, "prod4"_n, "prod5"_n} );
+      set_producers_legacy( {"prod1"_n, "prod2"_n, "prod3"_n, "prod4"_n, "prod5"_n} );
 
       produce_blocks();
 
@@ -76,7 +76,6 @@ public:
       abi_def abi;
       BOOST_REQUIRE_EQUAL(abi_serializer::to_abi(accnt.abi, abi), true);
       abi_ser.set_abi(abi, abi_serializer::create_yield_function(abi_serializer_max_time));
-
       while( control->pending_block_producer().to_string() == "eosio" ) {
          produce_block();
       }
@@ -164,7 +163,7 @@ BOOST_FIXTURE_TEST_CASE( wrap_exec_direct, eosio_wrap_tester ) try {
    auto trx = reqauth( "bob"_n, {permission_level{"bob"_n, config::active_name}} );
 
    transaction_trace_ptr trace;
-   control->applied_transaction.connect(
+   control->applied_transaction().connect(
    [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
       const auto& t = std::get<0>(p);
       if( t->scheduled ) { trace = t; }
@@ -216,7 +215,7 @@ BOOST_FIXTURE_TEST_CASE( wrap_with_msig, eosio_wrap_tester ) try {
    approve( "carol"_n, "first"_n, "prod4"_n );
 
    transaction_trace_ptr trace;
-   control->applied_transaction.connect(
+   control->applied_transaction().connect(
    [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
       const auto& t = std::get<0>(p);
       if( t->scheduled ) { trace = t; }
@@ -299,7 +298,7 @@ BOOST_FIXTURE_TEST_CASE( wrap_with_msig_producers_change, eosio_wrap_tester ) tr
 
    produce_block();
 
-   set_producers( {"prod1"_n, "prod2"_n, "prod3"_n, "prod4"_n, "prod5"_n, "newprod1"_n} ); // With 6 producers, the 2/3+1 threshold becomes 5
+   set_producers_legacy( {"prod1"_n, "prod2"_n, "prod3"_n, "prod4"_n, "prod5"_n, "newprod1"_n} ); // With 6 producers, the 2/3+1 threshold becomes 5
 
    while( control->active_producers().producers.size() != 6 ) {
       produce_block();
@@ -330,7 +329,7 @@ BOOST_FIXTURE_TEST_CASE( wrap_with_msig_producers_change, eosio_wrap_tester ) tr
    approve( "carol"_n, "first"_n, "prod5"_n );
 
    transaction_trace_ptr trace;
-   control->applied_transaction.connect(
+   control->applied_transaction().connect(
    [&]( std::tuple<const transaction_trace_ptr&, const packed_transaction_ptr&> p ) {
       const auto& t = std::get<0>(p);
       if( t->scheduled ) { trace = t; }
