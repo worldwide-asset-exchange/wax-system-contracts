@@ -78,7 +78,9 @@ namespace eosiosystem {
    // Ceiling on a BP guild score, whether stored as the default or read from the external
    // guilds table (WCAP-SYS-2026-005). Taken from the live table on 2026-09-17: scores run
    // 0 - 2,600,000 against a scaling factor of 1000, so 100,000,000 (a 100,000x multiplier)
-   // changes no live multiplier while refusing the absurd. Ceiling only - 0 is a legitimate
+   // changes no live multiplier while refusing the absurd. It bounds the magnitude, not the
+   // ranking: a score near the ceiling still outweighs every live score, so who may write
+   // the table remains the real control (guilds.oig audit). Ceiling only - 0 is a legitimate
    // live value ("unrated") - and no timelock: that is a consensus design change, roadmapped
    // separately.
    static constexpr uint32_t max_bp_score          = 100'000'000;
@@ -1510,7 +1512,7 @@ namespace eosiosystem {
           * @param default_score - the score, in the same units as the guilds table.
           *
           * @pre Requires the authority of the contract account itself (msig),
-          * @pre Default score must not exceed `max_bp_score` (100,000,000); zero is allowed.
+          * @pre Default score must not exceed `max_bp_score`; zero is allowed.
           */
          [[eosio::action]]
          void setbpdefscore( uint32_t default_score );
