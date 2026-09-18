@@ -10,6 +10,15 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+- `editproposal` now enforces the same 30-day minimum `duration` as `regproposal`
+  (WCAP-SYS-2026-003). Previously a PENDING proposal could be edited down to 1 day and
+  its entire funding goal claimed within 24 hours of approval. Both actions now validate
+  through one helper. Along the way: the `total_iterations` floor is 1 on both actions
+  (edit had kept the pre-2020 value of 3); `editproposal`'s maximum-duration message is
+  now "this proposal is over the maximum duration"; four length-limit messages now state
+  the limit the check actually enforces; and `setwpsenv` rejects a
+  `max_duration_of_funding` below 30.
+
 ## wax-2.10.12-3.0.0
 
 BREAKING CHANGES:
