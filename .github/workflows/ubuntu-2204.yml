@@ -37,3 +37,10 @@ jobs:
         run: |
           set -euxo pipefail
           make dev-docker-all
+
+      # WBP-2001: what can be measured without instrumentation (cdt-cpp 4.1 has none for
+      # wasm) - action references and asserted check() guards. Advisory, never gating.
+      - name: Test coverage report (advisory)
+        if: always()
+        run: |
+          python3 .audit/rules/test-coverage.py --list || true
