@@ -1175,13 +1175,14 @@ BOOST_FIXTURE_TEST_CASE(proposal_cleanvotes, eosio_wps_tester) try {
 // ---------------------------------------------------------------------------
 namespace {
    // Committee, reviewer, proposer, one proposal with the given duration and instalment
-   // count, voted through and approved. Mirrors proposal_vote_claim's setup.
-   void approve_proposal_with( eosio_wps_tester& t, uint64_t duration_days, uint32_t iterations, uint32_t max_duration_days ) {
+   // count, voted through and approved - the happy path of proposal_vote_claim's setup,
+   // which keeps its own copy because it asserts the intermediate states along the way.
+   void approve_proposal_with( eosio_wps_tester& t, uint64_t duration_days, uint32_t iterations ) {
       for( const auto& a : { "committee111"_n, "reviewer1111"_n, "proposer1111"_n } )
          t.create_account_with_resources( a, config::system_account_name, core_sym::from_string("100.0000"), false,
                                           core_sym::from_string("10.0000"), core_sym::from_string("10.0000") );
       t.cross_15_percent_threshold();
-      BOOST_REQUIRE_EQUAL( t.success(), t.setwpsenv( config::system_account_name, 35, 30, max_duration_days, 6 ) );
+      BOOST_REQUIRE_EQUAL( t.success(), t.setwpsenv( config::system_account_name, 35, 30, 36500, 6 ) );
       t.regcommittee( config::system_account_name, "committee111"_n, "categoryX", true );
       t.regreviewer( "committee111"_n, "committee111"_n, "reviewer1111"_n, "bob", "bob" );
       t.regproposer( "proposer1111"_n, "proposer1111"_n, "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin" );
@@ -1209,13 +1210,33 @@ namespace {
    }
 }
 
-BOOST_FIXTURE_TEST_CASE( wcap_010_setwpsenv_caps_funding_duration, eosio_wps_tester ) try {
-   // The ceiling is a century; 49,711 days - where the old 32-bit product wrapped - is refused.
-   BOOST_REQUIRE_EQUAL( success(), setwpsenv( config::system_account_name, 35, 30, 36500, 6 ) );
+BOOST_FIXTURE_TEST_CASE( wcap_010_setwpsenv_caps_both_durations, eosio_wps_tester ) try {
+   // The ceiling is a century; 49,711 days - where the old 32-bit product wrapped - is
+   // refused for the funding ceiling and for the voting window alike.
+   BOOST_REQUIRE_EQUAL( success(), setwpsenv( config::system_account_name, 35, 36500, 36500, 6 ) );
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("max_duration_of_funding cannot exceed 36500 days"),
                         setwpsenv( config::system_account_name, 35, 30, 36501, 6 ) );
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("max_duration_of_funding cannot exceed 36500 days"),
                         setwpsenv( config::system_account_name, 35, 30, 49711, 6 ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("duration_of_voting cannot exceed 36500 days"),
+                        setwpsenv( config::system_account_name, 35, 49711, 500, 6 ) );
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( wcap_010_proposal_duration_ceiling_is_the_contracts_own, eosio_wps_tester ) try {
+   // Even if the env singleton held a larger ceiling, a proposal cannot exceed the contract's
+   // own: the env ceiling here is at the maximum, and one day more is refused at registration.
+   for( const auto& a : { "committee111"_n, "proposer1111"_n } )
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("100.0000"), false,
+                                     core_sym::from_string("10.0000"), core_sym::from_string("10.0000") );
+   BOOST_REQUIRE_EQUAL( success(), setwpsenv( config::system_account_name, 35, 30, 36500, 6 ) );
+   regcommittee( config::system_account_name, "committee111"_n, "categoryX", true );
+   regproposer( "proposer1111"_n, "proposer1111"_n, "user", "one", "img_url", "bio", "country", "telegram", "website", "linkedin" );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("this proposal is over the maximum duration"),
+                        regproposal( "proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                                     "description", "roadmap", 36501, {"user"}, core_sym::from_string("9000.0000"), 1 ) );
+   BOOST_REQUIRE_EQUAL( success(),
+                        regproposal( "proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                                     "description", "roadmap", 36500, {"user"}, core_sym::from_string("9000.0000"), 1 ) );
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( wcap_010_claim_cadence_does_not_wrap, eosio_wps_tester ) try {
@@ -1224,7 +1245,7 @@ BOOST_FIXTURE_TEST_CASE( wcap_010_claim_cadence_does_not_wrap, eosio_wps_tester 
    // 2^32 to a date in 1983, so the whole goal was claimable at approval. (The due date
    // itself lies beyond the 32-bit block-timestamp range, so this case can only assert the
    // refusal; the control below claims a representable instalment.)
-   approve_proposal_with( *this, 36500, 1, 36500 );
+   approve_proposal_with( *this, 36500, 1 );
    produce_blocks(2);
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("Please wait until the end of this interval to claim funding"),
                         claimfunds( "proposer1111"_n, "proposer1111"_n ) );
@@ -1233,19 +1254,22 @@ BOOST_FIXTURE_TEST_CASE( wcap_010_claim_cadence_does_not_wrap, eosio_wps_tester 
 
 BOOST_FIXTURE_TEST_CASE( wcap_010_claim_cadence_control_long_duration, eosio_wps_tester ) try {
    // Control on the 64-bit path: the same century-long proposal in four instalments has its
-   // first one due after 25 years - representable, and paid exactly then.
-   approve_proposal_with( *this, 36500, 4, 36500 );
+   // first one due exactly 9,125 days after approval - representable - and pays a quarter
+   // of the goal.
+   approve_proposal_with( *this, 36500, 4 );
    produce_blocks(2);
+   const asset before = get_balance( "proposer1111"_n );
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("Please wait until the end of this interval to claim funding"),
                         claimfunds( "proposer1111"_n, "proposer1111"_n ) );
-   produce_block( fc::days(36500 / 4 - 1) );
+   produce_block( fc::days(9125) - fc::hours(1) );
    produce_blocks(1);
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("Please wait until the end of this interval to claim funding"),
                         claimfunds( "proposer1111"_n, "proposer1111"_n ) );
-   produce_block( fc::days(2) );
+   produce_block( fc::hours(1) );
    produce_blocks(1);
    BOOST_REQUIRE_EQUAL( success(), claimfunds( "proposer1111"_n, "proposer1111"_n ) );
    produce_blocks(1);
+   BOOST_REQUIRE_EQUAL( before + core_sym::from_string("2250.0000"), get_balance( "proposer1111"_n ) );
    const auto proposal = get_proposal( "proposer1111"_n );
    BOOST_REQUIRE_EQUAL( 5, proposal["status"].as<int>() );                       // APPROVED, three instalments left
    BOOST_REQUIRE_EQUAL( 2, proposal["iteration_of_funding"].as<int>() );

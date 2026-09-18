@@ -22,8 +22,10 @@ BUG FIXES:
 - `claimfunds` computes the instalment cadence in 64 bits and applies it to a 64-bit time
   point (WCAP-SYS-2026-010). Previously `duration * seconds_per_day` was narrowed into a
   `uint32` and the instalment offset was added to a 32-bit `time_point_sec`, so a permitted
-  but very long duration wrapped and made instalments claimable early. `setwpsenv` now also
-  caps `max_duration_of_funding` at 36,500 days.
+  but very long duration wrapped and made instalments claimable early. The voting-window
+  check had the same 32-bit product and is computed in 64 bits too. Both `wpsenv` durations
+  are capped at 36,500 days, and a proposal's duration is checked against that ceiling when
+  it is registered or edited and again when funds are claimed.
 
 ## wax-2.10.12-3.0.0
 
