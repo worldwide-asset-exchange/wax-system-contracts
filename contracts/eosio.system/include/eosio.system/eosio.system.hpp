@@ -90,9 +90,10 @@ namespace eosiosystem {
    // live active_producer_count, so the two setters stay order-independent. Zero is valid.
    static constexpr uint32_t max_standby_slots     = max_active_producers;
 
-   // Ceiling on wpsenv.max_duration_of_funding, in days (WCAP-SYS-2026-010): a century. Far
-   // above any real proposal, and far below where the cadence arithmetic ever wrapped.
-   static constexpr uint32_t max_wps_funding_days  = 36'500;
+   // Ceiling on both wpsenv durations (funding and voting), in days (WCAP-SYS-2026-010): a
+   // century. Far above any real proposal, and far below where the old 32-bit arithmetic
+   // wrapped. Enforced where proposals are admitted as well as where the env is written.
+   static constexpr uint32_t max_wps_duration_days = 36'500;
 
    static constexpr uint64_t useconds_in_gbm_period = 1096 * useconds_per_day;   // from July 1st 2019 to July 1st 2022
    static const time_point gbm_initial_time(eosio::seconds(1561939200));     // July 1st 2019 00:00:00
