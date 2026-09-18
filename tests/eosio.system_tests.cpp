@@ -9,6 +9,8 @@
 #include <fc/log/logger.hpp>
 #include <eosio/chain/exceptions.hpp>
 
+#include <functional>
+#include <iomanip>
 #include "eosio.system_tester.hpp"
 struct _abi_hash {
    name owner;
@@ -4760,55 +4762,69 @@ BOOST_FIXTURE_TEST_CASE( buy_pin_sell_ram, eosio_system_tester ) try {
 // producer read 0. The global is a published table field read by nothing in the contract.
 // ---------------------------------------------------------------------------
 namespace {
-   // Eight vote / withdraw-all cycles by three voters over three producers: the sequence
-   // from the audit's proof, which accumulates the residue that the clamp now absorbs.
-   template<typename Tester>
-   std::vector<account_name> vote_withdraw_cycles( Tester& t, int rounds, bool leave_votes_in_place ) {
+   const std::vector<account_name> vote_weight_producers = { "defproducera"_n, "defproducerb"_n, "defproducerc"_n };
+
+   // Vote / withdraw-all cycles by three voters over three producers - the sequence from the
+   // audit's proof, which accumulates the residue the clamp now absorbs. `after_withdrawal`
+   // runs after each withdraw-all round; with `leave_votes_in_place` the last round keeps its
+   // votes.
+   void vote_withdraw_cycles( eosio_system_tester& t, int rounds, bool leave_votes_in_place,
+                              const std::function<void(int)>& after_withdrawal = {} ) {
       t.cross_15_percent_threshold();
-      const std::vector<account_name> prods = { "defproducera"_n, "defproducerb"_n, "defproducerc"_n };
-      t.setup_producer_accounts( prods );
-      for( const auto& p : prods ) BOOST_REQUIRE_EQUAL( t.success(), t.regproducer( p ) );
+      t.setup_producer_accounts( vote_weight_producers );
+      for( const auto& p : vote_weight_producers ) BOOST_REQUIRE_EQUAL( t.success(), t.regproducer( p ) );
       const std::vector<account_name> voters = { "alice1111111"_n, "bob111111111"_n, "carol1111111"_n };
       for( const auto& v : voters ) {
          t.transfer( config::system_account_name, v, core_sym::from_string("100000.0000"), config::system_account_name );
          BOOST_REQUIRE_EQUAL( t.success(), t.stake( v, v, core_sym::from_string("30000.0000"), core_sym::from_string("30000.0000") ) );
       }
       for( int round = 0; round < rounds; ++round ) {
-         for( const auto& v : voters ) BOOST_REQUIRE_EQUAL( t.success(), t.vote( v, prods ) );
+         for( const auto& v : voters ) BOOST_REQUIRE_EQUAL( t.success(), t.vote( v, vote_weight_producers ) );
          t.produce_blocks( 3 );
          if( leave_votes_in_place && round == rounds - 1 ) break;
          for( const auto& v : voters ) BOOST_REQUIRE_EQUAL( t.success(), t.vote( v, std::vector<account_name>{} ) );
          t.produce_blocks( 3 );
+         if( after_withdrawal ) after_withdrawal( round );
       }
-      return prods;
+   }
+
+   // Sum over every producer that has been voted for in these tests, including the one
+   // cross_15_percent_threshold() registers and votes through.
+   double sum_of_producer_votes( eosio_system_tester& t ) {
+      double sum = 0;
+      std::vector<account_name> all = vote_weight_producers; all.push_back( "producer1111"_n );
+      for( const auto& p : all ) {
+         const double tv = t.get_producer_info( p )["total_votes"].as_double();
+         BOOST_REQUIRE_GE( tv, 0 );
+         sum += tv;
+      }
+      return sum;
    }
 }
 
 BOOST_FIXTURE_TEST_CASE( vote_weight_global_never_negative_after_full_withdrawal, eosio_system_tester ) try {
-   const auto prods = vote_withdraw_cycles( *this, 8, false );
-   double sum_producer_votes = 0;
-   for( const auto& p : prods ) {
-      const double tv = get_producer_info( p )["total_votes"].as_double();
-      BOOST_REQUIRE_GE( tv, 0 );
-      sum_producer_votes += tv;
-   }
+   // After every withdraw-all round the clamp must have engaged: the global reads exactly
+   // zero, like every producer. On 715ddba it read -2^56 after the eighth round.
+   vote_withdraw_cycles( *this, 8, false, [&]( int round ) {
+      const double global_weight = get_global_state()["total_producer_vote_weight"].as_double();
+      BOOST_REQUIRE_MESSAGE( global_weight == 0, "round " << round << ": total_producer_vote_weight = " << global_weight );
+   });
+   const double sum = sum_of_producer_votes( *this );
    const double global_weight = get_global_state()["total_producer_vote_weight"].as_double();
-   BOOST_TEST_MESSAGE( "sum(total_votes) = " << sum_producer_votes << "  total_producer_vote_weight = " << global_weight );
-   BOOST_REQUIRE_GE( global_weight, 0 );
-   BOOST_REQUIRE_LT( std::abs( global_weight - sum_producer_votes ), 1.0 );
+   BOOST_TEST_MESSAGE( "sum(total_votes) = " << sum << "  total_producer_vote_weight = " << global_weight );
+   BOOST_REQUIRE_EQUAL( 0, sum );
+   BOOST_REQUIRE_EQUAL( 0, global_weight );
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( vote_weight_global_unchanged_while_positive, eosio_system_tester ) try {
-   // The clamp engages only at zero. With votes left in place the published value must be
-   // bit-identical to what the unclamped accumulator produced: pinned from a run of this
-   // exact sequence on 715ddba, the audited commit, so a client predicting the field sees
-   // no change on any chain whose vote weight stays positive.
-   vote_withdraw_cycles( *this, 8, true );
+   // The clamp engages only at zero. For a sequence that never reaches it - one round of
+   // votes, left in place - the published value must be the double the unclamped
+   // accumulator produced on 715ddba, the audited commit, bit for bit.
+   vote_withdraw_cycles( *this, 1, true );
    const double global_weight = get_global_state()["total_producer_vote_weight"].as_double();
-   char buf[64]; std::snprintf( buf, sizeof(buf), "%.17g", global_weight );
-   BOOST_TEST_MESSAGE( "total_producer_vote_weight = " << buf );
+   BOOST_TEST_MESSAGE( "total_producer_vote_weight = " << std::setprecision(17) << global_weight );
    BOOST_REQUIRE_GT( global_weight, 0 );
-   BOOST_REQUIRE_EQUAL( std::string( "1.9151459753352051e+33" ), std::string( buf ) );
+   BOOST_REQUIRE_EQUAL( global_weight, 1.9151459753352051e+33 );
 } FC_LOG_AND_RETHROW()
 
 // WBP-2010 (WCAP-SYS-2026-004, -012). The msig-only action removerefund is removed: its only
