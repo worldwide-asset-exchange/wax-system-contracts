@@ -4923,4 +4923,149 @@ BOOST_FIXTURE_TEST_CASE( wasmcfg_profiles, eosio_system_tester ) try {
    BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "wasmcfg"_n, mvo()("settings", "default") ) );
 } FC_LOG_AND_RETHROW()
 
+// WCAP-SYS-2026-014 (WBP-2012). fill_buckets multiplied before dividing in two places:
+// to_producers_pay = total_block_pay * apc * PAY_SPLIT_SCALE / total_weight (uint64), which
+// wraps once a single fill covers about 4.7 days at mainnet supply, and
+// rng_amount = distribute_tokens * rng_rate / RATE_DENOMINATOR (uint64), which wraps after
+// about 30 days at the maximum permitted rate. Buckets fill only inside claims, so the gap is
+// bounded only by how long the chain goes without one - a halt. A wrapped split credited the
+// standby bucket with a wrong remainder; a wrapped rng product mis-sized the ORNG
+// deposit. Both intermediates are now 128-bit.
+//
+// The default test supply (1e13 units) cannot reach either wrap in any gap the block
+// timestamp can express, so this fixture issues a mainnet-scale supply (4.68e17 units)
+// before the system contract is deployed, then elects 21 producers.
+struct wcap_014_tester : eosio_system_tester {
+   static constexpr int64_t mainnet_scale_supply = 468'000'000'000'000'000;   // 4.68e17 units
+   static constexpr uint64_t pay_split_scale     = 10000;                      // PAY_SPLIT_SCALE
+   static constexpr uint64_t rate_denominator    = 10000;                      // RATE_DENOMINATOR
+   const name rng_contract = "orng.wax"_n;
+   const uint64_t u64_max = std::numeric_limits<uint64_t>::max();
+   std::vector<account_name> producers;
+
+   wcap_014_tester() : eosio_system_tester( setup_level::minimal ) {
+      create_currency( "eosio.token"_n, config::system_account_name, asset( 4'000'000'000'000'000'000, symbol{CORE_SYM} ) );
+      issue( asset( mainnet_scale_supply, symbol{CORE_SYM} ) );
+      deploy_contract();
+      produce_blocks();
+      open( "eosio.fees"_n, symbol{CORE_SYM} );
+
+      const std::string root("defproducer");
+      for ( char c = 'a'; c <= 'u'; ++c ) producers.emplace_back( root + std::string(1, c) );
+      // init priced RAM from the supply, so the helpers' default 1.0000 buys ~47,000x fewer bytes.
+      setup_producer_accounts( producers, core_sym::from_string("100000.0000") );
+      for ( const auto& p : producers ) BOOST_REQUIRE_EQUAL( success(), regproducer( p ) );
+
+      // One voter whose stake crosses min_activated_stake (150M) elects all 21.
+      const name voter = "producvotera"_n;
+      create_account_with_resources( voter, config::system_account_name, core_sym::from_string("100000.0000"), false,
+                                     core_sym::from_string("80.0000"), core_sym::from_string("80.0000") );
+      transfer( config::system_account_name, voter, core_sym::from_string("200000000.0000"), config::system_account_name );
+      BOOST_REQUIRE_EQUAL( success(), stake( voter, core_sym::from_string("80000000.0000"), core_sym::from_string("80000000.0000") ) );
+      BOOST_REQUIRE_EQUAL( success(), vote( voter, producers ) );
+      produce_blocks( 600 );   // the schedule takes effect and every producer has produced
+   }
+
+   struct buckets { asset bpay; asset voters; asset savings; int64_t perblock; uint64_t standby; asset supply; };
+   buckets snap() {
+      // Both tests read distribute_tokens as the supply delta, which holds only while eosio.fees is empty.
+      BOOST_REQUIRE_EQUAL( core_sym::from_string("0.0000"), get_balance( "eosio.fees"_n ) );
+      return { get_balance( "eosio.bpay"_n ), get_balance( "eosio.voters"_n ), get_balance( "eosio.saving"_n ),
+               get_global_state()["perblock_bucket"].as<int64_t>(),
+               get_global_state4()["standby_bucket"].as<uint64_t>(),
+               get_token_supply() };
+   }
+   // The split weights as the contract will read them, not as the test assumes them.
+   uint64_t active_producers()   { return get_global_state4()["active_producer_count"].as<uint32_t>(); }
+   uint64_t standby_weight()     { return get_global_state4()["standby_slot_weight"].as<uint64_t>()
+                                        * get_global_state4()["num_standby_slots"].as<uint32_t>(); }
+   action_result claim( const name& producer ) {
+      return push_action( producer, "claimrewards"_n, mvo()("owner", producer) );
+   }
+};
+
+BOOST_FIXTURE_TEST_CASE( wcap_014_pay_split_does_not_wrap_after_a_week_without_claims, wcap_014_tester ) try {
+   using u128 = unsigned __int128;
+   const uint64_t apc = active_producers();
+   BOOST_REQUIRE_EQUAL( 21u, apc );
+
+   // Phase 1: no standby slots, so the standby bucket must not move at all.
+   {
+      BOOST_REQUIRE_EQUAL( 0u, standby_weight() );
+      const auto before = snap();
+      const asset producer_before = get_balance( producers[0] );
+      produce_block( fc::days(7) );
+      BOOST_REQUIRE_EQUAL( success(), claim( producers[0] ) );
+      const auto after = snap();
+
+      const int64_t distributed = (after.supply - before.supply).get_amount();
+      const int64_t paid        = (get_balance( producers[0] ) - producer_before).get_amount();
+      const int64_t funded      = (after.bpay - before.bpay).get_amount() + paid;   // to_per_block_pay
+      // The fill is large enough that the old uint64 product wrapped.
+      BOOST_REQUIRE( u128(funded) * apc * pay_split_scale > u64_max );
+
+      BOOST_REQUIRE_EQUAL( distributed * 3 / 10, funded );
+      BOOST_REQUIRE_EQUAL( 0u, after.standby - before.standby );
+      BOOST_REQUIRE_EQUAL( funded - paid, after.perblock - before.perblock );
+   }
+
+   // Phase 2: four standby slots at half weight - the standby bucket gets exactly its share.
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", 5000) ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setsbslot"_n, mvo()("num_slots", 4) ) );
+   {
+      const uint64_t standby = standby_weight();
+      BOOST_REQUIRE_EQUAL( 20000u, standby );
+      const auto before = snap();
+      const asset producer_before = get_balance( producers[1] );
+      produce_block( fc::days(7) );
+      BOOST_REQUIRE_EQUAL( success(), claim( producers[1] ) );
+      const auto after = snap();
+
+      const int64_t  paid           = (get_balance( producers[1] ) - producer_before).get_amount();
+      const int64_t  perblock_delta = after.perblock - before.perblock;
+      const uint64_t standby_delta  = after.standby - before.standby;
+      const int64_t  funded         = (after.bpay - before.bpay).get_amount() + paid;   // to_per_block_pay
+      BOOST_REQUIRE( u128(funded) * apc * pay_split_scale > u64_max );
+      BOOST_REQUIRE( paid > 0 );
+
+      const uint64_t total_weight       = apc * pay_split_scale + standby;
+      const int64_t  expected_producers = int64_t( u128(funded) * apc * pay_split_scale / total_weight );
+      BOOST_REQUIRE_EQUAL( uint64_t(funded - expected_producers), standby_delta );
+      BOOST_REQUIRE_EQUAL( expected_producers - paid, perblock_delta );
+   }
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( wcap_014_rng_share_does_not_wrap_after_a_long_gap, wcap_014_tester ) try {
+   using u128 = unsigned __int128;
+   create_account_with_resources( rng_contract, config::system_account_name, core_sym::from_string("10000000.0000"), false,
+                                  core_sym::from_string("800.0000"), core_sym::from_string("800.0000") );   // RAM is priced from the supply
+   deploy_orng_contract( rng_contract );
+   const uint64_t rng_rate = 9999;   // the maximum setrngrate permits
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setrngrate"_n,
+                                                mvo()("rng_rate", rng_rate)("max_pool_rng", 1'000'000'000'000'000'000ull) ) );
+
+   const auto  before          = snap();
+   const asset rng_before      = get_balance( rng_contract );
+   const asset producer_before = get_balance( producers[0] );
+   produce_block( fc::days(45) );
+   BOOST_REQUIRE_EQUAL( success(), claim( producers[0] ) );
+   const auto after = snap();
+
+   const int64_t distributed = (after.supply - before.supply).get_amount();
+   // The fill is large enough that the old uint64 product wrapped.
+   BOOST_REQUIRE( u128(distributed) * rng_rate > u64_max );
+
+   const int64_t expected_deposit = int64_t( u128(distributed) * rng_rate / rate_denominator );
+   const int64_t deposit          = (get_balance( rng_contract ) - rng_before).get_amount();
+   BOOST_REQUIRE_EQUAL( expected_deposit, deposit );
+
+   // What is left after the deposit is split across the three buckets in full.
+   const int64_t paid    = (get_balance( producers[0] ) - producer_before).get_amount();
+   const int64_t funded  = (after.bpay - before.bpay).get_amount() + paid;
+   const int64_t voters  = (after.voters - before.voters).get_amount();
+   const int64_t savings = (after.savings - before.savings).get_amount();
+   BOOST_REQUIRE_EQUAL( distributed - deposit, funded + voters + savings );
+   BOOST_REQUIRE_EQUAL( (distributed - deposit) * 3 / 10, funded );
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -72,6 +72,25 @@ public:
       }
    }
 
+   // Deploys the ORNG contract to an existing `account`, approves its code hash in the system
+   // contract and grants it eosio.code on its own active permission. Shared by eosio_rng_tester
+   // and the WCAP-SYS-2026-014 fixture; fund the account before calling this, the deployed
+   // contract only accepts transfers it recognises.
+   void deploy_orng_contract( const account_name& account ) {
+      set_code( account, contracts::util::rng_wasm() );
+      set_abi( account, contracts::util::rng_abi().data() );
+      const auto wasm = contracts::util::rng_wasm();
+      const auto hash = fc::sha256::hash( reinterpret_cast<const char*>(wasm.data()), wasm.size() );
+      base_tester::push_action( config::system_account_name, "addornghash"_n, config::system_account_name, mvo()("hash", hash.str()) );
+      base_tester::push_action( config::system_account_name, updateauth::get_name(), account, mvo()
+         ("account", account.to_string())
+         ("permission", name(config::active_name).to_string())
+         ("parent", name(config::owner_name).to_string())
+         ("auth", authority( 1, { key_weight{ get_public_key( account, "active" ), 1 } },
+                                { permission_level_weight{ { account, config::eosio_code_name }, 1 } } ) ) );
+      produce_blocks( 2 );
+   }
+
    void deploy_system_v31_contract( ) {
       set_code( config::system_account_name, contracts::util::system_wasm_v3_1() );
       set_abi( config::system_account_name, contracts::util::system_abi_v3_1().data() );
