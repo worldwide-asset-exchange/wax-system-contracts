@@ -41,6 +41,9 @@ namespace eosiosystem {
 
    void system_contract::setsbratio( uint64_t ratio ){
       require_auth( get_self() );
+      // Settle the interval since the last fill under the split in force, so the new value
+      // applies from now rather than to time already served (WCAP-SYS-2026-013).
+      fill_buckets();
       // WCAP-SYS-2026-002: `ratio >= 0` was always true for an unsigned value, and the
       // message named a constant the code did not compare against.
       check( ratio <= PAY_SPLIT_SCALE, "ratio cannot exceed PAY_SPLIT_SCALE (" + std::to_string( PAY_SPLIT_SCALE ) + ")" );
@@ -49,13 +52,14 @@ namespace eosiosystem {
 
    void system_contract::setsbslot( uint32_t num_slots ){
       require_auth( get_self() );
+      fill_buckets();   // as setsbratio
       // WCAP-SYS-2026-002: `num_slots >= 0` was always true while the message promised
       // `> 0`. Zero is a valid value: it is the struct default, no standbys are elected and
       // no block pay is routed to the standby bucket (producer_pay.cpp keeps the split free
-      // of a zero divisor because apc >= 1). Rows elected before a switch to zero persist
-      // until the next non-empty election - tracked separately. What the action lacked was
-      // a ceiling: until now only max_considered_producers, in another file, kept the
-      // standby list bounded.
+      // of a zero divisor because apc >= 1). Every election reconciles the standby table, so
+      // rows elected before a switch to zero are deactivated at the next one
+      // (WCAP-SYS-2026-013). What the action lacked was a ceiling: until now only
+      // max_considered_producers, in another file, kept the standby list bounded.
       check( num_slots <= max_standby_slots, "num_slots cannot exceed " + std::to_string( max_standby_slots ) );
       _gstate4.num_standby_slots = num_slots;
    }
@@ -90,7 +94,6 @@ namespace eosiosystem {
       const auto ct = current_time_point();
 
       std::vector<eosio::name> remove_standby_producers;
-      remove_standby_producers.reserve(standby_producers.size());
       for ( auto itr = idx.begin(); itr != idx.end(); itr++ ) {
         if(itr->is_active){
             if(std::find(standby_producers.begin(), standby_producers.end(), itr->owner) == standby_producers.end()){
@@ -104,11 +107,11 @@ namespace eosiosystem {
       uint64_t total_standby_time_share_increase = 0;
       for(auto& name : remove_standby_producers){
         auto itr = _standbys.find( name.value );
-        time_point last_update = itr->last_standby_share_update;
-        uint64_t share_increase = (ct - last_update).count();
-        uint64_t new_account_share = itr->standby_share + share_increase;
-        total_standby_time_share_increase += share_increase;
         if( itr != _standbys.end() ) {
+            time_point last_update = itr->last_standby_share_update;
+            uint64_t share_increase = (ct - last_update).count();
+            uint64_t new_account_share = itr->standby_share + share_increase;
+            total_standby_time_share_increase += share_increase;
             _standbys.modify( itr, same_payer, [&](auto& row) {
                 row.is_active = false;
                 row.standby_share = new_account_share;
