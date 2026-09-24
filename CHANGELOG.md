@@ -34,6 +34,16 @@ BUG FIXES:
   score near the ceiling still outweighs every live score - so the control over who writes
   the guilds table is unchanged by this. Zero remains valid.
 
+- Three privileged setters compared an unsigned parameter with `>= 0`, which is always true
+  (WCAP-SYS-2026-002). `setsbratio` and `setrngrate` now enforce only their real upper
+  bounds, with messages that name the constant compared against; `setsbslot` accepts zero
+  (disables standbys, as before) and gains a ceiling of 21, the same as the active schedule.
+- `claimstandby` computes the payout in integers and clamps it to the standby bucket, as
+  `collect_voter_reward` already did for the voters bucket (WCAP-SYS-2026-006). Filed as a
+  missing safety net, not a demonstrated exploit: the old double arithmetic would have
+  trapped rather than over-paid. A reward that rounds to zero is now refused before the
+  bucket is touched instead of failing inside the token transfer.
+
 ## wax-2.10.12-3.0.0
 
 BREAKING CHANGES:

@@ -41,13 +41,22 @@ namespace eosiosystem {
 
    void system_contract::setsbratio( uint64_t ratio ){
       require_auth( get_self() );
-      check(ratio >= 0 && ratio <= PAY_SPLIT_SCALE, "ratio must be between 0 and RATIO_DENOMINATOR");
+      // WCAP-SYS-2026-002: `ratio >= 0` was always true for an unsigned value, and the
+      // message named a constant the code did not compare against.
+      check( ratio <= PAY_SPLIT_SCALE, "ratio cannot exceed PAY_SPLIT_SCALE (" + std::to_string( PAY_SPLIT_SCALE ) + ")" );
       _gstate4.standby_slot_weight = ratio;
    }
 
    void system_contract::setsbslot( uint32_t num_slots ){
       require_auth( get_self() );
-      check(num_slots >= 0, "num_slots must be greater than 0");
+      // WCAP-SYS-2026-002: `num_slots >= 0` was always true while the message promised
+      // `> 0`. Zero is a valid value: it is the struct default, no standbys are elected and
+      // no block pay is routed to the standby bucket (producer_pay.cpp keeps the split free
+      // of a zero divisor because apc >= 1). Rows elected before a switch to zero persist
+      // until the next non-empty election - tracked separately. What the action lacked was
+      // a ceiling: until now only max_considered_producers, in another file, kept the
+      // standby list bounded.
+      check( num_slots <= max_standby_slots, "num_slots cannot exceed " + std::to_string( max_standby_slots ) );
       _gstate4.num_standby_slots = num_slots;
    }
    
@@ -144,18 +153,22 @@ namespace eosiosystem {
     const auto ct = current_time_point();
     check( ct - itr->last_claim_time > microseconds(useconds_per_day), "already claimed rewards within past day" );
 
-    double share = itr->standby_share;
-    check(share > 0, "no standby share to claim");
+    const uint64_t share = itr->standby_share;
+    check( share > 0, "no standby share to claim" );
 
-    double total_share = _gstate4.total_standby_share;
-    double amount = 0;
-    if (total_share > 0){
-        double total_bucket = _gstate4.standby_bucket;
-        amount = total_bucket * share / total_share;
-    }
-    check(amount > 0, "no standby reward to claim");
+    // WCAP-SYS-2026-006: integer arithmetic, and the bucket defended the way
+    // collect_voter_reward defends voters_bucket. A share above the total is not reachable
+    // through this contract's own accounting, so it is treated as corruption and refused
+    // (fail closed) rather than paid out. With share <= total_share the exact integer
+    // division cannot exceed the bucket; the last check states that invariant. The old
+    // double arithmetic would have trapped on the uint64 narrowing instead.
+    const uint64_t total_share = _gstate4.total_standby_share;
+    check( share <= total_share, "standby share exceeds the total standby share" ); //should never happen
+    const uint64_t amount = static_cast<uint64_t>( (uint128_t)_gstate4.standby_bucket * share / total_share );
+    check( amount >= 1, "no standby reward to claim" );
+    check( amount <= _gstate4.standby_bucket, "standby reward exceeds the standby bucket" ); //should never happen
 
-    _gstate4.standby_bucket -= amount;
+    _gstate4.standby_bucket      -= amount;
     _gstate4.total_standby_share -= share;
 
     _standbys.modify( itr, same_payer, [&](auto& row) {
@@ -163,8 +176,7 @@ namespace eosiosystem {
         row.last_standby_share_update = ct;
         row.last_claim_time = ct;
     });
-    // amount already > 0
     token::transfer_action transfer_act{ token_account, { {bpay_account, active_permission}, {owner, active_permission} } };
-    transfer_act.send( bpay_account, owner, asset(amount, core_symbol()), "standby producer pay" );
+    transfer_act.send( bpay_account, owner, asset( static_cast<int64_t>(amount), core_symbol() ), "standby producer pay" );
    }
 }

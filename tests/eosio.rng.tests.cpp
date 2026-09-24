@@ -604,7 +604,7 @@ BOOST_FIXTURE_TEST_CASE(rng_rate_boundary_10000, eosio_rng_tester) try {
 
   // Should fail because rate must be < 10000
   BOOST_REQUIRE_EQUAL(
-      wasm_assert_msg("rng_rate must be between 0 and 10000"),
+      wasm_assert_msg("rng_rate must be less than 10000"),
       push_action( config::system_account_name, "setrngrate"_n, mvo()("rng_rate", 10000)("max_pool_rng", 1000000))
   );
 
