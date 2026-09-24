@@ -80,11 +80,14 @@ namespace eosiosystem {
       if( usecs_since_last_fill > 0 && _gstate.last_pervote_bucket_fill > time_point() ) {
          auto current_fees =  eosio::token::get_balance(token_account, fees_account, core_symbol().code() );
          auto distribute_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
+         check( distribute_tokens >= 0, "inflation to distribute must not be negative" );
          auto fees_to_use = std::min( distribute_tokens, current_fees.amount );
          auto issue_tokens = distribute_tokens - fees_to_use;
  
-         // calculate rng amount from distribute_tokens, then subtract to get tokens for producers and savings/voters split
-         auto rng_amount = distribute_tokens * _gstate5.rng_rate / RATE_DENOMINATOR;
+         // calculate rng amount from distribute_tokens, then subtract to get tokens for producers and savings/voters split.
+         // 128-bit intermediate: distribute_tokens scales with the gap since the last fill, and the
+         // product wrapped uint64 after ~30 days at the maximum rng_rate (WCAP-SYS-2026-014).
+         const uint64_t rng_amount = static_cast<uint64_t>( uint128_t(distribute_tokens) * _gstate5.rng_rate / RATE_DENOMINATOR );
 
          // Validate ORNG contract hash before calculating deposit
          uint64_t rng_deposit = 0;
@@ -106,7 +109,10 @@ namespace eosiosystem {
          auto total_block_pay = to_per_block_pay;
          uint32_t apc = *_gstate4.active_producer_count;
          auto total_weight = (apc * PAY_SPLIT_SCALE) + (_gstate4.standby_slot_weight * _gstate4.num_standby_slots);
-         auto to_producers_pay = (total_block_pay * apc * PAY_SPLIT_SCALE) / total_weight;
+         // 128-bit intermediate: total_block_pay * 21 * 10000 wrapped uint64 once a single fill covered
+         // ~4.7 days at mainnet supply, and the standby bucket was credited a wrong remainder
+         // (WCAP-SYS-2026-014). to_producers_pay <= total_block_pay because apc * PAY_SPLIT_SCALE <= total_weight.
+         const uint64_t to_producers_pay = static_cast<uint64_t>( (uint128_t(total_block_pay) * apc * PAY_SPLIT_SCALE) / total_weight );
          auto to_standby_pay   = total_block_pay - to_producers_pay;
          {
             if( issue_tokens > 0 ){

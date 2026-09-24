@@ -36,53 +36,21 @@ using namespace eosio_system;
 struct eosio_rng_tester : eosio_system_tester {
   
   abi_serializer rng_abi_ser;
-  eosio_rng_tester() { 
-    const asset net = core_sym::from_string("800.0000");
-    const asset cpu = core_sym::from_string("800.0000");
-    const std::vector<account_name> accounts = { RNG_CONTRACT,  };
-    for (const auto& v: accounts) {
-      create_account_with_resources( v, config::system_account_name, core_sym::from_string("100.0000"), false, net, cpu );
-      transfer( config::system_account_name, v, core_sym::from_string("100000000.0000"), config::system_account_name );
-      BOOST_REQUIRE_EQUAL(success(), stake(v, core_sym::from_string("30000000.0000"), core_sym::from_string("30000000.0000")) );
-    }
-
+  eosio_rng_tester() {
+    create_account_with_resources( RNG_CONTRACT, config::system_account_name, core_sym::from_string("100.0000"), false,
+                                   core_sym::from_string("800.0000"), core_sym::from_string("800.0000") );
+    transfer( config::system_account_name, RNG_CONTRACT, core_sym::from_string("100000000.0000"), config::system_account_name );
+    BOOST_REQUIRE_EQUAL(success(), stake(RNG_CONTRACT, core_sym::from_string("30000000.0000"), core_sym::from_string("30000000.0000")) );
     produce_blocks( 2 );
-
-    // fc::logger::get(DEFAULT_LOGGER).set_log_level(fc::log_level::debug);
-
-
-    set_code( RNG_CONTRACT, contracts::util::rng_wasm() );
-    set_abi( RNG_CONTRACT, contracts::util::rng_abi().data() );
-
+    deploy_orng_contract( RNG_CONTRACT );
     {
       const auto& accnt = control->db().get<account_object,by_name>( RNG_CONTRACT );
       abi_def abi;
       BOOST_REQUIRE_EQUAL(abi_serializer::to_abi(accnt.abi, abi), true);
       rng_abi_ser.set_abi(abi, abi_serializer::create_yield_function(abi_serializer_max_time));
     }
-
-    // Get the code hash of the deployed ORNG contract
-    // Compute hash from the WASM code that was deployed
-    auto wasm = contracts::util::rng_wasm();
-    auto hash_result = fc::sha256::hash(reinterpret_cast<const char*>(wasm.data()), wasm.size());
-    ilog( "ORNG contract hash: ${hash}", ("hash", hash_result.str()) );
-    // Add the correct hash to approved list
-    base_tester::push_action(config::system_account_name, "addornghash"_n, config::system_account_name, mvo()
-       ("hash", hash_result.str())
-    );
-
-     base_tester::push_action(config::system_account_name, updateauth::get_name(), RNG_CONTRACT, mvo()
-      ("account", RNG_CONTRACT.to_string())
-      ("permission", name(config::active_name).to_string())
-      ("parent", name(config::owner_name).to_string())
-      ("auth",  authority(1, {key_weight{get_public_key(RNG_CONTRACT, "active" ), 1}}, {
-            // permission_level_weight{{config::system_account_name, config::eosio_code_name}, 1},
-            permission_level_weight{{RNG_CONTRACT, config::eosio_code_name}, 1}
-        }
-      ))
-    );
   }
-  
+
   fc::variant get_global_state5() {
     vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global5"_n, "global5"_n );
     return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state5", data, abi_serializer::create_yield_function(abi_serializer_max_time) );

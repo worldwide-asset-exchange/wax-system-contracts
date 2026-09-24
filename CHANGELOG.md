@@ -76,6 +76,13 @@ BUG FIXES:
   with truncating division and `eosio.token` refuses a zero transfer, so a smaller goal
   reached the same approved-but-unclaimable state through arithmetic.
 
+- `fill_buckets` computes its two scaled products in 128 bits (WCAP-SYS-2026-014). The
+  producer/standby split `total_block_pay * active_producers * PAY_SPLIT_SCALE` wrapped
+  `uint64` once a single fill covered about 4.7 days at mainnet supply - buckets fill only
+  inside claims, so a chain halt of that length followed by the first claim credited the
+  standby bucket with a wrong remainder, and `distribute_tokens * rng_rate` wrapped
+  after about 30 days at the maximum permitted rate. No behaviour change for gaps that fit.
+
 ## wax-2.10.12-3.0.0
 
 BREAKING CHANGES:
