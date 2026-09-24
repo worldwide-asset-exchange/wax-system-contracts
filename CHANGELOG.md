@@ -83,6 +83,15 @@ BUG FIXES:
   standby bucket with a wrong remainder, and `distribute_tokens * rng_rate` wrapped
   after about 30 days at the maximum permitted rate. No behaviour change for gaps that fit.
 
+- The producer election reconciles the standby table on every run, including when the
+  elected standby set is empty (WCAP-SYS-2026-013). Previously `setsbslot(0)` left the
+  rows elected under the old setting active: they kept accruing standby share while
+  standbys were disabled, could claim it, and took the refilled bucket ahead of the newly
+  elected standbys when slots were re-enabled. A deactivated row still claims what it
+  earned while active. `setsbslot` and `setsbratio` now settle the pay buckets under the
+  split in force before changing it, so a new value applies from that point rather than
+  to the whole unfilled interval.
+
 ## wax-2.10.12-3.0.0
 
 BREAKING CHANGES:

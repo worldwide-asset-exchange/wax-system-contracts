@@ -811,4 +811,83 @@ BOOST_FIXTURE_TEST_CASE( standby_allow_disallow_round_trip, eosio_standby_tester
                         push_action( eosio, "allowsb"_n, mvo()("account", alice) ) );
 } FC_LOG_AND_RETHROW()
 
+
+// WCAP-SYS-2026-013 (WBP-2011). update_elected_producers called update_standby_producers only
+// when the newly elected standby list was non-empty. With num_standby_slots = 0 the list is
+// always empty, so rows elected under the previous setting were never deactivated: they kept
+// accruing standby_share while standbys were nominally disabled, could claim it, and took the
+// refilled bucket ahead of the newly elected standbys when slots were re-enabled. The election
+// now reconciles the table on every run, including to an empty set.
+//
+// claimstandby deliberately has no is_active check - a deactivated row may claim what it
+// earned while active - so the invariant is that share stops accruing at deactivation. The
+// setters also settle the buckets under the old split first, so the bucket the former
+// standbys claim from was funded for the time they served.
+BOOST_FIXTURE_TEST_CASE( wcap_013_setsbslot_zero_deactivates_standbys, eosio_standby_tester ) try {
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setsbratio"_n, mvo()("ratio", 5000) ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setsbslot"_n, mvo()("num_slots", 5) ) );
+   active_and_vote_producers_and_standbys();
+   produce_block( fc::hours(1) );
+
+   auto rows = get_standby_table();
+   BOOST_REQUIRE_EQUAL( 5u, rows.size() );
+   for ( const auto& r : rows ) BOOST_REQUIRE( r.is_active );
+
+   // Disable standbys. The setter settles the buckets under the old split first, so the
+   // hour just served funds the standby bucket; the next election deactivates every row.
+   const uint64_t bucket_before = get_global_state4()["standby_bucket"].as<uint64_t>();
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setsbslot"_n, mvo()("num_slots", 0) ) );
+   const uint64_t bucket = get_global_state4()["standby_bucket"].as<uint64_t>();
+   BOOST_REQUIRE( bucket > bucket_before );
+   // The election runs in the onblock of the pending block that follows the time skip, and the
+   // tester aborts a pending block on the next skip, so produce one more block to make it durable.
+   produce_block( fc::hours(1) );
+   produce_blocks( 1 );
+
+   rows = get_standby_table();
+   BOOST_REQUIRE_EQUAL( 5u, rows.size() );
+   std::map<name, uint64_t> settled;
+   const time_point deactivated_at = rows[0].last_standby_share_update;
+   for ( const auto& r : rows ) {
+      BOOST_REQUIRE_MESSAGE( !r.is_active, r.owner.to_string() + " is still active with standbys disabled" );
+      BOOST_REQUIRE( r.standby_share > 0 );
+      settled[r.owner] = r.standby_share;
+   }
+   const uint64_t total_settled = get_global_state4()["total_standby_share"].as<uint64_t>();
+   uint64_t sum = 0;
+   for ( const auto& kv : settled ) sum += kv.second;
+   BOOST_REQUIRE_EQUAL( sum, total_settled );
+
+   // A day later the former standby may claim exactly what it earned while active - no more.
+   // The claim's own fill runs with no slots, so it adds nothing to the standby bucket.
+   const name former = rows[0].owner;
+   produce_block( fc::days(1) + fc::hours(1) );
+   const asset balance_before = get_balance( former );
+   BOOST_REQUIRE_EQUAL( success(), push_action( former, "claimstandby"_n, mvo()("owner", former) ) );
+   const int64_t expected_pay = int64_t( double(bucket) * double(settled[former]) / double(total_settled) );
+   BOOST_REQUIRE_EQUAL( expected_pay, (get_balance( former ) - balance_before).get_amount() );
+   BOOST_REQUIRE_EQUAL( 0u, get_standby_producer_state( former ).standby_share );
+   BOOST_REQUIRE_EQUAL( total_settled - settled[former], get_global_state4()["total_standby_share"].as<uint64_t>() );
+
+   // Another day of being disabled earns nothing.
+   produce_block( fc::days(1) + fc::hours(1) );
+   BOOST_REQUIRE_EQUAL( 0u, get_standby_producer_state( former ).standby_share );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("no standby share to claim"),
+                        push_action( former, "claimstandby"_n, mvo()("owner", former) ) );
+
+   // Re-enable: the same rows come back active, carrying only the share settled at deactivation.
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setsbslot"_n, mvo()("num_slots", 5) ) );
+   produce_block( fc::hours(1) );
+   produce_blocks( 1 );
+   rows = get_standby_table();
+   BOOST_REQUIRE_EQUAL( 5u, rows.size() );
+   for ( const auto& r : rows ) {
+      BOOST_REQUIRE_MESSAGE( r.is_active, r.owner.to_string() + " was not re-elected" );
+      BOOST_REQUIRE_EQUAL( r.owner == former ? 0u : settled[r.owner], r.standby_share );
+      // The share clock restarts at re-activation; the disabled period is never paid.
+      BOOST_REQUIRE( r.last_standby_share_update > deactivated_at + fc::days(2) );
+   }
+   BOOST_REQUIRE_EQUAL( total_settled - settled[former], get_global_state4()["total_standby_share"].as<uint64_t>() );
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()

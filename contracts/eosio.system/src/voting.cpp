@@ -186,6 +186,12 @@ namespace eosiosystem {
          }
       }
 
+      // Reconcile the standby table on every election, before the early return and even with
+      // an empty list: with num_standby_slots = 0, or too few candidates, every previously
+      // elected standby must be deactivated, or it keeps accruing share while standbys are
+      // disabled (WCAP-SYS-2026-013).
+      update_standby_producers( standby_producers );
+
       if( top_producers.size() == 0 ) {
          return;
       }
@@ -207,9 +213,6 @@ namespace eosiosystem {
 
       if( set_proposed_producers( producers ) >= 0 ) {
          _gstate.last_producer_schedule_size = static_cast<decltype(_gstate.last_producer_schedule_size)>( top_producers.size() );
-      }
-      if (standby_producers.size() > 0) {
-         update_standby_producers( standby_producers );
       }
    }
 
