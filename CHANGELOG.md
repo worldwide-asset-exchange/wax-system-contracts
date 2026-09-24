@@ -44,6 +44,15 @@ BUG FIXES:
   trapped rather than over-paid. A reward that rounds to zero is now refused before the
   bucket is touched instead of failing inside the token transfer.
 
+- `global.total_producer_vote_weight` is clamped at zero alongside each producer's
+  `total_votes` (WCAP-SYS-2026-007). Previously the per-producer value was clamped when
+  floating-point residue drove it negative but the global accumulator was not, so after
+  every vote was withdrawn the global read a large negative number (-2^56 on a test chain).
+  The published value is unchanged until the first time the accumulator would have gone
+  negative, which a chain with continuous voting never reaches; the field remains a running
+  accumulator, not a recomputed sum. The proxy-weight path now clamps the per-producer
+  value too, and the disabled `total_votes >= 0` assertion is restored.
+
 ## wax-2.10.12-3.0.0
 
 BREAKING CHANGES:

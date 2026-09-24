@@ -180,7 +180,7 @@ namespace eosiosystem {
       int64_t              total_activated_stake = 0;
       time_point           thresh_activated_stake_time;
       uint16_t             last_producer_schedule_size = 0;
-      double               total_producer_vote_weight = 0; /// the sum of all producer votes
+      double               total_producer_vote_weight = 0; /// running accumulator of producer vote-weight deltas, clamped at zero; not recomputed from the producers table and read by nothing in the contract
       block_timestamp      last_name_close;
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
