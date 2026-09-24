@@ -990,7 +990,7 @@ namespace eosiosystem {
           * @param unstake_cpu_quantity - tokens to be unstaked from CPU bandwidth,
           *
           * @post Unstaked tokens are transferred to `from` liquid balance via a
-          *    deferred transaction with a delay of 3 days.
+          *    refund, claimable through the `refund` action after 3 days.
           * @post If called during the delay period of a previous `undelegatebw`
           *    action, pending action is canceled and timer is reset.
           * @post All producers `from` account has voted for will have their votes updated immediately.
@@ -999,12 +999,6 @@ namespace eosiosystem {
          [[eosio::action]]
          void undelegatebw( const name& from, const name& receiver,
                             const asset& unstake_net_quantity, const asset& unstake_cpu_quantity );
-
-         /**
-          * Removing the amount of tokens from account's refunds
-          */
-         [[eosio::action]]
-         void removerefund( name account, asset tokens );
 
          /**
           * Pays all awarded tokens for period since last claim
@@ -1576,7 +1570,6 @@ namespace eosiosystem {
          using activate_action = eosio::action_wrapper<"activate"_n, &system_contract::activate>;
          using logsystemfee_action = eosio::action_wrapper<"logsystemfee"_n, &system_contract::logsystemfee>;
          using delegatebw_action = eosio::action_wrapper<"delegatebw"_n, &system_contract::delegatebw>;
-         using removerefund_action = eosio::action_wrapper<"removerefund"_n, &system_contract::removerefund>;
          using claimgenesis_action = eosio::action_wrapper<"claimgenesis"_n, &system_contract::claimgenesis>;
          using undelegatebw_action = eosio::action_wrapper<"undelegatebw"_n, &system_contract::undelegatebw>;
          using buyram_action = eosio::action_wrapper<"buyram"_n, &system_contract::buyram>;

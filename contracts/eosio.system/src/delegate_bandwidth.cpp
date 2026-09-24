@@ -428,30 +428,6 @@ namespace eosiosystem {
       update_voting_power( from, stake_net_delta + stake_cpu_delta );
    }
 
-   void system_contract::removerefund( const name account, const asset tokens )
-   {
-      require_auth(_self);
-
-      const asset zero_asset( 0, core_symbol() );
-      refunds_table refunds_tbl( _self, account.value );
-      auto& req = refunds_tbl.get( account.value, "no refund found");
-      check(req.net_amount + req.cpu_amount >= tokens, "account does not have enough staked tokens");
-
-      if(req.net_amount + req.cpu_amount == tokens){
-         refunds_tbl.erase(req);
-         return;
-      }
-
-      refunds_tbl.modify( req, same_payer, [&]( auto& r ) {
-         if(req.net_amount >= tokens) {
-            r.net_amount -= tokens;
-         }else{
-            r.cpu_amount -= tokens - req.net_amount;
-            r.net_amount = zero_asset;
-         }
-      });
-   }
-
    void system_contract::update_voting_power( const name& voter, const asset& total_update )
    {
       auto voter_itr = _voters.find( voter.value );
