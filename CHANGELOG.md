@@ -4,6 +4,14 @@
 
 BREAKING CHANGES:
 
+- The msig-only `removerefund` action is removed (WBP-2010; closes WCAP-SYS-2026-004 and
+  -012). It has had no in-contract caller since GBM was removed in 2023 (`a1461f7`), no
+  ricardian clause and no test. ABI change: after `setcode`, a transaction still naming it
+  executes as a silent no-op (the dispatcher ignores an unimplemented action name), so any
+  `eosio.msig` proposal carrying it must be cancelled before deploy and, if needed,
+  re-proposed as a new reviewed action; decoding historical traces of the action needs the
+  pre-removal ABI.
+
 FEATURES:
 
 IMPROVEMENTS:

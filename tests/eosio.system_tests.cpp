@@ -4753,4 +4753,51 @@ BOOST_FIXTURE_TEST_CASE( buy_pin_sell_ram, eosio_system_tester ) try {
 
 } FC_LOG_AND_RETHROW()
 
+// WBP-2010 (WCAP-SYS-2026-004, -012). The msig-only action removerefund is removed: its only
+// caller left with GBM in 2023 and it had no ricardian clause and no test. This pins the
+// removal three ways: the deployed ABI carries no such action; the fixture's serializer
+// cannot encode it; and a transaction carrying raw removerefund bytes - what an eosio.msig
+// proposal already in flight would deliver - executes as a silent no-op: the CDT dispatcher
+// ignores an action name the contract no longer implements, so the refund row and the
+// eosio.stake pool are untouched, and the proposal is consumed without doing anything.
+BOOST_FIXTURE_TEST_CASE( wcap_004_removerefund_is_gone, eosio_system_tester ) try {
+   cross_15_percent_threshold();
+   const name eosio = config::system_account_name;
+   const name alice = "alice1111111"_n;
+
+   const auto& accnt = control->db().get<account_object,by_name>( eosio );
+   abi_def abi;
+   BOOST_REQUIRE( abi_serializer::to_abi( accnt.abi, abi ) );
+   for ( const auto& a : abi.actions ) BOOST_REQUIRE_NE( "removerefund", a.name.to_string() );
+   for ( const auto& st : abi.structs ) BOOST_REQUIRE_NE( "removerefund", st.name );
+   BOOST_REQUIRE( abi_ser.get_action_type( "removerefund"_n ).empty() );
+
+   transfer( eosio, alice, core_sym::from_string("1000.0000"), eosio );
+   BOOST_REQUIRE_EQUAL( success(), stake( alice, alice, core_sym::from_string("100.0000"), core_sym::from_string("100.0000") ) );
+   BOOST_REQUIRE_EQUAL( success(), unstake( alice, alice, core_sym::from_string("10.0000"), core_sym::from_string("5.0000") ) );
+   const fc::variant row_before = get_refund_request( alice );
+   BOOST_REQUIRE( !row_before.is_null() );
+   const asset stake_pool_before = get_balance( "eosio.stake"_n );
+
+   // The serializer path: no type for the action name, so the call cannot even be built.
+   BOOST_CHECK_THROW( push_action( eosio, "removerefund"_n, mvo()("account", alice)("tokens", core_sym::from_string("5.0000")) ),
+                      fc::exception );
+
+   // The chain path: raw bytes, as eosio.msig::exec would deliver them inline.
+   signed_transaction trx;
+   trx.actions.emplace_back( vector<permission_level>{{eosio, config::active_name}},
+                             eosio, "removerefund"_n,
+                             fc::raw::pack( std::make_pair( alice, core_sym::from_string("5.0000") ) ) );
+   set_transaction_headers( trx );
+   trx.sign( get_private_key( eosio, "active" ), control->get_chain_id() );
+   const auto trace = push_transaction( trx );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, trace->receipt->status );
+   BOOST_REQUIRE_EQUAL( 1u, trace->action_traces.size() );
+
+   BOOST_REQUIRE_EQUAL( row_before["net_amount"].as<asset>(), get_refund_request( alice )["net_amount"].as<asset>() );
+   BOOST_REQUIRE_EQUAL( row_before["cpu_amount"].as<asset>(), get_refund_request( alice )["cpu_amount"].as<asset>() );
+   BOOST_REQUIRE_EQUAL( row_before["request_time"].as_string(), get_refund_request( alice )["request_time"].as_string() );
+   BOOST_REQUIRE_EQUAL( stake_pool_before, get_balance( "eosio.stake"_n ) );
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()
