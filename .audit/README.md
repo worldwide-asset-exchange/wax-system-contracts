@@ -12,6 +12,7 @@ not once at audit time.
 | `rules/antelope.yaml` | semgrep ruleset for Antelope/C++ contract idioms. |
 | `rules/wcap-check.py` | Type-aware checks that regex cannot decide. |
 | `rules/run-sweep.sh` | Runs both engines. |
+| `rules/test-coverage.py` | Reports action-reference and guard-branch test coverage (the toolchain cannot instrument line/branch coverage). Advisory: always exits 0. |
 
 ## What is deliberately *not* here
 
