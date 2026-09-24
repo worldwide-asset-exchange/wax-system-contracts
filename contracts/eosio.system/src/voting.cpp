@@ -629,9 +629,12 @@ namespace eosiosystem {
       auto guilds = guildsoig::get_guilds( _gstate6.guilds_contract );
       auto guild_itr = guilds.find( producer.value );
 
+      // WCAP-SYS-2026-005: the table is another contract's data, so clamp rather than
+      // reject - a throw here would fail the whole election. The default needs no clamp:
+      // setbpdefscore enforces the same ceiling at write time and the live value is 1000.
       uint32_t score = _gstate6.bp_default_score;
       if( guild_itr != guilds.end() ) {
-         score = guild_itr->score;
+         score = std::min( guild_itr->score, max_bp_score );
       }
 
       return static_cast<double>(score) / static_cast<double>(_gstate6.bp_score_scaling_factor);
