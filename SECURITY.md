@@ -14,19 +14,20 @@ receive security fixes.
 
 | Version | Supported | Notes |
 |---|---|---|
-| `wax-3.3.0` (`develop`) | Yes | Deployed on mainnet as `eosio` (`eosio.system`). A reproducible build of this tag matches the on-chain code hash bit-for-bit — see [`.audit/verify-hashes.sh`](.audit/verify-hashes.sh). |
-| `wax-3.2.x` and older | No | Superseded. Upgrade to the current tag. |
+| `develop` @ `e7739ed` (release tag to follow) | Yes | The 2026-09 review's remediations, merged; the next `eosio` deployment. |
+| `wax-3.3.0` (`715ddba`) | Yes, until the above is deployed | Deployed on mainnet as `eosio` (`eosio.system`) since 2026-02-17. A reproducible build of this tag matches the on-chain code hash bit-for-bit — see [`.audit/verify-hashes.sh`](.audit/verify-hashes.sh). |
+| `wax-3.2.x` and older | No | Superseded. |
 
 Which tag is live is verifiable at any time for `eosio.system`: build the tag inside the image
 pinned in the `Makefile` and compare the SHA-256 of the WASM with `get_code_hash` for the
 `eosio` account.
 
 The other three deployed contracts — `eosio.msig`, `eosio.token`, `eosio.wrap` — were deployed
-from earlier source and **do not** currently reproduce from this tag, so `verify-hashes.sh`
-reports a mismatch for them and exits non-zero until they are either traced to their deployed
-commit or redeployed from this repository (tracked as WBP-1991). A report against the deployed
-code of those three is still in scope; we will identify the source they were built from as part
-of triage.
+from earlier tags of this repository, so `verify-hashes.sh` reports a mismatch for them
+against the current source. Which tag and toolchain each one reproduces from is recorded in
+the provenance table in [`.audit/README.md`](.audit/README.md) (`eosio.token` and
+`eosio.wrap`: tag `wax-1.7.0-2.0.0`, bit for bit). A report against the deployed code of
+those three is in scope.
 
 ## Reporting a vulnerability
 
