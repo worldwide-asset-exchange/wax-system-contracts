@@ -20,6 +20,15 @@ IMPROVEMENTS:
   the `guilds.oig` contract at `718903f`, run against its checked-in, sha256-pinned wasm/abi
   in `tests/test_contracts/guilds/`. Tests only; no contract change.
 
+- The three remaining WPS reg/edit pairs (`regproposer`/`editproposer`, `regreviewer`/
+  `editreviewer`, `regcommittee`/`edcommittee`) validate their inputs through one shared
+  helper each instead of two inline copies (WBP-1998; the WCAP-SYS-2026-003 shape). No
+  bound changed. Four messages did: the bio limit no longer says "description", the
+  linkedin limit no longer says "linked URL", the empty-image-URL message says what is
+  checked ("image URL should be more than 0 characters long", not "not a valid image
+  URL"), and `edcommittee` and `rmvreviewer` use their pair's wording for a missing
+  account ("committeeman account doesn't exist", "The reviewer account does not exist").
+
 BUG FIXES:
 
 - `editproposal` now enforces the same 30-day minimum `duration` as `regproposal`

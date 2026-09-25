@@ -30,7 +30,7 @@ namespace eosiosystem {
         //verify that the inputs are not too short
         check(first_name.size() > 0, "first name should be more than 0 characters long");
         check(last_name.size() > 0, "last name should be more than 0 characters long");
-        check(img_url.size() > 0, "not a valid image URL");
+        check(img_url.size() > 0, "image URL should be more than 0 characters long");
         check(bio.size() > 0, "bio should be more than 0 characters long");
         check(country.size() > 0, "country name should be more than 0 characters long");
 
@@ -412,8 +412,8 @@ namespace eosiosystem {
         // needs authority of the committee account
         require_auth(committee);
 
-        //verify that the account exists
-        check(is_account(reviewer), "The account does not exist");
+        //verify that the account exists (same wording as validate_reviewer_fields)
+        check(is_account(reviewer), "The reviewer account does not exist");
 
         auto committee_itr = _committees.find(committee.value);
         // verify that the committee is on committee table
@@ -593,7 +593,9 @@ namespace eosiosystem {
     }
 
     // Shared by regcommittee and edcommittee (WBP-1998). The two copies had already drifted
-    // on the account-exists message; this is the one wording now.
+    // on the account-exists message; regcommittee's wording is the pair's wording now.
+    // (validate_proposal_fields says "committee account doesn't exist" about a proposal's
+    // committee parameter - a different input, deliberately left as it is.)
     void system_contract::validate_committee_fields( const name& committeeman, const string& category ) const {
         //verify that the committee account exists
         check(is_account(committeeman), "committeeman account doesn't exist");
