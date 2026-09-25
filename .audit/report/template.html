@@ -1,0 +1,59 @@
+<!doctype html><html><head><meta charset="utf-8"><title>{{ audit.title }}</title><style>{{ font_css|safe }}
+{{ theme_css|safe }}</style></head>
+<body>
+<div class="cover">
+  <div>
+    <div class="meta">SMART CONTRACT SECURITY ASSESSMENT</div>
+    <h1>{{ audit.title }}</h1>
+    <div class="meta">Prepared for {{ audit.client }} · {{ audit.date }} · Protocol WCAP v1</div>
+  </div>
+  <div class="logo">{% if logo_svg %}{{ logo_svg|safe }}{% else %}<img alt="WAX" src="data:image/png;base64,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">{% endif %}</div>
+</div>
+<div class="gradient-rule"></div>
+
+<h2>Scope</h2>
+<table><tr><th>Repository</th><th>Commit / tag</th><th>Build image</th></tr>
+<tr><td class="mono">{{ audit.scope.repo }}</td><td class="mono">{{ audit.scope.commit }} / {{ audit.scope.tag }}</td><td class="mono">{{ audit.scope.build_image }}</td></tr></table>
+
+<div class="callout"><strong>Provenance.</strong> {{ audit.provenance }}</div>
+
+<h2>Findings by severity</h2>
+<div class="tiles">{% for s in ['critical','high','medium','low','info'] %}<div class="tile"><div class="n">{{ counts[s] }}</div><div class="l">{{ s }}</div></div>{% endfor %}</div>
+
+<h2>Assessment scores</h2>
+<table><tr><th>Dimension</th><th>Score</th><th>Weight</th></tr>
+{% for s in audit.scores %}<tr><td>{{ s.dimension }}</td><td>{{ s.score }} / 10</td><td>{{ s.weight }}%</td></tr>{% endfor %}
+<tr><td><strong>Overall (weighted)</strong></td><td><strong>{{ overall }} / 10</strong></td><td></td></tr></table>
+
+<h2>Findings</h2>
+<p class="meta">{{ findings|length }} security findings{% if by_status %} · {{ by_status.get('fixed', 0) }} fixed, {{ by_status.get('open', 0) }} open{% endif %}; informational items follow in their own section.</p>
+<table><tr><th>ID</th><th>Title</th><th>Severity</th><th>Class</th><th>Status</th></tr>
+{% for f in findings %}<tr><td class="mono">{{ f.id }}</td><td>{{ f.title }}</td><td><span class="badge sev-{{ f.severity }}">{{ f.severity }}</span></td><td>{{ f['class'] }}</td><td>{{ f.status }}</td></tr>{% endfor %}</table>
+
+{% macro finding(f) %}
+<div class="finding">
+  <div class="hd"><h3>{{ f.id }} — {{ f.title }}</h3><span class="badge sev-{{ f.severity }}">{{ f.severity }}</span></div>
+  <div class="meta">Class {{ f['class'] }}{% if f.invariant %} · invariant {{ f.invariant }}{% endif %} · impact {{ f.impact }} × likelihood {{ f.likelihood }} · status <strong>{{ f.status }}</strong>{% if f.asset %} · asset: {{ f.asset }}{% endif %}</div>
+  <div class="meta">{% for l in f.location %}<code>{{ l.file }}{% if l.get('lines') %}:{{ l.lines[0] }}{% if l.lines|length > 1 %}–{{ l.lines[-1] }}{% endif %}{% endif %}</code>{% if not loop.last %} · {% endif %}{% endfor %}</div>
+  <p class="prose"><strong>Description.</strong> {{ f.description }}</p>
+  {% if f.attack_scenario %}<p class="prose"><strong>Scenario.</strong> {{ f.attack_scenario }}</p>{% endif %}
+  {% if f.proof %}<p class="prose"><strong>Proof</strong> ({{ f.proof.type }}). {{ f.proof.ref }}</p>{% endif %}
+  <p class="prose"><strong>Recommendation.</strong> {{ f.recommendation }}</p>
+  {% if f.remediation %}<p class="prose"><strong>Remediation.</strong> {% if f.remediation.ticket %}{{ f.remediation.ticket }}{% endif %}{% if f.remediation.pr %} · {{ f.remediation.pr }}{% endif %}{% if f.remediation.regression_test %} · test: <code>{{ f.remediation.regression_test }}</code>{% endif %}{% if f.remediation.verified_by %} · verified by {{ f.remediation.verified_by }} {{ f.remediation.verified_at or '' }}{% endif %}</p>{% endif %}
+  {% if f.remediation_notes %}<p class="prose small">{{ f.remediation_notes }}</p>{% endif %}
+  {% if f.notes %}<p class="prose small">{{ f.notes }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% for f in findings %}{{ finding(f) }}{% endfor %}
+
+{% if informational %}
+<h2>Informational</h2>
+<p class="meta">Observations with no security impact on their own, kept separate from the findings above.</p>
+{% for f in informational %}{{ finding(f) }}{% endfor %}
+{% endif %}
+
+<h2>Provenance and disclaimer</h2>
+<p class="prose">{{ audit.provenance }}</p>
+<p class="prose small">This report describes the state of the listed repository at the listed commit on the listed dates. It is a time-boxed review and does not claim to identify every vulnerability; the absence of a finding is not a statement that none exists. It was prepared by WAX engineering about WAX's own code and is not an independent third-party attestation; it is not investment, legal or listing advice.</p>
+</body></html>
