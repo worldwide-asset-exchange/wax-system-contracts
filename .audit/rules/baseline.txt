@@ -38,13 +38,9 @@ contracts/eosio.system/src/voting.cpp|C4|weighted_votes
 # WBP-1998: the validation/message class, added 2026-09-25. At the audit base (715ddba)
 # these checks reported 19 hits; the remediation PRs cleared 13 and the WPS validate_*
 # helpers (WBP-1998 part 2) cleared the three duplicated reg/edit pairs; setramrate's
-# bytes_per_block became WCAP-SYS-2026-017 (WBP-2022) and is bounded. What remains:
-# setrngrate.max_pool_rng - dismissed under WBP-2023: it is a cap whose absence means
-# "uncapped". Its only reader (producer_pay.cpp, fill_buckets) takes remaining = 0 when
-# the treasury balance already meets the cap and max_pool_rng - balance otherwise (the
-# ternary guards the subtraction), then deposits min(rng_amount, remaining); rng_amount
-# is already bounded by rng_rate, so any value is safe (0 disables deposits, as the
-# header documents); and powerup.max_payment, whose sign is bounded indirectly by the
+# bytes_per_block was accepted as a finding under WBP-2022 and is bounded. What remains:
+# setrngrate.max_pool_rng, dismissed under WBP-2023 (any value is safe; reasoning on the
+# ticket), and powerup.max_payment, whose sign is bounded indirectly by the
 # fee >= min_powerup_fee check.
 contracts/eosio.system/src/eosio.system.cpp|C6-setter|setrngrate/max_pool_rng
 contracts/eosio.system/src/powerup.cpp|C3|powerup/max_payment

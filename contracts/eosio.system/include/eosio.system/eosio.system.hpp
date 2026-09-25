@@ -85,17 +85,18 @@ namespace eosiosystem {
    // separately.
    static constexpr uint32_t max_bp_score          = 100'000'000;
    static constexpr uint32_t max_active_producers  = 21;                // largest active schedule setprodcnt allows
-   // Ceiling on the RAM growth rate setramrate stores (WCAP-SYS-2026-017). 8,192 bytes per block is
-   // about 1.4 GB per day: eight times the 1,024 EOS mainnet ran for years, under half a percent of
-   // today's 314 GB pool per day, and far below the 65,535 the type allows (11 GB per day). Any
-   // rate a units mistake produces - kilobytes for bytes, per day for per block - is refused; any
-   // growth policy WAX has ever run fits. Zero is the live value and stays legal. Accrued supply
-   // cannot be removed (setram refuses a decrease), which is why the setter, not the reader, bounds it.
-   static constexpr uint16_t max_new_ram_per_block = 8192;
    // A standby is a runner-up for an active slot, so the standby list gets the same ceiling
    // as the active schedule can ever have (WCAP-SYS-2026-002). It is a constant, not the
    // live active_producer_count, so the two setters stay order-independent. Zero is valid.
    static constexpr uint32_t max_standby_slots     = max_active_producers;
+
+   // Ceiling on the RAM growth rate setramrate stores (WCAP-SYS-2026-017). 8,192 bytes per block is
+   // about 1.4 GB per day: eight times the 1,024 EOS mainnet ran for years, and far below the 65,535
+   // the type allows (11 GB per day - 3.6% of the 315 GB pool WAX had when this was set, in 2026).
+   // Any rate a units mistake produces - kilobytes for bytes, per day for per block - is refused;
+   // any growth policy WAX has run fits. Zero disables growth and stays legal. Accrued supply cannot
+   // be removed (setram refuses a decrease), which is why the setter, not the reader, bounds it.
+   static constexpr uint16_t max_new_ram_per_block = 8192;
 
    // Ceiling on both wpsenv durations (funding and voting), in days (WCAP-SYS-2026-010): a
    // century. Far above any real proposal, and far below where the old 32-bit arithmetic
