@@ -2,16 +2,16 @@
 id: WCAP-SYS-2026-09
 title: WAX System Contracts — Security Assessment
 client: Worldwide Asset eXchange (WAX)
-date: 2026-09-XX
+date: 2026-09-26
 scope:
   repo: worldwide-asset-exchange/wax-system-contracts
-  commit: 715ddba
-  tag: wax-3.3.0 (remediated in wax-3.3.1)
+  commit: 715ddba (audited) → d12f261 deployed
+  tag: wax-3.3.0 audited; wax-3.3.2 deployed 2026-09-25
   build_image: waxteam/waxdev:v5.0.3wax02-v4.1.0
-scores:
-  - {dimension: Security, score: 8.5, weight: 35}
-  - {dimension: Supply chain & reproducibility, score: 9.5, weight: 15}
-  - {dimension: Governance & upgrade safety, score: 7.0, weight: 15}
-  - {dimension: Test coverage, score: 7.0, weight: 15}
-  - {dimension: Code quality, score: 7.0, weight: 10}
-  - {dimension: Documentation, score: 6.0, weight: 10}
+scores:                       # Scorecard v6 (2026-09-26); keep in step with the Confluence scorecard
+  - {dimension: Security, score: 8.8, weight: 35}
+  - {dimension: Supply chain & reproducibility, score: 9.8, weight: 15}
+  - {dimension: Governance & upgrade safety, score: 7.8, weight: 15}
+  - {dimension: Test coverage, score: 7.5, weight: 15}
+  - {dimension: Code quality, score: 8.0, weight: 10}
+  - {dimension: Documentation, score: 7.5, weight: 10}
