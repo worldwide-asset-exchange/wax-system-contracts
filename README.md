@@ -9,9 +9,14 @@ The Worldwide Asset eXchange™ (WAX) is a purpose-built blockchain and protocol
 2. [Earning staking rewards](https://wax.io/blog/earn-more-wax-introducing-wax-block-rewards-staking-and-voting-guilds-and-more)
 3. [Incentives and mechanics to address voter apathy](https://wax.io/blog/staking-and-voting-on-wax-a-technical-deep-dive)
 
-Dependencies:
-* [WAX v3.1.3wax02](https://github.com/worldwide-asset-exchange/wax-blockchain/tree/v3.1.3wax02)
-* [WAX CDT v3.0.1](https://github.com/worldwide-asset-exchange/cdt/tree/v3.0.1)
+Dependencies — pinned by the build image `waxteam/waxdev:v5.0.3wax02-v4.1.0` declared in the
+[`Makefile`](Makefile). That image is the reference build: it is what CI uses and what
+reproduces the WASM deployed on mainnet. The host builds described further down are
+best-effort and must use the same versions:
+* [WAX blockchain v5.0.3wax01](https://github.com/worldwide-asset-exchange/wax-blockchain/tree/v5.0.3wax01) (Antelope Leap 5.0.3 fork; the image tag says `wax02`, `nodeos --version` inside it reports `v5.0.3wax01`)
+* [WAX CDT v4.1.0](https://github.com/worldwide-asset-exchange/wax-cdt/tree/v4.1.0)
+
+If the image tag in the `Makefile` changes, change this list in the same pull request.
 
 ### Installation Instructions
 To build the contracts and the unit tests:
@@ -33,11 +38,11 @@ The build guide below will assume you are running Ubuntu 20.04. However, as ment
 
 ### Build or install CDT dependency
 
-The CDT dependency is required. This release of the system contracts requires at least version 3.0 of CDT.
+The CDT dependency is required. This release of the system contracts requires CDT 4.1 (the version in the pinned build image).
 
-The easiest way to satisfy this dependency is to install CDT on your system through a package. Find the release of a compatible version of CDT from its [releases page](https://github.com/worldwide-asset-exchange/cd/releases), download the package file appropriate for your OS from the attached assets, and install the package.
+The easiest way to satisfy this dependency is to install CDT on your system through a package. Find the release of a compatible version of CDT from its [releases page](https://github.com/worldwide-asset-exchange/wax-cdt/releases), download the package file appropriate for your OS from the attached assets, and install the package.
 
-Alternatively, you can build CDT from source. Please refer to the guide in the [CDT README](https://github.com/worldwide-asset-exchange/cd#building-from-source) for instructions on how to do this. If you choose to go with building CDT from source, please keep the path to the build directory in the shell environment variable `CDT_BUILD_PATH` for later use when building the system contracts.
+Alternatively, you can build CDT from source. Please refer to the guide in the [CDT README](https://github.com/worldwide-asset-exchange/wax-cdt#building-from-source) for instructions on how to do this. If you choose to go with building CDT from source, please keep the path to the build directory in the shell environment variable `CDT_BUILD_PATH` for later use when building the system contracts.
 
 ### Optionally build Leap dependency
 
