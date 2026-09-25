@@ -41,8 +41,9 @@ Email **security@wax.io** instead. Please include:
   local chain; and
 - whether you have shared it with anyone else.
 
-We do not currently publish a PGP key. If you need to send sensitive detail encrypted, say so in
-a first plain email and we will arrange a channel.
+We do not publish a PGP key and do not offer an encrypted channel; reports are received by
+plain email. Keep the first message to what is needed to triage (location, impact, how to
+reproduce) and we will take the rest from there.
 
 ## What to expect
 
