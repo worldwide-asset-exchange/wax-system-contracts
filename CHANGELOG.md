@@ -1,6 +1,19 @@
 # Changelog
 
-## Pending (wax-2.1.12-X.Y.Z)
+## Pending
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
+
+BUG FIXES:
+
+## wax-3.3.1
+
+Security review performed internally using Claude (Anthropic) — Opus 5 for audit phases 0–5,
+Fable 5.1 for remediation and reporting. Every entry below names its WCAP finding or ticket.
 
 BREAKING CHANGES:
 
