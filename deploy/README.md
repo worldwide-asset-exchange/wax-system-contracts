@@ -47,6 +47,11 @@ approving; its sha256 is in the runbook.
 Before proposing, cancel any older proposal for `eosio` that names an action the new ABI removes:
 after `setcode`, an unimplemented action name executes as a silent no-op.
 
+Every `plan` run produces a fresh transaction set (new expiration and reference block), so the
+runbook, the `.trx.json` files and the packed hex belong together: use the output of one run, and
+re-run `plan` rather than editing any of them. The runbook also checks that the proposer has the RAM
+the proposal bills and the NET the propose transaction uses, and says what to do if not.
+
 ## Environment
 
 | variable | default | |
