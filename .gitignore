@@ -51,4 +51,3 @@ cmake-build-debug/
 /.audit/report/out/
 /.audit/report/*.json
 /.audit/report/*.pdf
-__pycache__/
