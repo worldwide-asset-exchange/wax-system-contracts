@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# WCAP v1 — invariant I7 forensics (class E4). Companion to verify-hashes.sh.
+#
+# verify-hashes.sh answers "does the CURRENT source reproduce what is deployed?". This
+# script answers the follow-up when it does not: "which tag, built with which toolchain,
+# does?". It builds one git ref of this repository inside one toolchain image and compares
+# every contract WASM it produces against the code hash live on mainnet.
+#
+# Usage:
+#   .audit/reproduce-deployed.sh <git-ref> <docker-image> [extra cmake args...]
+#
+# Examples (the in-repo rows of the 2026-09 provenance table in README.md):
+#   .audit/reproduce-deployed.sh wax-3.3.0 waxteam/waxdev:v5.0.3wax02-v4.1.0       # eosio
+#   .audit/reproduce-deployed.sh wax-1.7.0-2.0.0 waxteam/dev:wax-1.6.1-1.2.1     # token, wrap
+# Older waxteam/dev images keep CDT under /tmp/cdt/build; pass its cmake dir explicitly:
+#   .audit/reproduce-deployed.sh wax-3.1.0-wax1-3.0.1 waxteam/dev:v3.1.0-wax1-v3.0.1 \
+#       -Dcdt_DIR=/tmp/cdt/build/lib/cmake/cdt
+# Extra cmake args are re-split on whitespace inside the container: one token each, no
+# spaces or shell globs inside a value. The eosio.msig row is built from another repository
+# with a packaged toolchain; its recipe is in README.md, not here.
+#
+# The build runs with --rm and no --name, so it never collides with the Makefile's
+# development container, and it is capped so it cannot take a shared host down: set
+# WCAP_DOCKER_OPTS to override the default "--cpus 6" (e.g. add --cgroup-parent=...), and
+# WCAP_JOBS for make's -j (default 6). The container runs as the calling user, so the scratch
+# tree it leaves behind is yours to delete. The ref is exported with `git archive` into a
+# scratch directory (WCAP_SCRATCH, default a mktemp dir); the working tree is never touched.
+# Tests are not built. Needs docker, git, curl and jq on the host. Exits 0 when at least
+# one account matches (a ref normally explains one or two of the four), 1 when none does,
+# 2 when mainnet could not be queried.
+set -euo pipefail
+
+REF="${1:?git ref (tag or commit)}"
+IMAGE="${2:?toolchain image}"
+shift 2
+EXTRA_CMAKE="$*"
+API="${WAX_API:-https://wax.greymass.com}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRATCH="${WCAP_SCRATCH:-$(mktemp -d)}"
+SCRATCH="$(cd "$SCRATCH" && pwd)"                     # docker needs an absolute mount source
+WORK="$SCRATCH/reproduce-${REF//\//_}"
+DOCKER_OPTS="${WCAP_DOCKER_OPTS:---cpus 6}"
+JOBS="${WCAP_JOBS:-6}"
+
+declare -A DEPLOYED=(
+  [eosio]=eosio.system
+  [eosio.msig]=eosio.msig
+  [eosio.token]=eosio.token
+  [eosio.wrap]=eosio.wrap
+)
+
+rm -rf "$WORK" && mkdir -p "$WORK"
+git -C "$ROOT" archive "$REF" | tar -x -C "$WORK"
+echo "ref $REF ($(git -C "$ROOT" rev-parse --short "$REF^{commit}")) -> $WORK"
+echo "image $IMAGE"
+
+docker image inspect "$IMAGE" >/dev/null 2>&1 || docker pull -q "$IMAGE" >/dev/null
+# shellcheck disable=SC2086
+docker run --rm $DOCKER_OPTS --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -e EXTRA_CMAKE="$EXTRA_CMAKE" -e JOBS="$JOBS" \
+  -v "$WORK":/opt/contracts -w /opt/contracts "$IMAGE" bash -lc '
+  set -e
+  (cdt-cpp --version || eosio-cpp --version) 2>/dev/null | head -1
+  rm -rf build && mkdir build && cd build
+  cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF ${EXTRA_CMAKE:-} .. >cmake.log 2>&1 || { tail -20 cmake.log; exit 1; }
+  make -j"$JOBS" >make.log 2>&1 || { tail -30 make.log; exit 1; }
+' || { echo "build failed in $IMAGE (logs under $WORK/build)"; exit 1; }
+
+matched=0
+printf '%-13s %-66s %s\n' ACCOUNT BUILT MATCH
+for account in "${!DEPLOYED[@]}"; do
+  contract="${DEPLOYED[$account]}"
+  wasm="$(find "$WORK/build" -name "${contract}.wasm" -not -path '*CMakeFiles*' -print -quit)"
+  if [[ -z "$wasm" ]]; then
+    printf '%-13s %-66s %s\n' "$account" "NOT BUILT" "SKIP"; continue
+  fi
+  built="$(sha256sum "$wasm" | cut -d' ' -f1)"
+  onchain="$(curl -sf --max-time 20 -X POST "$API/v1/chain/get_code_hash" \
+               -d "{\"account_name\":\"$account\"}" | jq -r '.code_hash')" \
+    || { echo "get_code_hash $account failed against $API (network? VPN?)"; exit 2; }
+  [[ "$onchain" =~ ^[0-9a-f]{64}$ ]] || { echo "get_code_hash $account returned '$onchain'"; exit 2; }
+  if [[ "$built" == "$onchain" ]]; then
+    printf '%-13s %-66s %s\n' "$account" "$built" "YES"; matched=$((matched + 1))
+  else
+    printf '%-13s %-66s %s\n' "$account" "$built" "no"
+  fi
+done
+echo
+echo "A YES row means: the code at $REF, built in $IMAGE, is the code securing that account"
+echo "on mainnet. Record ref, image and hash in the provenance table in .audit/README.md."
+echo "Rows marked no are expected for the accounts this ref never deployed to."
+# One ref is normally the source of one or two accounts, so the exit code says whether
+# this ref+image explains anything at all: 0 if at least one account matched, 1 if none.
+(( matched > 0 ))
