@@ -90,6 +90,61 @@ python3 .audit/rules/wcap-check.py contracts
 `wcap-check.py` and `run-sweep.sh` exit non-zero when they report anything, so both work
 as CI gates.
 
+## Deployed-contract provenance (WCAP I7, WBP-1991)
+
+`verify-hashes.sh` compares the *current* source with what is deployed. When they differ,
+`reproduce-deployed.sh <ref> <image>` finds which tag, built in which toolchain, matches —
+so the audit can say for every account which source it reviewed and whether that source is
+the one on chain. Result of the 2026-09 forensics (mainnet `last_code_update` in the
+second column):
+
+| account | deployed | reproduced from | toolchain image | match |
+|---|---|---|---|---|
+| `eosio` | 2026-02-17 | `wax-3.3.0` (`715ddba`) | `waxteam/waxdev:v5.0.3wax02-v4.1.0` (cdt 4.1.0) | **yes**, bit for bit |
+| `eosio.token` | 2019-12-10 | `wax-1.7.0-2.0.0` (`318dc57`) | `waxteam/dev:wax-1.6.1-1.2.1` (eosio.cdt 1.6.1) | **yes**, bit for bit |
+| `eosio.wrap` | 2019-12-10 | `wax-1.7.0-2.0.0` (`318dc57`) | `waxteam/dev:wax-1.6.1-1.2.1` (eosio.cdt 1.6.1) | **yes**, bit for bit |
+| `eosio.msig` | 2022-12-08 | `EOSIO/eosio.contracts` branch `1.8.3-oob-patch` (`301c901`, 2020-09-14) | official `eosio.cdt` 1.6.3 package on Ubuntu 18.04, via the CDT cmake toolchain | **yes**, bit for bit |
+
+Every row above is re-runnable with the two commands in the script header. The source for
+`eosio.token` and `eosio.wrap` in this repository has changed since the deployed tag only
+cosmetically (doc comments, a redundant `sym.is_valid()` removed because `asset::is_valid()`
+already checks the symbol, and two error messages added to `get()` lookups); the code on
+chain is therefore older than, but not weaker than, the code reviewed.
+
+`eosio.msig` is the one contract not built from a commit of this repository. It is EOSIO's
+out-of-band 1.8.3 patch (inline `exec`, `earliest_exec_time`), which this repository ported
+onto the CDT 3 tree in October 2022 (`c3db26f`…`83985e6`). The port is the same code: the
+only differences are the patch's hand-rolled `eosio_msig_binary_extension` class, replaced
+by the library's `eosio::binary_extension`, and `std::optional` assignments replaced by
+`emplace()`. Two details mattered for the reproduction and are easy to get wrong:
+
+- the compiler generation is visible in the deployed ABI's `version` field (`eosio::abi/1.1`
+  is eosio.cdt 1.6–1.7; `eosio::abi/1.2` is 1.8 and cdt 3+), which rules toolchains in or
+  out before any build;
+- `eosio-cpp` on the command line and `add_contract()` through the CDT cmake toolchain do
+  not produce the same bytes (1.6.3 gives 36,489 vs 36,978), so reproduce the way the
+  release was built.
+
+Recipe for the msig row, from a stock container, no WAX image needed:
+
+```bash
+# source: EOSIO/eosio.contracts @ 301c901, contracts/eosio.msig; toolchain: eosio.cdt 1.6.3
+gh release download v1.6.3 --repo EOSIO/eosio.cdt --pattern '*ubuntu-18.04_amd64.deb'
+docker run --rm -v "$PWD":/w ubuntu:18.04 bash -c '
+  apt-get update -qq && apt-get install -y -qq cmake make /w/eosio.cdt_1.6.3-1-ubuntu-18.04_amd64.deb
+  mkdir /b && cd /b && cmake -DCMAKE_TOOLCHAIN_FILE=/usr/opt/eosio.cdt/1.6.3/lib/cmake/eosio.cdt/EosioWasmToolchain.cmake /w/eosio.msig
+  make && sha256sum eosio.msig.wasm'      # 055f1cd3bffc3262ccd40a0acd665a0a62e4a7cc48f34f6fc54aa74928cbac13
+```
+
+where `/w/eosio.msig` holds that branch's `src/`, `include/` and a `CMakeLists.txt` of
+`find_package(eosio.cdt)` + `add_contract(eosio.msig eosio.msig src/eosio.msig.cpp)` with
+`target_include_directories(eosio.msig.wasm PUBLIC include)`.
+
+What this buys the audit: every finding against `eosio.system` applies to live code with no
+version caveat, and for the three older contracts the reviewer knows exactly which source
+is live and that the source in this repository is the same code, modulo the cosmetic drift
+listed above. Re-run the table after every deployment (WCAP Phase 7).
+
 ## Reproducible builds
 
 `verify-hashes.sh` only means something because the build is reproducible: building this
