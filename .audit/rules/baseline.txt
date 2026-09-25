@@ -40,9 +40,9 @@ contracts/eosio.system/src/voting.cpp|C4|weighted_votes
 # the three reg*/edit* pairs that still duplicate validation inline, two privileged
 # setters with no bound on the value they store (filed as candidate findings), and
 # powerup.max_payment, whose sign is bounded indirectly by the fee > 0 check.
-contracts/eosio.system/src/eosio.system.cpp|C6-setter|setramrate
-contracts/eosio.system/src/eosio.system.cpp|C6-setter|setrngrate
-contracts/eosio.system/src/powerup.cpp|C3|powerup
-contracts/eosio.system/src/wps.cpp|C6-sibling|regcommittee
-contracts/eosio.system/src/wps.cpp|C6-sibling|regproposer
-contracts/eosio.system/src/wps.cpp|C6-sibling|regreviewer
+contracts/eosio.system/src/eosio.system.cpp|C6-setter|setramrate/bytes_per_block
+contracts/eosio.system/src/eosio.system.cpp|C6-setter|setrngrate/max_pool_rng
+contracts/eosio.system/src/powerup.cpp|C3|powerup/max_payment
+contracts/eosio.system/src/wps.cpp|C6-sibling|regcommittee/edcommittee
+contracts/eosio.system/src/wps.cpp|C6-sibling|regproposer/editproposer
+contracts/eosio.system/src/wps.cpp|C6-sibling|regreviewer/editreviewer

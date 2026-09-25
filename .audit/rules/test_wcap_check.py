@@ -154,5 +154,56 @@ class C2Narrowing(unittest.TestCase):
         self.assertEqual(rows, [])
 
 
+class ReviewCases(unittest.TestCase):
+    """Shapes raised by the WBP-1998 review pass; each was a false positive, a false negative
+    or a parser hole before the fix."""
+
+    def test_arrow_is_not_an_operator(self):
+        rows = wc.check_c6('t.cpp', wrap('check(itr->x < 500, "x cannot exceed 500");',
+                                         sig='void system_contract::act( uint32_t n )'))
+        self.assertEqual(classes(rows), ['C6'])
+
+    def test_non_literal_message_does_not_swallow_the_next_check(self):
+        body = ('eosio::check(false, error_msg);\n'
+                'check(n >= 0, "n must be greater than 0");')
+        rows = wc.checks_in(body, 1)
+        self.assertEqual([c for _, c, _ in rows], ['n >= 0'])
+
+    def test_off_by_one_and_converted_numbers_are_consistent(self):
+        body = ('check(n > 0, "n must be at least 1");\n'
+                'check(s.size() < 256, "s must be at most 255 characters");\n'
+                'check(n >= 600, "n must be at least 10 minutes");\n'
+                'check(n <= 100, "n cannot exceed 100%");')
+        self.assertEqual(wc.check_c6('t.cpp', wrap(body)), [])
+
+    def test_paren_in_params_and_brace_in_string_do_not_hide_functions(self):
+        text = ('void system_contract::a( std::function<void(int)> f, uint32_t n ) {\n'
+                '   check(n >= 0, "n must be greater than 0 {");\n}\n'
+                'void system_contract::b( uint32_t m ) {\n   check(m >= 0, "m must be greater than 0");\n}\n')
+        self.assertEqual([fn for fn, *_ in wc.fn_bodies(text)], ['a', 'b'])
+        self.assertEqual(len(wc.check_c6('t.cpp', text)), 2)
+
+    def test_helper_args_with_commas_map_positionally(self):
+        text = wrap('helper( asset(0, sym), q );',
+                    sig='void system_contract::act( symbol sym, const asset& q )')
+        defs = {'helper': ('const asset& zero, const asset& quantity',
+                           '{ check(quantity.is_valid(), "invalid quantity"); }')}
+        self.assertEqual(wc.check_c3('t.cpp', text, {'act'}, defs), [])
+
+    def test_setter_store_through_a_cast_is_seen_and_message_mention_is_not_a_bound(self):
+        rows = wc.check_c6_setter('t.cpp', wrap('check( true, "rate must be set" );\n_g.rate = static_cast<uint16_t>(rate);',
+                                                sig='void system_contract::setrate( uint32_t rate )'))
+        self.assertEqual(classes(rows), ['C6-setter'])
+
+    def test_c2_ignores_dereference_and_ambiguous_names(self):
+        self.assertEqual(wc.check_c2_narrowing('t.cpp', 'uint32_t apc = *_gstate4.active_producer_count;\n', {'active_producer_count'}), [])
+
+    def test_key_of_separates_two_defects_in_one_function(self):
+        a = wc.key_of('f.cpp', 'C6-setter', '`setrngrate` stores `rng_rate` (`uint64_t rng_rate`) into state')
+        b = wc.key_of('f.cpp', 'C6-setter', '`setrngrate` stores `max_pool_rng` (`uint64_t max_pool_rng`) into state')
+        self.assertNotEqual(a, b)
+        self.assertEqual(wc.key_of('f.cpp', 'C5', '`check(x >= 0)` is always true: x is `uint32_t`'), 'f.cpp|C5|check(x >= 0)')
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

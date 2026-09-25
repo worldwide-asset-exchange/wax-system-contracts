@@ -220,24 +220,59 @@ NONSTRICT_WORDS = re.compile(r"\b(at least|at most|or more|or less|or fewer|or e
 UNTIL = re.compile(r"\b(until|unless)\b", re.I)
 SIMPLE_CMP = re.compile(r'^\s*([A-Za-z_][A-Za-z0-9_.()>-]*)\s*(>=|<=|>|<)\s*(-?\d+)\s*$')
 NUM_LITERAL = re.compile(r'(?<![\w.])-?\d+(?![\w.])')
-WIDE_TYPES = re.compile(r'\b(u?int64_t|u?int128_t|__int128|unsigned __int128|long long|size_t)\b')
+# A number followed by a time unit or a percent sign is a conversion of the bound, not the
+# bound itself ("at least 600 (10 minutes)", "more than 100%"), so it does not count.
+CONVERTED_NUM = re.compile(r'-?\d+\s*(?:%|percent|second|minute|hour|day|week|month|year)s?\b', re.I)
+
+
+def _block_end(text, start):
+    """Index of the brace closing the block opened at text[start], skipping string and
+    char literals so a brace inside a message cannot merge two bodies."""
+    depth, j = 0, start
+    while j < len(text):
+        c = text[j]
+        if c in ('"', "'"):
+            q, j = c, j + 1
+            while j < len(text) and text[j] != q:
+                j += 2 if text[j] == '\\' else 1
+        elif c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                return j
+        j += 1
+    return j
+
+
+def split_args(s):
+    """Split an argument list on top-level commas only."""
+    out, depth, cur = [], 0, ''
+    for c in s:
+        if c in '(<[':
+            depth += 1
+        elif c in ')>]':
+            depth -= 1
+        if c == ',' and depth == 0:
+            out.append(cur.strip()); cur = ''
+        else:
+            cur += c
+    if cur.strip():
+        out.append(cur.strip())
+    return out
 
 
 def fn_bodies(text):
-    """(name, params, body, first_line) for every `<type> system_contract::<fn>(...) {`."""
+    """(name, params, body, first_line) for every `<type> <class>::<fn>(...) {`.
+
+    The parameter list may contain one level of nested parentheses (a std::function
+    type, a default argument); the body walk skips string literals.
+    """
     out = []
-    for m in re.finditer(r'\w[\w:<>]*\s+\w+::([a-z0-9_]+)\s*\(([^)]*)\)\s*(?:const\s*)?\{', text):
+    for m in re.finditer(r'\w[\w:<>]*\s+\w+::([a-z0-9_]+)\s*\(((?:[^()]|\([^()]*\))*)\)\s*(?:const\s*)?\{', text):
         start = m.end() - 1
-        depth, j = 0, start
-        while j < len(text):
-            if text[j] == '{':
-                depth += 1
-            elif text[j] == '}':
-                depth -= 1
-                if depth == 0:
-                    break
-            j += 1
-        out.append((m.group(1), m.group(2), text[start:j], text[:m.start()].count('\n') + 1))
+        out.append((m.group(1), m.group(2), text[start:_block_end(text, start)],
+                    text[:m.start()].count('\n') + 1))
     return out
 
 
@@ -254,7 +289,7 @@ def checks_in(body, first_line):
     message (`"cannot exceed " + std::to_string(x)`) still yields its literal prefix.
     """
     out = []
-    for m in re.finditer(r'\bcheck\s*\((.*?),\s*"((?:[^"\\]|\\.)*)"', body, re.S):
+    for m in re.finditer(r'\bcheck\s*\(([^;"]*?),\s*"((?:[^"\\]|\\.)*)"', body, re.S):
         cond = ' '.join(m.group(1).split())
         if cond.count('(') != cond.count(')'):
             continue                                   # the comma was inside a nested call
@@ -284,7 +319,7 @@ def check_c6(path, text):
     for fn, params, body, first in fn_bodies(text):
         types = {n: (param_type(params, n) or '') for n in param_names(params)}
         for line, cond, msg in checks_in(body, first):
-            ops = re.findall(r'(>=|<=|>|<)(?!=)', re.sub(r'[=!]=', ' ', cond))
+            ops = re.findall(r'(>=|<=|>|<)(?!=)', re.sub(r'->|[=!]=|<<|>>', ' ', cond))
             if len(ops) != 1 or '&&' in cond or '||' in cond:
                 continue
             op = ops[0]
@@ -293,13 +328,18 @@ def check_c6(path, text):
 
             simple = SIMPLE_CMP.match(cond)
             if simple:
-                lit = simple.group(3)
-                msg_nums = set(NUM_LITERAL.findall(msg))
-                if msg_nums and lit not in msg_nums:
+                lit = int(simple.group(3))
+                msg_nums = {int(n) for n in NUM_LITERAL.findall(CONVERTED_NUM.sub(' ', msg))}
+                # "> 0" / "at least 1" and "< 256" / "at most 255" say the same thing.
+                consistent = {lit, lit + 1} if op == '>' else {lit, lit - 1} if op == '<' else {lit}
+                if msg_nums and not msg_nums & consistent:
                     out.append((line, 'C6',
-                                f'`{fn}`: message names {sorted(msg_nums)} but the check compares '
-                                f'against {lit}: `check({cond}, "{msg}")`'))
+                                f'`{fn}`: `check({cond}, "{msg}")` — the message names '
+                                f'{sorted(msg_nums)} but the check compares against {lit}.'))
                     continue
+                if msg_nums and lit not in msg_nums:
+                    continue    # the message restated the bound in the other form ("> 0" as
+                                # "at least 1"); its wording is judged against that number
 
             if strict_w and not nonstrict_w or nonstrict_w and not strict_w:
                 wording_strict = bool(strict_w)
@@ -318,16 +358,16 @@ def check_c6(path, text):
                     word = (strict_w or nonstrict_w).group(0)
                     side = 'passing' if describes_pass else 'failing'
                     out.append((line, 'C6',
-                                f'`{fn}`: message says "{word}" of the {side} side but the check is '
-                                f'`{op}`, so the bound enforced is not the bound promised: '
-                                f'`check({cond}, "{msg}")`'))
+                                f'`{fn}`: `check({cond}, "{msg}")` — the message says "{word}" '
+                                f'of the {side} side but the operator is {op}, so the bound '
+                                f'enforced is not the bound promised.'))
                     continue
 
             m = re.search(r'\b([a-z_][a-z0-9_]*)\.size\(\)', cond)
             if m and re.search(r'\bcharacters?\b', msg) and 'vector' in types.get(m.group(1), ''):
                 out.append((line, 'C6',
-                            f'`{fn}`: message counts "characters" but `{m.group(1)}` is a vector, '
-                            f'so the bound is on entries: `check({cond}, "{msg}")`'))
+                            f'`{fn}`: `check({cond}, "{msg}")` — the message counts '
+                            f'"characters" but {m.group(1)} is a vector, so the bound is on entries.'))
     return out
 
 
@@ -402,9 +442,9 @@ def check_c6_setter(path, text):
             if not re.search(r'\b(u?int\d+_t|double|float)\b', p):
                 continue
             name = p.split()[-1].lstrip('&*')
-            if re.search(r'\bcheck\s*\([^;]*\b' + re.escape(name) + r'\b', body):
+            if any(re.search(r'\b' + re.escape(name) + r'\b', cond) for _, cond, _ in checks_in(body, first)):
                 continue
-            if not re.search(r'=\s*' + re.escape(name) + r'\s*;', body):
+            if not re.search(r'(?<![=!<>])=\s*[^;=]*\b' + re.escape(name) + r'\b[^;]*;', body):
                 continue
             out.append((first, 'C6-setter',
                         f'`{fn}` stores `{name}` (`{p}`) into state with no check() on it. '
@@ -421,7 +461,7 @@ def _validates_asset(body, name, defs_index, depth=1):
     if depth <= 0:
         return False
     for call in re.finditer(r'\b([a-z0-9_]{3,})\s*\(([^;{]*?)\)\s*;', body, re.S):
-        callee, args = call.group(1), [a.strip() for a in call.group(2).split(',')]
+        callee, args = call.group(1), split_args(call.group(2))
         if callee not in defs_index or name not in args:
             continue
         cparams, cbody = defs_index[callee]
@@ -433,6 +473,8 @@ def _validates_asset(body, name, defs_index, depth=1):
 
 
 def check_c3(path, text, actions, defs_index):
+    # a helper defined in this file shadows a same-named one elsewhere (setparams, exec, ...)
+    defs_index = {**defs_index, **{fn: (params, body) for fn, params, body, _ in fn_bodies(text)}}
     """C3 - an action takes an asset it never validates.
 
     WCAP-SYS-2026-004: removerefund accepted a negative asset and every guard downstream
@@ -468,7 +510,7 @@ def check_c2_narrowing(path, text, wide_members):
     """
     out = []
     for i, line in enumerate(text.splitlines(), 1):
-        m = re.match(r'\s*uint32_t\s+([a-z_][a-z0-9_]*)\s*=\s*([^;]*\*[^;]*);', line)
+        m = re.match(r'\s*uint32_t\s+([a-z_][a-z0-9_]*)\s*=\s*([^;]*[\w)]\s*\*\s*[\w(][^;]*);', line)
         if not m:
             continue
         operands = re.findall(r'[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*', m.group(2))
@@ -481,8 +523,12 @@ def check_c2_narrowing(path, text, wide_members):
 
 
 def build_hpp_index(root):
-    """(declared action names, members declared with a 64-bit type) across every .hpp."""
-    actions, wide = set(), set()
+    """(declared action names, member names declared ONLY with a 64-bit type) across every .hpp.
+
+    Member types are resolved by name, not by struct, so a name that is 64-bit in one
+    struct and narrower in another is dropped rather than guessed.
+    """
+    actions, wide, narrow = set(), set(), set()
     for hpp in pathlib.Path(root).rglob('*.hpp'):
         if 'test_contracts' in str(hpp):
             continue
@@ -494,7 +540,8 @@ def build_hpp_index(root):
                 if m:
                     actions.add(m.group(1))
         wide |= set(re.findall(r'\b(?:u?int64_t|u?int128_t)\s+([a-z_][a-z0-9_]*)\s*[;=]', text))
-    return actions, wide
+        narrow |= set(re.findall(r'\b(?:u?int(?:8|16|32)_t|bool|float)\s+([a-z_][a-z0-9_]*)\s*[;=]', text))
+    return actions, wide - narrow
 
 
 def build_defs_with_params(root):
@@ -508,10 +555,17 @@ def build_defs_with_params(root):
     return index
 
 
+# Classes whose message names two things: the function and the specific check, parameter,
+# asset or expression. Keying on the function alone would let a second defect in the same
+# function hide behind the first one's baseline line.
+TWO_PART_KEY = {'C6', 'C6-sibling', 'C6-setter', 'C3', 'C2'}
+
+
 def key_of(path, cls, msg):
-    """Stable identity for a finding: file + class + the symbol it names."""
-    m = re.search(r'`([^`]+)`', msg)
-    return f'{path}|{cls}|{m.group(1) if m else ""}'
+    """Stable identity for a finding: file + class + the symbol(s) it names."""
+    parts = re.findall(r'`([^`]+)`', msg)
+    n = 2 if cls in TWO_PART_KEY else 1
+    return f'{path}|{cls}|' + '/'.join(parts[:n])
 
 
 def load_baseline(path):
