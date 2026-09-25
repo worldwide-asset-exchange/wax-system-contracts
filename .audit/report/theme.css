@@ -1,0 +1,39 @@
+/* WAX brand tokens from https://www.wax.io/branding/ (WBP-1999). Fonts are self-hosted in
+   fonts/ so the PDF is reproducible without network access. */
+:root {
+  --brand: #1A1036;        /* WAX Night        */
+  --accent: #F78E1E;       /* WAX Orange       */
+  --sand: #EBAF64; --tangerine: #FF774A; --purple: #7D70F6; --turquoise: #64D5F9;   /* product palette */
+  --ink: #1A1036; --muted: #5c5a6b; --rule: #e3e1ea; --paper: #ffffff;
+  --sev-critical: #8b0000; --sev-high: #FF774A; --sev-medium: #F78E1E; --sev-low: #7D70F6; --sev-info: #64D5F9;
+  --font: "Open Sans", "Liberation Sans", Arial, Helvetica, sans-serif;
+  --mono: "Liberation Mono", Menlo, monospace;
+}
+@page { size: A4; margin: 18mm 16mm 20mm 16mm;
+  @bottom-left { content: "FOOTER_LEFT"; font-family: "Open Sans", sans-serif; font-size: 8pt; color: #5c5a6b; }
+  @bottom-right { content: "Internal security assessment \00b7 not a third-party attestation \00b7 page " counter(page) " of " counter(pages); font-family: "Open Sans", sans-serif; font-size: 8pt; color: #5c5a6b; } }
+html, body { margin: 0; padding: 0; color: var(--ink); background: var(--paper); font-family: var(--font); font-size: 10.5pt; line-height: 1.45; }
+h1, h2, h3 { color: var(--brand); margin: 0 0 6px 0; line-height: 1.2; }
+h1 { font-size: 22pt; } h2 { font-size: 14pt; margin-top: 18px; border-bottom: 2px solid var(--accent); padding-bottom: 3px; }
+h3 { font-size: 11.5pt; margin-top: 12px; }
+.cover { display: flex; justify-content: space-between; align-items: center; background: var(--brand); color: #fff; padding: 16px 18px; margin: 0 0 0 0; border-radius: 4px 4px 0 0; }
+.cover h1, .cover .meta { color: #fff; } .cover .meta { color: #cfcbe0; }
+.cover::after { content: ""; }
+.gradient-rule { height: 5px; margin-bottom: 14px; background: linear-gradient(90deg, #64d5f9 0%, #7d70f6 34%, #ff774a 72%, #ebaf64 100%); margin: 0 0 14px 0; }
+.cover .logo img, .cover .logo svg { height: 40px; width: auto; display: block; }
+.cover .logo-placeholder { width: 120px; height: 40px; border: 1px dashed var(--muted); color: var(--muted); font-size: 8pt; display: flex; align-items: center; justify-content: center; }
+.meta { color: var(--muted); font-size: 9pt; }
+table { border-collapse: collapse; width: 100%; margin: 6px 0 10px 0; font-size: 9.5pt; }
+th { text-align: left; background: var(--brand); color: #fff; padding: 5px 7px; font-weight: 600; }
+td { padding: 5px 7px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+code, .mono { font-family: var(--mono); font-size: 9pt; }
+.badge { display: inline-block; padding: 1px 7px; border-radius: 3px; color: #fff; font-size: 8.5pt; font-weight: 600; text-transform: uppercase; }
+.sev-critical { background: var(--sev-critical);} .sev-high { background: var(--sev-high);} .sev-medium { background: var(--sev-medium);} .sev-low { background: var(--sev-low);} .sev-info { background: var(--sev-info); color: var(--brand);}
+.tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 8px 0; }
+.tile { border: 1px solid var(--rule); border-top: 4px solid var(--brand); padding: 6px 8px; }
+.tile .n { font-size: 18pt; font-weight: 700; color: var(--brand); } .tile .l { font-size: 8.5pt; color: var(--muted); text-transform: uppercase; }
+.callout { border-left: 4px solid var(--accent); background: #fff5ea; padding: 8px 10px; margin: 10px 0; font-size: 9.5pt; }
+.finding { border: 1px solid var(--rule); padding: 8px 10px; margin: 8px 0; page-break-inside: avoid; }
+.finding .hd { display: flex; justify-content: space-between; align-items: baseline; }
+
+.prose { white-space: pre-line; } .small { font-size: 9pt; color: var(--muted); }

@@ -1,0 +1,17 @@
+# Non-sensitive report metadata: everything the findings JSON does not carry.
+id: WCAP-SYS-2026-09
+title: WAX System Contracts — Security Assessment
+client: Worldwide Asset eXchange (WAX)
+date: 2026-09-XX
+scope:
+  repo: worldwide-asset-exchange/wax-system-contracts
+  commit: 715ddba
+  tag: wax-3.3.0 (remediated in wax-3.3.1)
+  build_image: waxteam/waxdev:v5.0.3wax02-v4.1.0
+scores:
+  - {dimension: Security, score: 8.5, weight: 35}
+  - {dimension: Supply chain & reproducibility, score: 9.5, weight: 15}
+  - {dimension: Governance & upgrade safety, score: 7.0, weight: 15}
+  - {dimension: Test coverage, score: 7.0, weight: 15}
+  - {dimension: Code quality, score: 7.0, weight: 10}
+  - {dimension: Documentation, score: 6.0, weight: 10}

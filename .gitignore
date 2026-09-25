@@ -48,3 +48,6 @@ cmake-build-debug/
 /.audit/auth-inventory.tsv
 /.audit/phase3-leads.md
 /.audit/rules/triage.md
+/.audit/report/out/
+/.audit/report/*.json
+/.audit/report/*.pdf

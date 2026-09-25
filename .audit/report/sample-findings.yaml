@@ -1,0 +1,31 @@
+# Illustrative, non-sensitive sample used only to prove the pipeline. Not a real finding.
+audit:
+  id: WCAP-SYS-2026-09
+  title: WAX System Contracts — Security Assessment
+  client: Worldwide Asset eXchange (WAX)
+  date: 2026-09-XX
+  scope:
+    repo: worldwide-asset-exchange/wax-system-contracts
+    commit: 715ddba
+    tag: wax-3.3.0
+    build_image: waxteam/waxdev:v5.0.3wax02-v4.1.0
+  provenance: >-
+    Security review performed internally using Claude (Anthropic) — Opus 5 for audit
+    phases 0–5, Fable 5.1 for remediation and reporting.
+  scores:
+    - {dimension: Security, score: 8.5, weight: 35}
+    - {dimension: Supply chain & reproducibility, score: 9.5, weight: 15}
+    - {dimension: Governance & upgrade safety, score: 7.0, weight: 15}
+    - {dimension: Test coverage, score: 7.0, weight: 15}
+    - {dimension: Code quality, score: 7.0, weight: 10}
+    - {dimension: Documentation, score: 6.0, weight: 10}
+findings:
+  - id: WCAP-SYS-2026-EXAMPLE
+    title: Example finding used to exercise the template
+    severity: low
+    class: C6
+    status: fixed
+    location: [{file: contracts/eosio.system/src/example.cpp, lines: [1, 2]}]
+    description: This block exists only to show how a finding renders. It is not a real finding.
+    impact: None. Illustrative.
+    recommendation: Replace with the rendered output of .audit/render.py --report-data.
