@@ -1708,6 +1708,16 @@ namespace eosiosystem {
          //defined in wps.cpp
          void update_wps_votes( const name& voter, const std::vector<name>& proposals);
 
+         // Shared reg*/edit* input validation - defined in wps.cpp (WBP-1998; the
+         // WCAP-SYS-2026-003 shape). One helper per pair so the copies cannot drift.
+         void validate_proposer_fields( const std::string& first_name, const std::string& last_name,
+                                        const std::string& img_url, const std::string& bio,
+                                        const std::string& country, const std::string& telegram,
+                                        const std::string& website, const std::string& linkedin ) const;
+         void validate_reviewer_fields( const name& reviewer, const std::string& first_name,
+                                        const std::string& last_name ) const;
+         void validate_committee_fields( const name& committeeman, const std::string& category ) const;
+
          // Shared regproposal/editproposal input validation - defined in wps.cpp (WCAP-SYS-2026-003).
          void validate_proposal_fields( const name& committee, uint16_t subcategory,
                                         const std::string& title, const std::string& summary,
