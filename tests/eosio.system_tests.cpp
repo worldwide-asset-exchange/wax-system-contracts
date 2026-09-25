@@ -4490,6 +4490,37 @@ BOOST_FIXTURE_TEST_CASE( ram_inflation, eosio_system_tester ) try {
 
 } FC_LOG_AND_RETHROW()
 
+// WCAP-SYS-2026-017 (WBP-2022): setramrate is bounded, and RAM supply accrual across a long gap is
+// computed in 64 bits. The gap case is red on the 32-bit product: 8192 * 576,000 slots = 4.72e9 > 2^32.
+BOOST_FIXTURE_TEST_CASE( wcap_017_setramrate_ceiling_and_supply_wrap, eosio_system_tester ) try {
+   const uint16_t ceiling = 8192;                       // max_new_ram_per_block; the message literal below must match it
+   transfer( config::system_account_name, "alice1111111", core_sym::from_string("1000.0000"), config::system_account_name );
+
+   // Ceiling: inclusive at the bound, refused above it with a message that names the bound; zero stays legal.
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("bytes_per_block cannot exceed 8192"),
+                        push_action( config::system_account_name, "setramrate"_n, mvo()("bytes_per_block", uint16_t(ceiling + 1)) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("bytes_per_block cannot exceed 8192"),
+                        push_action( config::system_account_name, "setramrate"_n, mvo()("bytes_per_block", uint16_t(65535)) ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setramrate"_n, mvo()("bytes_per_block", uint16_t(0)) ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setramrate"_n, mvo()("bytes_per_block", ceiling) ) );
+   BOOST_REQUIRE_EQUAL( ceiling, get_global_state2()["new_ram_per_block"].as<uint16_t>() );
+
+   // Accrual: no RAM-market action for 80 hours, then one buyram credits exactly slots * rate.
+   const uint64_t before = get_global_state()["max_ram_size"].as_uint64();
+   const auto t0 = fc::time_point::from_iso_string( get_global_state2()["last_ram_increase"].as_string() );
+   produce_block( fc::hours(80) );
+   produce_blocks(1);
+   BOOST_REQUIRE_EQUAL( success(), buyram( "alice1111111", "alice1111111", core_sym::from_string("10.0000") ) );
+   const auto t1 = fc::time_point::from_iso_string( get_global_state2()["last_ram_increase"].as_string() );
+   const uint64_t slots = uint64_t( (t1 - t0).count() / 500'000 );
+   BOOST_REQUIRE_GT( slots * ceiling, uint64_t(1) << 32 );   // the case does exercise the old wrap
+   BOOST_REQUIRE_EQUAL( before + slots * ceiling, get_global_state()["max_ram_size"].as_uint64() );
+
+   // Whoever was authorised before still is; nobody else is.
+   BOOST_REQUIRE_EQUAL( error("missing authority of eosio"),
+                        push_action( "alice1111111"_n, "setramrate"_n, mvo()("bytes_per_block", uint16_t(0)) ) );
+} FC_LOG_AND_RETHROW()
+
 BOOST_FIXTURE_TEST_CASE( eosioram_ramusage, eosio_system_tester ) try {
    BOOST_REQUIRE_EQUAL( core_sym::from_string("0.0000"), get_balance( "alice1111111" ) );
    transfer( "eosio", "alice1111111", core_sym::from_string("1000.0000"), "eosio" );

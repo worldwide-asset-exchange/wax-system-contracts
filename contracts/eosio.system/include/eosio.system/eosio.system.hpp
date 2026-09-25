@@ -90,6 +90,14 @@ namespace eosiosystem {
    // live active_producer_count, so the two setters stay order-independent. Zero is valid.
    static constexpr uint32_t max_standby_slots     = max_active_producers;
 
+   // Ceiling on the RAM growth rate setramrate stores (WCAP-SYS-2026-017). 8,192 bytes per block is
+   // about 1.4 GB per day: eight times the 1,024 EOS mainnet ran for years, and far below the 65,535
+   // the type allows (11 GB per day - 3.6% of the 315 GB pool WAX had when this was set, in 2026).
+   // Any rate a units mistake produces - kilobytes for bytes, per day for per block - is refused;
+   // any growth policy WAX has run fits. Zero disables growth and stays legal. Accrued supply cannot
+   // be removed (setram refuses a decrease), which is why the setter, not the reader, bounds it.
+   static constexpr uint16_t max_new_ram_per_block = 8192;
+
    // Ceiling on both wpsenv durations (funding and voting), in days (WCAP-SYS-2026-010): a
    // century. Far above any real proposal, and far below where the old 32-bit arithmetic
    // wrapped. Enforced where proposals are admitted as well as where the env is written.
@@ -1196,11 +1204,15 @@ namespace eosiosystem {
          void setram( uint64_t max_ram_size );
 
          /**
-          * Set ram rate action, sets the rate of increase of RAM in bytes per block. It is capped by the uint16_t to
-          * a maximum rate of 3 TB per year. If update_ram_supply hasn't been called for the most recent block,
-          * then new ram will be allocated at the old rate up to the present block before switching the rate.
+          * Set ram rate action, sets the rate of increase of RAM in bytes per block. If update_ram_supply hasn't
+          * been called for the most recent block, then new ram will be allocated at the old rate up to the present
+          * block before switching the rate.
           *
           * @param bytes_per_block - the amount of bytes per block increase to set.
+          *
+          * @pre `bytes_per_block` must not exceed `max_new_ram_per_block`; zero is allowed and disables growth.
+          * RAM supply only ever increases (`setram` refuses a decrease), so a mistaken rate cannot be undone
+          * once it has accrued.
           */
          [[eosio::action]]
          void setramrate( uint16_t bytes_per_block );
