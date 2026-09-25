@@ -101,11 +101,13 @@ second column):
 | account | deployed | reproduced from | toolchain image | match |
 |---|---|---|---|---|
 | `eosio` | 2026-02-17 | `wax-3.3.0` (`715ddba`) | `waxteam/waxdev:v5.0.3wax02-v4.1.0` (cdt 4.1.0) | **yes**, bit for bit |
-| `eosio.token` | 2019-12-10 | `wax-1.7.0-2.0.0` (`318dc57`) | `waxteam/dev:wax-1.6.1-1.2.1` (eosio.cdt 1.6.1) | **yes**, bit for bit |
-| `eosio.wrap` | 2019-12-10 | `wax-1.7.0-2.0.0` (`318dc57`) | `waxteam/dev:wax-1.6.1-1.2.1` (eosio.cdt 1.6.1) | **yes**, bit for bit |
+| `eosio.token` | 2019-12-10 | source identical to `wax-1.7.0-2.0.0` (`318dc57`, tagged the day after the deployment) | `waxteam/dev:wax-1.6.1-1.2.1` (eosio.cdt 1.6.1) | **yes**, bit for bit |
+| `eosio.wrap` | 2019-12-10 | source identical to `wax-1.7.0-2.0.0` (`318dc57`) | `waxteam/dev:wax-1.6.1-1.2.1` (eosio.cdt 1.6.1) | **yes**, bit for bit |
 | `eosio.msig` | 2022-12-08 | `EOSIO/eosio.contracts` branch `1.8.3-oob-patch` (`301c901`, 2020-09-14) | official `eosio.cdt` 1.6.3 package on Ubuntu 18.04, via the CDT cmake toolchain | **yes**, bit for bit |
 
-Every row above is re-runnable with the two commands in the script header. The source for
+The three in-repo rows are re-runnable with `reproduce-deployed.sh <ref> <image>` using the
+ref and image columns as written (the older image also needs `-Dcdt_DIR=…`, see the script
+header); the `eosio.msig` row uses the recipe below. The source for
 `eosio.token` and `eosio.wrap` in this repository has changed since the deployed tag only
 cosmetically (doc comments, a redundant `sym.is_valid()` removed because `asset::is_valid()`
 already checks the symbol, and two error messages added to `get()` lookups); the code on
