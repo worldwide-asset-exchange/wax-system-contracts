@@ -83,7 +83,7 @@ We practise coordinated disclosure.
 **In scope:** the contracts under `contracts/` in this repository, and the code deployed on WAX
 mainnet under the accounts `eosio`, `eosio.msig`, `eosio.token` and `eosio.wrap` (see
 "Supported versions" for which of those currently reproduce from this source); the tests under
-`tests/`; the CI workflows under `.github/workflows/`; and `deploy-system-contract.bash`.
+`tests/`; the CI workflows under `.github/workflows/`; and the deploy tooling under `deploy/`.
 
 **Out of scope here, but still please report it to the same address:** the WAX node software
 (`nodeos` and its host functions, in

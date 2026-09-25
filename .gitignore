@@ -51,3 +51,6 @@ cmake-build-debug/
 /.audit/report/out/
 /.audit/report/*.json
 /.audit/report/*.pdf
+
+# deploy/system-contract.sh output: build artefacts and unsigned proposals per tag
+/deploy/out/
