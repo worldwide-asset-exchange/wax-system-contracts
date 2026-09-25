@@ -14,7 +14,7 @@ receive security fixes.
 
 | Version | Supported | Notes |
 |---|---|---|
-| `develop` @ `e7739ed` (release tag to follow) | Yes | The 2026-09 review's remediations, merged; the next `eosio` deployment. |
+| `wax-3.3.1` — to be cut from `develop` @ `e7739ed` after the version bump | Yes | The 2026-09 review's remediations, merged; the next `eosio` deployment. |
 | `wax-3.3.0` (`715ddba`) | Yes, until the above is deployed | Deployed on mainnet as `eosio` (`eosio.system`) since 2026-02-17. A reproducible build of this tag matches the on-chain code hash bit-for-bit — see [`.audit/verify-hashes.sh`](.audit/verify-hashes.sh). |
 | `wax-3.2.x` and older | No | Superseded. |
 
