@@ -25,7 +25,9 @@
 # WCAP_JOBS for make's -j (default 6). The container runs as the calling user, so the scratch
 # tree it leaves behind is yours to delete. The ref is exported with `git archive` into a
 # scratch directory (WCAP_SCRATCH, default a mktemp dir); the working tree is never touched.
-# Tests are not built. Needs docker, git, curl and jq on the host.
+# Tests are not built. Needs docker, git, curl and jq on the host. Exits 0 when at least
+# one account matches (a ref normally explains one or two of the four), 1 when none does,
+# 2 when mainnet could not be queried.
 set -euo pipefail
 
 REF="${1:?git ref (tag or commit)}"
@@ -64,13 +66,13 @@ docker run --rm $DOCKER_OPTS --user "$(id -u):$(id -g)" -e HOME=/tmp \
   make -j"$JOBS" >make.log 2>&1 || { tail -30 make.log; exit 1; }
 ' || { echo "build failed in $IMAGE (logs under $WORK/build)"; exit 1; }
 
-fail=0
+matched=0
 printf '%-13s %-66s %s\n' ACCOUNT BUILT MATCH
 for account in "${!DEPLOYED[@]}"; do
   contract="${DEPLOYED[$account]}"
   wasm="$(find "$WORK/build" -name "${contract}.wasm" -not -path '*CMakeFiles*' -print -quit)"
   if [[ -z "$wasm" ]]; then
-    printf '%-13s %-66s %s\n' "$account" "NOT BUILT" "SKIP"; fail=1; continue
+    printf '%-13s %-66s %s\n' "$account" "NOT BUILT" "SKIP"; continue
   fi
   built="$(sha256sum "$wasm" | cut -d' ' -f1)"
   onchain="$(curl -sf --max-time 20 -X POST "$API/v1/chain/get_code_hash" \
@@ -78,12 +80,15 @@ for account in "${!DEPLOYED[@]}"; do
     || { echo "get_code_hash $account failed against $API (network? VPN?)"; exit 2; }
   [[ "$onchain" =~ ^[0-9a-f]{64}$ ]] || { echo "get_code_hash $account returned '$onchain'"; exit 2; }
   if [[ "$built" == "$onchain" ]]; then
-    printf '%-13s %-66s %s\n' "$account" "$built" "YES"
+    printf '%-13s %-66s %s\n' "$account" "$built" "YES"; matched=$((matched + 1))
   else
-    printf '%-13s %-66s %s\n' "$account" "$built" "no"; fail=1
+    printf '%-13s %-66s %s\n' "$account" "$built" "no"
   fi
 done
 echo
 echo "A YES row means: the code at $REF, built in $IMAGE, is the code securing that account"
 echo "on mainnet. Record ref, image and hash in the provenance table in .audit/README.md."
-exit $fail
+echo "Rows marked no are expected for the accounts this ref never deployed to."
+# One ref is normally the source of one or two accounts, so the exit code says whether
+# this ref+image explains anything at all: 0 if at least one account matched, 1 if none.
+(( matched > 0 ))
