@@ -558,7 +558,70 @@ def build_defs_with_params(root):
 # Classes whose message names two things: the function and the specific check, parameter,
 # asset or expression. Keying on the function alone would let a second defect in the same
 # function hide behind the first one's baseline line.
-TWO_PART_KEY = {'C6', 'C6-sibling', 'C6-setter', 'C3', 'C2'}
+
+# ----------------------------------------------------------------------------- WBP-2026
+# D3 - a throw reachable from onblock. onblock runs implicitly every block; if it throws,
+# nodeos logs "onblock ... is REJECTING" and produces the block anyway, so the chain does
+# not halt - but while it fails every block the election, standby rotation, unpaid-block
+# accounting and name-bid closes freeze on their last state until a contract fix ships by
+# msig. The 2026-09 review walked this call graph by hand (12 reachable functions, no
+# throw site); this keeps the walk running on every change.
+
+KEYWORDS = {'if', 'for', 'while', 'switch', 'catch', 'return', 'sizeof', 'else', 'do', 'operator'}
+THROW_SITES = re.compile(r'\b(check\s*\(|eosio_assert\s*\(|\.get\s*\(|\.require_find\s*\(|\.at\s*\()')
+
+
+def strip_strings(text):
+    """Blank out string literals but keep their length, so line numbers survive."""
+    return re.sub(r'"(?:[^"\\\n]|\\.)*"', lambda m: '"' + ' ' * (len(m.group(0)) - 2) + '"', text)
+
+
+def build_reach_index(files):
+    """fn name -> [(path, first_line, body)] for every function definition in `files`
+    ({path: text}), .cpp and .hpp alike. A definition starts a line with a return type,
+    then `Class::fn(` or the in-class `fn(` form headers use, then `{`. Calls, control
+    flow and lambdas never carry a return type at line start, so they are not indexed."""
+    index = {}
+    for path, text in files.items():
+        clean = strip_strings(strip_comments(text))
+        for m in re.finditer(r'(?m)^[ \t]*(?:[\w:<>&*]+\s+)+(?:\w+::)?([a-z_][a-z0-9_]*)\s*\(((?:[^()]|\([^()]*\))*)\)\s*(?:const\s*)?\{', clean):
+            fn, params = m.group(1), m.group(2)
+            if fn in KEYWORDS or '[' in params:
+                continue
+            start = m.end() - 1
+            body = clean[start:_block_end(clean, start)]
+            index.setdefault(fn, []).append((path, clean[:m.start()].count('\n') + 1, body))
+    return index
+
+
+def check_d3_onblock(index, entry='onblock'):
+    """D3 - check()/assert or a throwing table read in any function onblock reaches."""
+    if entry not in index:
+        return []
+    out, seen, queue = [], set(), [(entry, [])]
+    while queue:
+        fn, via = queue.pop(0)
+        if fn in seen:
+            continue
+        seen.add(fn)
+        for path, first, body in index[fn]:
+            inner = body[1:-1]
+            for m in THROW_SITES.finditer(inner):
+                what = m.group(1).replace(' ', '')
+                line = first + inner[:m.start()].count('\n')
+                route = ' -> '.join(via + [fn])
+                out.append((path, line, 'D3',
+                            f'`{fn}` contains `{what}` and onblock reaches it ({route}). '
+                            f'A throw here rejects every onblock: the chain keeps producing, but the '
+                            f'election, standby rotation, unpaid-block accounting and name-bid closes '
+                            f'freeze until a contract fix ships by msig. Guard it, or return.'))
+            # every call, including `row.method()` and `it->method()`: table-row methods are definitions too
+            for callee in set(re.findall(r'\b([a-z_][a-z0-9_]*)\s*\(', inner)):
+                if callee in index and callee not in seen and callee != fn:
+                    queue.append((callee, via + [fn]))
+    return out
+
+TWO_PART_KEY = {'C6', 'C6-sibling', 'C6-setter', 'C3', 'C2', 'D3'}
 
 
 def key_of(path, cls, msg):
@@ -600,6 +663,15 @@ def main():
                      + check_c6_setter(path, clean) + check_c3(path, clean, actions, defs_with_params)
                      + check_c2_narrowing(path, clean, wide_members))
         findings += [(str(path), ln, cls, msg) for ln, cls, msg in rows]
+
+    # D3 needs the whole contract, not one file: one index per contracts/<name>/ directory.
+    by_contract = {}
+    for path in sorted(pathlib.Path(root).rglob('*')):
+        if path.suffix in ('.cpp', '.hpp') and 'test_contracts' not in str(path):
+            contract = next((p for p in path.parents if p.parent == pathlib.Path(root)), path.parent)
+            by_contract.setdefault(contract, {})[str(path)] = read(path)
+    for files in by_contract.values():
+        findings += check_d3_onblock(build_reach_index(files))
 
     if '--write-baseline' in flags:
         target = flags['--write-baseline']

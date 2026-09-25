@@ -74,6 +74,13 @@ Each carries a class ID used in audit reports.
   and the error message misleads.
 - **C4b** — a `check()` that has been commented out. A disabled assertion is a statement
   that the invariant does not hold.
+- **D3** — a `check()`, `eosio_assert()`, or a throwing table read (`get`, `require_find`,
+  `at`) in any function `onblock` can reach, walking the call graph from `onblock` through
+  every definition in the contract, row methods included. A throw there does not halt the
+  chain — nodeos logs `onblock … is REJECTING` and produces the block anyway — but while it
+  fails every block the election, standby rotation, unpaid-block accounting and name-bid
+  closes freeze on their last state until a contract fix ships by msig. Zero hits at
+  `wax-3.3.2`; the rule exists so that stays true.
 
 The next five were added under WBP-1998 after the 2026-09 audit found that four of its first
 seven findings had one shape — an action whose validation does not do what its error message
