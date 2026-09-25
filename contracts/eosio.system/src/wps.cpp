@@ -21,6 +21,30 @@ namespace eosiosystem {
     using std::vector;
     using std::set;
 
+    // Shared by regproposer and editproposer so the two cannot drift apart (WBP-1998, the
+    // WCAP-SYS-2026-003 shape). One copy of each bound; the message is the bound.
+    void system_contract::validate_proposer_fields( const string& first_name, const string& last_name,
+                                                    const string& img_url, const string& bio,
+                                                    const string& country, const string& telegram,
+                                                    const string& website, const string& linkedin ) const {
+        //verify that the inputs are not too short
+        check(first_name.size() > 0, "first name should be more than 0 characters long");
+        check(last_name.size() > 0, "last name should be more than 0 characters long");
+        check(img_url.size() > 0, "not a valid image URL");
+        check(bio.size() > 0, "bio should be more than 0 characters long");
+        check(country.size() > 0, "country name should be more than 0 characters long");
+
+        //verify that the inputs aren't too long
+        check(first_name.size() < 128, "first name should be shorter than 128 characters.");
+        check(last_name.size() < 128, "last name should be shorter than 128 characters.");
+        check(img_url.size() < 128, "image URL should be shorter than 128 characters.");
+        check(bio.size() < 256, "bio should be shorter than 256 characters.");
+        check(country.size() < 64, "country name should be shorter than 64 characters.");
+        check(telegram.size() < 64, "telegram username should be shorter than 64 characters.");
+        check(website.size() < 128, "website URL should be shorter than 128 characters.");
+        check(linkedin.size() < 128, "linkedin URL should be shorter than 128 characters.");
+    }
+
     void system_contract::regproposer(
             name account,
             const string& first_name,
@@ -35,22 +59,7 @@ namespace eosiosystem {
         // authority of the user's account is required
         require_auth(account);
 
-        //verify that the inputs are not too short
-        check(first_name.size() > 0, "first name should be more than 0 characters long");
-        check(last_name.size() > 0, "last name should be more than 0 characters long");
-        check(img_url.size() > 0, "not a valid image URL");
-        check(bio.size() > 0, "bio should be more than 0 characters long");
-        check(country.size() > 0, "country name should be more than 0 characters long");
-
-        //verify that the inputs aren't too long
-        check(first_name.size() < 128, "first name should be shorter than 128 characters.");
-        check(last_name.size() < 128, "last name should be shorter than 128 characters.");
-        check(img_url.size() < 128, "image URL should be shorter than 128 characters.");
-        check(bio.size() < 256, "description should be shorter than 256 characters.");
-        check(country.size() < 64, "country name should be shorter than 64 characters.");
-        check(telegram.size() < 64, "telegram username should be shorter than 64 characters.");
-        check(website.size() < 128, "website URL should be shorter than 128 characters.");
-        check(linkedin.size() < 128, "linked URL should be shorter than 128 characters.");
+        validate_proposer_fields( first_name, last_name, img_url, bio, country, telegram, website, linkedin );
 
         auto itr = _proposers.find(account.value);
         // verify that the account doesn't already exist in the table
@@ -83,22 +92,7 @@ namespace eosiosystem {
         // authority of the user's account is required
         require_auth(account);
 
-        //verify that the inputs are not too short
-        check(first_name.size() > 0, "first name should be more than 0 characters long");
-        check(last_name.size() > 0, "last name should be more than 0 characters long");
-        check(img_url.size() > 0, "not a valid image URL");
-        check(bio.size() > 0, "bio should be more than 0 characters long");
-        check(country.size() > 0, "country name should be more than 0 characters long");
-
-        //verify that the inputs aren't too long
-        check(first_name.size() < 128, "first name should be shorter than 128 characters.");
-        check(last_name.size() < 128, "last name should be shorter than 128 characters.");
-        check(img_url.size() < 128, "image URL should be shorter than 128 characters.");
-        check(bio.size() < 256, "description should be shorter than 256 characters.");
-        check(country.size() < 64, "country name should be shorter than 64 characters.");
-        check(telegram.size() < 64, "telegram username should be shorter than 64 characters.");
-        check(website.size() < 128, "website URL should be shorter than 128 characters.");
-        check(linkedin.size() < 128, "linked URL should be shorter than 128 characters.");
+        validate_proposer_fields( first_name, last_name, img_url, bio, country, telegram, website, linkedin );
 
         auto itr = _proposers.find(account.value);
         // verify that the account doesn't already exist in the table
@@ -351,10 +345,9 @@ namespace eosiosystem {
         });
     }
 
-    void system_contract::regreviewer(name committee, name reviewer, const string& first_name, const string& last_name){
-        //Require permission of committee account
-        require_auth(committee);
-
+    // Shared by regreviewer and editreviewer (WBP-1998).
+    void system_contract::validate_reviewer_fields( const name& reviewer, const string& first_name,
+                                                    const string& last_name ) const {
         //verify that the account exists
         check(is_account(reviewer), "The reviewer account does not exist");
 
@@ -365,6 +358,13 @@ namespace eosiosystem {
         //verify that the inputs are not too long
         check(first_name.size() < 128, "first name should be shorter than 128 characters.");
         check(last_name.size() < 128, "last name should be shorter than 128 characters.");
+    }
+
+    void system_contract::regreviewer(name committee, name reviewer, const string& first_name, const string& last_name){
+        //Require permission of committee account
+        require_auth(committee);
+
+        validate_reviewer_fields( reviewer, first_name, last_name );
 
         auto itr = _committees.find(committee.value);
         // verify that the committee is on committee table
@@ -387,16 +387,7 @@ namespace eosiosystem {
         //Require permission of committee account
         require_auth(committee);
 
-        //verify that the account exists
-        check(is_account(reviewer), "The reviewer account does not exist");
-
-        //verify that the inputs are not too short
-        check(first_name.size() > 0, "first name should be more than 0 characters long");
-        check(last_name.size() > 0, "last name should be more than 0 characters long");
-
-        //verify that the inputs are not too long
-        check(first_name.size() < 128, "first name should be shorter than 128 characters.");
-        check(last_name.size() < 128, "last name should be shorter than 128 characters.");
+        validate_reviewer_fields( reviewer, first_name, last_name );
 
         auto committee_itr = _committees.find(committee.value);
         // verify that the committee is on committee table
@@ -601,16 +592,22 @@ namespace eosiosystem {
         _wps_state.total_stake = total_stake;
     }
 
-    void system_contract::regcommittee(name committeeman, const string& category, bool is_oversight){
-        //registration of committee requires contract account permissions
-        require_auth(get_self());
-
+    // Shared by regcommittee and edcommittee (WBP-1998). The two copies had already drifted
+    // on the account-exists message; this is the one wording now.
+    void system_contract::validate_committee_fields( const name& committeeman, const string& category ) const {
         //verify that the committee account exists
         check(is_account(committeeman), "committeeman account doesn't exist");
 
         //verify that the size of the category string is not too long/short
         check(category.size() > 0, "category should be more than 0 characters long");
         check(category.size() < 64, "category should be less than 64 characters long");
+    }
+
+    void system_contract::regcommittee(name committeeman, const string& category, bool is_oversight){
+        //registration of committee requires contract account permissions
+        require_auth(get_self());
+
+        validate_committee_fields( committeeman, category );
 
         auto itr = _committees.find(committeeman.value);
         // verify that the account doesn't already exist in the table
@@ -628,12 +625,7 @@ namespace eosiosystem {
         //editing committee info requires contract account permissions
         require_auth(get_self());
 
-        //verify that the committee account exists
-        check(is_account(committeeman), "committee account doesn't exist");
-
-        //verify that the size of the category string is not too long/short
-        check(category.size() > 0, "category should be more than 0 characters long");
-        check(category.size() < 64, "category should be less than 64 characters long");
+        validate_committee_fields( committeeman, category );
 
         auto itr = _committees.find(committeeman.value);
         // verify that the account doesn't already exist in the table
