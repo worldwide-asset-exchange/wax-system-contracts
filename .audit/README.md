@@ -74,6 +74,27 @@ Each carries a class ID used in audit reports.
 - **C4b** — a `check()` that has been commented out. A disabled assertion is a statement
   that the invariant does not hold.
 
+The next five were added under WBP-1998 after the 2026-09 audit found that four of its first
+seven findings had one shape — an action whose validation does not do what its error message
+claims — and a fifth came from two sibling actions validating the same input differently.
+
+- **C6** — the error message does not describe what the check enforces: strict wording on a
+  non-strict operator (`"must be greater than 0"` on `>= 0`), a number in the message that is
+  not the number in the comparison (`< 400` / `"shorter than 256"`), or "characters" counted
+  on a vector.
+- **C6-sibling** — a `reg*`/`edit*` pair carries two inline copies of the same validation.
+  Reported at three levels: the copies already disagree (the weaker one is usually the
+  finding), a message has drifted, or they still agree and should share one `validate_*`
+  helper before they stop agreeing.
+- **C6-setter** — a `set*` action stores a numeric parameter that no `check()` bounds.
+- **C3** — an action takes an `asset` it never validates (`is_valid()` / sign of `.amount`),
+  in its own body or in a helper it hands the asset to.
+- **C2** (narrowing) — a product with a 64-bit operand assigned into a `uint32_t`.
+
+Each of these was calibrated on both trees before it was kept: it fires on every known
+instance at the audit base and goes quiet on every fixed one. `rules/test_wcap_check.py`
+pins that behaviour with a positive and a negative case per check, and runs in CI.
+
 ## Usage
 
 ```bash
@@ -82,6 +103,9 @@ Each carries a class ID used in audit reports.
 
 # type-aware checks only, no docker needed
 python3 .audit/rules/wcap-check.py contracts
+
+# self-test of the type-aware checks (positive and negative case per check)
+python3 .audit/rules/test_wcap_check.py
 
 # deployed-vs-source verification, after `make dev-docker-all`
 .audit/verify-hashes.sh build

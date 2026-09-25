@@ -37,7 +37,11 @@ jobs:
         with:
           python-version: '3.11'
 
-      # A1, C4, C4b, C5 — needs declared types and decl->def linking. No dependencies.
+      # The checker's own self-test: a rule that has lost its precision fails here first.
+      - name: Type-aware checks self-test
+        run: python3 .audit/rules/test_wcap_check.py
+
+      # A1, C2, C3, C4, C4b, C5, C6 — needs declared types and decl->def linking. No dependencies.
       - name: Type-aware contract checks
         run: |
           python3 .audit/rules/wcap-check.py contracts \
