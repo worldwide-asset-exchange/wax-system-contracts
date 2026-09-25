@@ -31,10 +31,12 @@ the script never signs, never broadcasts, and never sees a key.
 
 ## The build is the same build the audit verifies
 
-`build` exports the tag with `git archive` and compiles it inside the image pinned in the
-`Makefile`, exactly as [`.audit/reproduce-deployed.sh`](../.audit/reproduce-deployed.sh) does, so
-the hash the runbook shows is the hash `.audit/verify-hashes.sh` will match after the deploy. On a
-shared host, cap the container: `DOCKER_OPTS="--cgroup-parent=wax-build.slice --cpus 6"`.
+`build` runs [`.audit/reproduce-deployed.sh`](../.audit/reproduce-deployed.sh) on the tag with the
+image the tag's own `Makefile` pins (so a rollback to an older tag builds with its own toolchain),
+then keeps the artefacts. One build recipe, so the hash the runbook shows is the hash
+`.audit/verify-hashes.sh` will match after the deploy; before the deploy the comparison table it
+prints shows `eosio` as `no`, which is the point. On a shared host, cap the container:
+`WCAP_DOCKER_OPTS="--cgroup-parent=wax-build.slice --cpus 6"`.
 
 ## What the runbook contains
 
@@ -59,6 +61,6 @@ the proposal bills and the NET the propose transaction uses, and says what to do
 | `WAX_API` | `https://wax.greymass.com` | chain API used for reads and by `cleos` |
 | `PROPOSER` | `admin2.wax` | msig proposer; needs free RAM for the packed proposal |
 | `EXPIRE_DAYS` | `7` | proposal transaction lifetime |
-| `IMAGE` | `waxteam/waxdev:<Makefile DEV_VERSION>` | toolchain image; also supplies `cleos` |
-| `DOCKER_OPTS` | `--cpus 6` | build container caps |
-| `JOBS` | `6` | `make -j` |
+| `IMAGE` | `waxteam/waxdev:<DEV_VERSION from the tag's Makefile>` | toolchain image; also supplies `cleos` |
+| `WCAP_DOCKER_OPTS` | `--cpus 6` | build container caps (read by `reproduce-deployed.sh`) |
+| `WCAP_JOBS` | `6` | `make -j` (read by `reproduce-deployed.sh`) |

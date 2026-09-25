@@ -19,10 +19,12 @@
 #   WAX_API      chain API            default https://wax.greymass.com
 #   PROPOSER     msig proposer        default admin2.wax  (needs free RAM >= the packed proposal)
 #   EXPIRE_DAYS  proposal lifetime    default 7
-#   IMAGE        toolchain image      default waxteam/waxdev:<DEV_VERSION from Makefile>
-#   DOCKER_OPTS  build container caps default "--cpus 6"   (shared host: add --cgroup-parent=...)
-#   JOBS         make -j              default 6
+#   IMAGE        toolchain image      default waxteam/waxdev:<DEV_VERSION from the TAG's Makefile>
+#   WCAP_DOCKER_OPTS  build container caps, default "--cpus 6" (shared host: add --cgroup-parent=...)
+#   WCAP_JOBS         make -j, default 6            (both as .audit/reproduce-deployed.sh reads them)
 # Needs docker, git, curl, jq. cleos runs inside the image; nothing is installed on the host.
+# The build itself is .audit/reproduce-deployed.sh - one recipe, so the hash the runbook prints is
+# the hash verify-hashes.sh will check after the deploy.
 set -euo pipefail
 
 STEP="${1:-}"; TAG="${2:-}"
@@ -32,16 +34,16 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 API="${WAX_API:-https://wax.greymass.com}"
 PROPOSER="${PROPOSER:-admin2.wax}"
 EXPIRE_DAYS="${EXPIRE_DAYS:-7}"
-IMAGE="${IMAGE:-waxteam/waxdev:$(sed -n 's/^DEV_VERSION=//p' "$ROOT/Makefile")}"
-DOCKER_OPTS="${DOCKER_OPTS:---cpus 6}"
-JOBS="${JOBS:-6}"
+# The image the tag itself pins, so an older tag (a rollback) is built with its own toolchain.
+IMAGE="${IMAGE:-waxteam/waxdev:$(git -C "$ROOT" show "$TAG:Makefile" | sed -n 's/^DEV_VERSION=//p')}"
 OUT="$ROOT/deploy/out/$TAG"
 CONTRACT_ACCOUNT=eosio
 
 chain() { curl -sf --max-time 20 -X POST "$API/v1/chain/$1" -d "$2"; }
 # cleos from the pinned image, as the calling user, with deploy/out/<tag> mounted at /opt/out.
+# --network host so a local API (a dry run against a test chain) works the same as mainnet.
 cleos() {
-  docker run --rm --cpus 1 --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  docker run --rm --cpus 1 --network host --user "$(id -u):$(id -g)" -e HOME=/tmp \
     -v "$OUT":/opt/out -w /opt/out "$IMAGE" cleos -u "$API" "$@"
 }
 sha() { sha256sum "$1" | cut -d' ' -f1; }
@@ -49,21 +51,19 @@ sha() { sha256sum "$1" | cut -d' ' -f1; }
 # ---------------------------------------------------------------- build
 do_build() {
   local commit; commit="$(git -C "$ROOT" rev-parse --short "$TAG^{commit}")"
-  rm -rf "$OUT" && mkdir -p "$OUT/src"
-  git -C "$ROOT" archive "$TAG" | tar -x -C "$OUT/src"
+  rm -rf "$OUT" && mkdir -p "$OUT"
   echo "build $TAG ($commit) in $IMAGE"
-  docker image inspect "$IMAGE" >/dev/null 2>&1 || docker pull -q "$IMAGE" >/dev/null
-  # shellcheck disable=SC2086
-  docker run --rm $DOCKER_OPTS --user "$(id -u):$(id -g)" -e HOME=/tmp -e JOBS="$JOBS" \
-    -v "$OUT/src":/opt/contracts -w /opt/contracts "$IMAGE" bash -lc '
-    set -e
-    rm -rf build && mkdir build && cd build
-    cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF .. >cmake.log 2>&1 || { tail -20 cmake.log; exit 1; }
-    make -j"$JOBS" >make.log 2>&1 || { tail -30 make.log; exit 1; }
-  ' || { echo "build failed (logs under $OUT/src/build)"; exit 1; }
-  cp "$OUT/src/build/contracts/eosio.system/eosio.system.wasm" "$OUT/src/build/contracts/eosio.system/eosio.system.abi" "$OUT/"
-  cp "$OUT/src/build/cmake.log" "$OUT/src/build/make.log" "$OUT/"
-  rm -rf "$OUT/src"
+  # reproduce-deployed.sh builds the ref in the image and compares every wasm with mainnet. Before
+  # the deploy nothing matches (exit 1) - expected; a build failure also exits 1, so the artefact
+  # decides. Exit 2 is "mainnet unreachable".
+  local rc=0
+  WCAP_SCRATCH="$OUT" "$ROOT/.audit/reproduce-deployed.sh" "$TAG" "$IMAGE" || rc=$?
+  (( rc != 2 )) || echo "mainnet not reachable; the build may be fine but could not be compared"
+  local work="$OUT/reproduce-${TAG//\//_}"
+  [[ -f "$work/build/contracts/eosio.system/eosio.system.wasm" ]] || { echo "build failed (logs under $work/build)"; exit 1; }
+  cp "$work/build/contracts/eosio.system/eosio.system.wasm" "$work/build/contracts/eosio.system/eosio.system.abi" "$OUT/"
+  cp "$work/build/cmake.log" "$work/build/make.log" "$OUT/"
+  rm -rf "$work"
   (cd "$OUT" && sha256sum eosio.system.wasm eosio.system.abi > SHA256SUMS)
   {
     echo "tag       $TAG"
@@ -120,24 +120,26 @@ do_plan() {
 
   # --- the set-contract transaction, unsigned, and its packed size
   local exp=$(( EXPIRE_DAYS * 86400 ))
-  # --compression none: the msig stores the transaction uncompressed, so this hex is what
-  # `cleos multisig review` will show, byte for byte, and its size is what the proposal bills.
+  # One cleos run makes the transaction (expiration and TaPoS come from the chain at that moment);
+  # the packed form is derived from that same JSON, so the hex is byte for byte what the msig will
+  # store and `cleos multisig review` will show. The msig stores it uncompressed.
   cleos set contract "$CONTRACT_ACCOUNT" /opt/out eosio.system.wasm eosio.system.abi --compression none \
     -p "$CONTRACT_ACCOUNT@active" -s -d -j -x "$exp" --suppress-duplicate-check > "$OUT/02-set-contract.trx.json"
-  cleos set contract "$CONTRACT_ACCOUNT" /opt/out eosio.system.wasm eosio.system.abi --compression none \
-    -p "$CONTRACT_ACCOUNT@active" -s -d -j -x "$exp" --suppress-duplicate-check --return-packed \
-    | jq -r .packed_trx | tr -d '\n' > "$OUT/02-set-contract.packed_trx.hex"
+  # (the file name, not its contents: the JSON is far larger than one argument may be)
+  cleos convert pack_transaction 02-set-contract.trx.json | jq -r .packed_trx > "$OUT/02-set-contract.packed_trx.hex"
   local code_bytes abi_bytes packed_bytes largest
-  code_bytes="$(jq '[.actions[] | select(.name=="setcode") | .data | length / 2] | add' "$OUT/02-set-contract.trx.json")"
-  abi_bytes="$(jq '[.actions[] | select(.name=="setabi") | .data | length / 2] | add' "$OUT/02-set-contract.trx.json")"
-  packed_bytes=$(( $(wc -c < "$OUT/02-set-contract.packed_trx.hex") / 2 ))
+  # action data may be hex (`data`) or, if this cleos decoded it, an object with the hex in `hex_data`
+  code_bytes="$(jq '[.actions[] | select(.name=="setcode") | (.hex_data // .data) | length / 2] | add' "$OUT/02-set-contract.trx.json")"
+  abi_bytes="$(jq '[.actions[] | select(.name=="setabi") | (.hex_data // .data) | length / 2] | add' "$OUT/02-set-contract.trx.json")"
+  packed_bytes=$(( ( $(wc -c < "$OUT/02-set-contract.packed_trx.hex") - 1 ) / 2 ))
   largest=$(( code_bytes > abi_bytes ? code_bytes : abi_bytes ))
 
   # --- which parameters the deploy needs raised, and to what
-  # inline: the msig exec runs setcode/setabi as inline actions, each bounded by max_inline_action_size.
+  # inline: the msig exec runs setcode/setabi as inline actions; the chain requires
+  # data.size() < max_inline_action_size (strict).
   # net: the propose transaction carries the packed transaction; bounded by max_transaction_net_usage.
-  local raise="$params" need=()
-  if (( largest > cur_inline )); then
+  local raise="$params" need=() net_raised=0
+  if (( largest >= cur_inline )); then
     local new_inline; new_inline="$(roundup $(( largest * 2 )) 100000)"
     raise="$(jq -c --argjson v "$new_inline" '.max_inline_action_size=$v' <<<"$raise")"
     need+=("max_inline_action_size $cur_inline -> $new_inline (largest action $largest bytes)")
@@ -147,6 +149,7 @@ do_plan() {
     local new_net; new_net="$(roundup $(( propose_bytes * 2 )) 65536)"
     raise="$(jq -c --argjson v "$new_net" '.max_transaction_net_usage=$v' <<<"$raise")"
     need+=("max_transaction_net_usage $cur_net -> $new_net (propose transaction ~$propose_bytes bytes)")
+    net_raised=1
     (( new_net <= cur_blocknet )) || { echo "max_transaction_net_usage $new_net would exceed max_block_net_usage $cur_blocknet - raise that too, by hand"; exit 1; }
   fi
   if (( ${#need[@]} )); then
@@ -166,7 +169,8 @@ do_plan() {
   prop_net="$(jq '.net_limit.available' <<<"$prop_acct")"
   prop_open="$(chain get_table_rows "{\"json\":true,\"code\":\"eosio.msig\",\"scope\":\"$PROPOSER\",\"table\":\"proposal\",\"limit\":50}" | jq -r '[.rows[].proposal_name] | join(" ")')"
   local six; six="$(printf '%s' "$built" | cut -c1-6 | tr '0-9a-f' 'abcdefghijklmnop')"
-  local n_inc="inc$six" n_set="set$six" n_res="res$six"
+  local n_inc="inc$six" n_set="set$six" n_res="res$six" clash=""
+  for n in $n_inc $n_set $n_res; do [[ " $prop_open " == *" $n "* ]] && clash="$clash $n"; done
 
   # --- the runbook
   {
@@ -197,20 +201,27 @@ do_plan() {
     echo "## Before proposing"; echo
     (( prop_ram >= propose_bytes )) || echo "- **$PROPOSER has $prop_ram bytes of free RAM; the proposal needs ~$propose_bytes.** Buy RAM for the proposer or choose another (\`PROPOSER=...\`)."
     (( prop_net >= propose_bytes )) || echo "- **$PROPOSER has $prop_net bytes of NET available; the propose transaction needs ~$propose_bytes.** Stake or power up NET for the proposer first (ONLY_BILL_FIRST_AUTHORIZER: the proposer pays), or choose another (\`PROPOSER=...\`)."
+    [[ -z "$clash" ]] || echo "- **Proposal name(s)$clash already open under $PROPOSER** (an earlier run for this same build). Cancel or exec those first: \`cleos -u $API multisig cancel $PROPOSER <name> $PROPOSER -p $PROPOSER@active\`."
     echo "- Cancel any older proposal for $CONTRACT_ACCOUNT that names an action this ABI removes (an unimplemented action name executes as a silent no-op after setcode)."
     echo "- Approvers: before approving \`$n_set\`, compare the packed transaction on chain with this file, byte for byte:"
-    echo "  \`cleos -u $API multisig review $PROPOSER $n_set | jq -r .packed_transaction | sha256sum\` must print \`$(sha "$OUT/02-set-contract.packed_trx.hex")\` (= sha256 of \`02-set-contract.packed_trx.hex\`)."
+    echo "  \`cleos -u $API multisig review $PROPOSER $n_set | jq -r .packed_transaction | sha256sum\` must print \`$(sha "$OUT/02-set-contract.packed_trx.hex")\` (= \`sha256sum $OUT/02-set-contract.packed_trx.hex\`)."
     (( ${#need[@]} )) && echo "- Approvers: \`01-raise-params.params.json\` and \`03-restore-params.params.json\` are the full setparams payloads; only the raised field(s) differ from today's \`global\` row."
     echo
+    local req="$OUT/requested.json"
+    if (( net_raised )); then
+      echo "## Order matters here"; echo
+      echo "The propose transaction for \`$n_set\` is itself larger than today's \`max_transaction_net_usage\`, so \`$n_inc\` must be proposed, approved **and executed** before \`$n_set\` can be proposed. Run steps 1-3 for \`$n_inc\` first, then for \`$n_set\` and \`$n_res\`."; echo
+    fi
     echo "## 1. Propose (proposer's key)"; echo; echo '```'
-    (( ${#need[@]} )) && echo "cleos -u $API multisig propose_trx $n_inc requested.json 01-raise-params.trx.json $PROPOSER -p $PROPOSER@active"
-    echo "cleos -u $API multisig propose_trx $n_set requested.json 02-set-contract.trx.json $PROPOSER -p $PROPOSER@active"
-    (( ${#need[@]} )) && echo "cleos -u $API multisig propose_trx $n_res requested.json 03-restore-params.trx.json $PROPOSER -p $PROPOSER@active"
+    (( ${#need[@]} )) && echo "cleos -u $API multisig propose_trx $n_inc $req $OUT/01-raise-params.trx.json $PROPOSER -p $PROPOSER@active"
+    (( net_raised )) && echo "# ... approve and exec $n_inc (steps 2-3) before continuing ..."
+    echo "cleos -u $API multisig propose_trx $n_set $req $OUT/02-set-contract.trx.json $PROPOSER -p $PROPOSER@active"
+    (( ${#need[@]} )) && echo "cleos -u $API multisig propose_trx $n_res $req $OUT/03-restore-params.trx.json $PROPOSER -p $PROPOSER@active"
     echo '```'; echo
     echo "## 2. Review and approve (each approver, any that reach the threshold)"; echo; echo '```'
     for n in $( (( ${#need[@]} )) && echo "$n_inc $n_set $n_res" || echo "$n_set"); do
       echo "cleos -u $API multisig review $PROPOSER $n"
-      jq -r --arg p "$PROPOSER" --arg n "$n" --arg api "$API" '.[] | "cleos -u \($api) multisig approve \($p) \($n) '"'"'{\"actor\":\"\(.actor)\",\"permission\":\"\(.permission)\"}'"'"' -p \(.actor)@\(.permission)"' "$OUT/requested.json"
+      jq -r --arg p "$PROPOSER" --arg n "$n" --arg api "$API" '.[] | "cleos -u \($api) multisig approve \($p) \($n) '"'"'{\"actor\":\"\(.actor)\",\"permission\":\"\(.permission)\"}'"'"' -p \(.actor)@\(.permission)"' "$req"
     done
     echo '```'; echo
     echo "## 3. Execute, in this order, each after the previous is irreversible (~3 minutes)"; echo; echo '```'
@@ -219,7 +230,7 @@ do_plan() {
     (( ${#need[@]} )) && echo "cleos -u $API multisig exec $PROPOSER $n_res -p $PROPOSER@active"
     echo '```'; echo
     echo "## 4. Verify"; echo; echo '```'
-    echo "deploy/system-contract.sh verify $TAG"
+    echo "$ROOT/deploy/system-contract.sh verify $TAG"
     echo '```'; echo
     echo "## Undo"; echo
     echo "Before exec: \`cleos -u $API multisig cancel $PROPOSER <name> $PROPOSER -p $PROPOSER@active\`. After exec of \`$n_set\`: propose the previous tag the same way; there is no other rollback."
@@ -231,6 +242,7 @@ do_plan() {
   if (( ${#need[@]} )); then printf 'raise: %s\n' "${need[@]}"; else echo "no parameter change needed"; fi
   (( prop_ram >= propose_bytes )) || echo "WARN: $PROPOSER free RAM $prop_ram < $propose_bytes needed for the proposal"
   (( prop_net >= propose_bytes )) || echo "WARN: $PROPOSER NET available $prop_net < $propose_bytes needed to propose"
+  [[ -z "$clash" ]] || echo "WARN: proposal name(s)$clash already open under $PROPOSER - cancel or exec them first"
   echo "proposals: $( (( ${#need[@]} )) && echo "$n_inc -> $n_set -> $n_res" || echo "$n_set" )"
   echo "runbook:   $OUT/RUNBOOK.md"
 }
