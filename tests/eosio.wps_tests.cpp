@@ -1546,4 +1546,78 @@ BOOST_FIXTURE_TEST_CASE( wcap_010_claim_cadence_control_long_duration, eosio_wps
    BOOST_REQUIRE_EQUAL( 2, proposal["iteration_of_funding"].as<int>() );
 } FC_LOG_AND_RETHROW()
 
+// WBP-1998: each reg*/edit* pair validates through one shared helper, so the same bad input is
+// rejected by both sides with the same message. Before this change the pairs carried two inline
+// copies of the checks (the shape that produced WCAP-SYS-2026-003), and regcommittee/edcommittee
+// had already drifted on the account-exists message.
+BOOST_FIXTURE_TEST_CASE( wbp_1998_proposer_reg_and_edit_share_validation, eosio_wps_tester ) try {
+    create_account_with_resources("proposer1111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
+        core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+    setwpsenv(config::system_account_name, 5, 30, 500, 6);
+    const std::string long128(128, 'x');
+    const std::string long256(256, 'x');
+
+    // register once so edit has a row to work on
+    BOOST_REQUIRE_EQUAL(success(),
+        regproposer("proposer1111"_n, "proposer1111"_n, "user", "one", "img", "bio", "country", "tg", "web", "in"));
+    produce_blocks(1);
+
+    // every bound, both sides, same message
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("first name should be more than 0 characters long"),
+        regproposer("proposer1111"_n, "proposer1111"_n, "", "one", "img", "bio", "country", "tg", "web", "in"));
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("first name should be more than 0 characters long"),
+        editproposer("proposer1111"_n, "proposer1111"_n, "", "one", "img", "bio", "country", "tg", "web", "in"));
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("first name should be shorter than 128 characters."),
+        editproposer("proposer1111"_n, "proposer1111"_n, long128, "one", "img", "bio", "country", "tg", "web", "in"));
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("bio should be shorter than 256 characters."),
+        regproposer("proposer1111"_n, "proposer1111"_n, "user", "one", "img", long256, "country", "tg", "web", "in"));
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("bio should be shorter than 256 characters."),
+        editproposer("proposer1111"_n, "proposer1111"_n, "user", "one", "img", long256, "country", "tg", "web", "in"));
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("linkedin URL should be shorter than 128 characters."),
+        editproposer("proposer1111"_n, "proposer1111"_n, "user", "one", "img", "bio", "country", "tg", "web", long128));
+
+    // the bounds are exclusive on both sides: 127 passes, 128 fails (was already so; now stated once)
+    const std::string ok127(127, 'x');
+    BOOST_REQUIRE_EQUAL(success(),
+        editproposer("proposer1111"_n, "proposer1111"_n, ok127, "one", "img", "bio", "country", "tg", "web", "in"));
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( wbp_1998_reviewer_and_committee_pairs_share_validation, eosio_wps_tester ) try {
+    create_account_with_resources("committee111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
+        core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+    create_account_with_resources("reviewer1111"_n, config::system_account_name, core_sym::from_string("100.0000"), false,
+        core_sym::from_string("10.0000"), core_sym::from_string("10.0000"));
+    setwpsenv(config::system_account_name, 5, 30, 500, 6);
+    const std::string long64(64, 'x');
+    const std::string long128(128, 'x');
+
+    // committee: the drifted message is now one message, on both sides
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("committeeman account doesn't exist"),
+        regcommittee(config::system_account_name, "nosuchacct11"_n, "categoryX", true));
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("committeeman account doesn't exist"),
+        edcommittee(config::system_account_name, "nosuchacct11"_n, "categoryX", true));
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("category should be more than 0 characters long"),
+        regcommittee(config::system_account_name, "committee111"_n, "", true));
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("category should be less than 64 characters long"),
+        regcommittee(config::system_account_name, "committee111"_n, long64, true));
+    BOOST_REQUIRE_EQUAL(success(), regcommittee(config::system_account_name, "committee111"_n, "categoryX", true));
+    produce_blocks(1);
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("category should be less than 64 characters long"),
+        edcommittee(config::system_account_name, "committee111"_n, long64, true));
+
+    // reviewer
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("The reviewer account does not exist"),
+        regreviewer("committee111"_n, "committee111"_n, "nosuchacct11"_n, "bob", "bob"));
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("last name should be more than 0 characters long"),
+        regreviewer("committee111"_n, "committee111"_n, "reviewer1111"_n, "bob", ""));
+    BOOST_REQUIRE_EQUAL(success(), regreviewer("committee111"_n, "committee111"_n, "reviewer1111"_n, "bob", "bob"));
+    produce_blocks(1);
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("The reviewer account does not exist"),
+        editreviewer("committee111"_n, "committee111"_n, "nosuchacct11"_n, "bob", "bob"));
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("first name should be shorter than 128 characters."),
+        editreviewer("committee111"_n, "committee111"_n, "reviewer1111"_n, long128, "bob"));
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("last name should be more than 0 characters long"),
+        editreviewer("committee111"_n, "committee111"_n, "reviewer1111"_n, "bob", ""));
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()
