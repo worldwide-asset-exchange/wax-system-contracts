@@ -3449,13 +3449,22 @@ BOOST_FIXTURE_TEST_CASE(producers_upgrade_system_contract, eosio_system_tester) 
 
    transaction trx;
    {
-      //prepare system contract with different hash (contract differs in one byte)
+      //prepare system contract with different hash. Preferred: flip one byte of a known
+      //error message. wasm-ld splits the data section into segments at points that move
+      //with every layout change, and a segment header can land inside that literal (it did
+      //under WBP-1998: "...uniqu" | header | "e and sorted"), so if the message is not
+      //contiguous in this build, append an empty custom section instead - the VM parses
+      //and ignores custom sections, and the hash still differs.
       auto code = contracts::system_wasm();
       string msg = "producer votes must be unique";
       auto it = std::search( code.begin(), code.end(), msg.begin(), msg.end() );
-      BOOST_REQUIRE( it != code.end() );
-      msg[0] = 'P';
-      std::copy( msg.begin(), msg.end(), it );
+      if( it != code.end() ) {
+         msg[0] = 'P';
+         std::copy( msg.begin(), msg.end(), it );
+      } else {
+         const char section[] = { 0x00, 0x05, 0x04, 'w', 'c', 'a', 'p' };   // id 0, size 5, name "wcap"
+         code.insert( code.end(), std::begin(section), std::end(section) );
+      }
 
       fc::variant pretty_trx = fc::mutable_variant_object()
          ("expiration", "2020-01-01T00:30")
