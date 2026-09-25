@@ -10,6 +10,23 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+## wax-3.3.2
+
+Supersedes wax-3.3.1 before it reached mainnet: the same remediation set plus the one finding filed
+after the tag, so the deployed contract carries every code fix of the 2026-09 review.
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
+
+- `deploy/system-contract.sh` replaces `deploy-system-contract.bash` (WBP-2025): reproducible
+  tag build, unsigned `eosio.msig` proposals and a runbook generated from live chain state; no
+  keys. Tooling only.
+
+BUG FIXES:
+
 - `setramrate` refuses more than `max_new_ram_per_block` (8,192 bytes per block, about 1.4 GB
   per day; mainnet runs 0) with a message that names the bound (WBP-2022; closes
   WCAP-SYS-2026-017). Previously
