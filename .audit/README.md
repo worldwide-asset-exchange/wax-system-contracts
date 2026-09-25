@@ -125,7 +125,7 @@ second column):
 
 | account | deployed | reproduced from | toolchain image | match |
 |---|---|---|---|---|
-| `eosio` | 2026-02-17 | `wax-3.3.0` (`715ddba`) | `waxteam/waxdev:v5.0.3wax02-v4.1.0` (cdt 4.1.0) | **yes**, bit for bit |
+| `eosio` | 2026-09-25 | `wax-3.3.2` (`d12f261`) — the 2026-09 review's remediations; replaced `wax-3.3.0` (`715ddba`, deployed 2026-02-17), which was reproduced the same way | `waxteam/waxdev:v5.0.3wax02-v4.1.0` (cdt 4.1.0) | **yes**, bit for bit (`f5b832cd…`) |
 | `eosio.token` | 2019-12-10 | source identical to `wax-1.7.0-2.0.0` (`318dc57`, tagged the day after the deployment) | `waxteam/dev:wax-1.6.1-1.2.1` (eosio.cdt 1.6.1) | **yes**, bit for bit |
 | `eosio.wrap` | 2019-12-10 | source identical to `wax-1.7.0-2.0.0` (`318dc57`) | `waxteam/dev:wax-1.6.1-1.2.1` (eosio.cdt 1.6.1) | **yes**, bit for bit |
 | `eosio.msig` | 2022-12-08 | `EOSIO/eosio.contracts` branch `1.8.3-oob-patch` (`301c901`, 2020-09-14) | official `eosio.cdt` 1.6.3 package on Ubuntu 18.04, via the CDT cmake toolchain | **yes**, bit for bit |
