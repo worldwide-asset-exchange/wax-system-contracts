@@ -34,7 +34,9 @@ inline const name prod_d          = "defproducerd"_n;
 inline const name prod_e          = "defproducere"_n;
 
 // sha256 of guilds_oig_718903f.wasm. Move this constant only in a commit that names the guilds.oig source SHA.
-inline const std::string guilds_718903f_sha256 = "cca52864dcbb13af50069ad5358c3a3d0254d351e6d79bac3b8c1d4ea3ded155";
+inline const std::string guilds_718903f_sha256     = "cca52864dcbb13af50069ad5358c3a3d0254d351e6d79bac3b8c1d4ea3ded155";
+// sha256 of guilds_oig_718903f.abi (the file bytes; read_abi's trailing NUL is excluded from the hash)
+inline const std::string guilds_718903f_abi_sha256 = "2e0f556559d7941a388f15540be530ecd66b912e03cdf8b1cf3c75ae9fcaf300";
 
 inline const std::string lacking_oig_authority = "Lacking OIG authority.";
 inline const std::string empty_evaluation      = "Evaluation must include at least one guild score.";
@@ -51,9 +53,11 @@ using score_list = std::vector<std::pair<name, uint32_t>>;
 struct guilds_fixture_base : eosio_system_tester {
    abi_serializer          guilds_abi_ser;
    std::vector<uint8_t>    deployed_wasm;
+   std::vector<char>       deployed_abi;
    const std::vector<name> producers = { prod_a, prod_b, prod_c, prod_d, prod_e };
 
-   guilds_fixture_base( std::vector<uint8_t> wasm, std::vector<char> abi ) : deployed_wasm( std::move(wasm) ) {
+   guilds_fixture_base( std::vector<uint8_t> wasm, std::vector<char> abi )
+      : deployed_wasm( std::move(wasm) ), deployed_abi( std::move(abi) ) {
       const asset net = core_sym::from_string("800.0000");
       const asset cpu = core_sym::from_string("800.0000");
       for( const auto& a : { guilds_account, oig, treasury } ) {
@@ -64,7 +68,7 @@ struct guilds_fixture_base : eosio_system_tester {
       produce_blocks( 2 );
 
       set_code( guilds_account, deployed_wasm );
-      set_abi( guilds_account, abi.data() );
+      set_abi( guilds_account, deployed_abi.data() );
       {
          const auto& accnt = control->db().get<account_object,by_name>( guilds_account );
          abi_def abi_def_;
@@ -81,6 +85,11 @@ struct guilds_fixture_base : eosio_system_tester {
 
    std::string wasm_sha256() const {
       return fc::sha256::hash( reinterpret_cast<const char*>( deployed_wasm.data() ), deployed_wasm.size() ).str();
+   }
+
+   std::string abi_sha256() const {
+      const auto end = std::find( deployed_abi.begin(), deployed_abi.end(), '\0' );
+      return fc::sha256::hash( deployed_abi.data(), static_cast<uint32_t>( end - deployed_abi.begin() ) ).str();
    }
 
    std::string on_chain_code_hash() const {
@@ -200,11 +209,14 @@ struct guilds_fixture_base : eosio_system_tester {
 struct eosio_guilds_tester : guilds_fixture_base {
    eosio_guilds_tester() : guilds_fixture_base( contracts::util::guild_718903f_wasm(), contracts::util::guild_718903f_abi() ) {
       BOOST_REQUIRE_EQUAL( guilds_718903f_sha256, wasm_sha256() );
+      BOOST_REQUIRE_EQUAL( guilds_718903f_abi_sha256, abi_sha256() );
    }
 };
 
 // the legacy mock the weighted-producer tests deploy (deployed-era shape: pusheval -> setscores -> clearscores,
-// then apply() -> vote(), which needs at least 22 guilds at or above `minimum` or the whole action fails)
+// then apply() -> vote()). apply() asserts top21.size()==21 ("Less than 21 guilds passing minimum score.") but
+// fills top21 with 20 names for i<20 and adds the 21st only in the i==21 branch, so it needs 22 guilds at or
+// above `minimum` or the whole action fails; the fixture seeds 23.
 struct legacy_guilds_mock_tester : guilds_fixture_base {
    std::vector<name> legacy_producers;   // defproducera..defproducerw, 23 registered producers
 
@@ -262,6 +274,7 @@ BOOST_FIXTURE_TEST_CASE( wcap_gld_fixture_pins_audited_build, eosio_guilds_teste
    // the bytes we loaded are the audited build, and they are what the chain is running
    BOOST_REQUIRE_EQUAL( guilds_718903f_sha256, wasm_sha256() );
    BOOST_REQUIRE_EQUAL( guilds_718903f_sha256, on_chain_code_hash() );
+   BOOST_REQUIRE_EQUAL( guilds_718903f_abi_sha256, abi_sha256() );
 
    // 718903f is scoring-only: the legacy payment/eligibility surface is gone from the ABI
    const std::set<std::string> scoring_only_actions = { "pusheval", "retireguild", "rmguild" };
@@ -436,9 +449,9 @@ BOOST_FIXTURE_TEST_CASE( wcap_gld_pusheval_type_is_a_label, eosio_guilds_tester 
       BOOST_REQUIRE_EQUAL( expected,     prv_score( prod_a ) );
       require_unchanged( before );
       const auto evals = evaluations();
-      BOOST_REQUIRE_EQUAL( type, evals.back()["type"].as<uint8_t>() );
-      BOOST_REQUIRE_EQUAL( 0u,   evals.back()["minimum"].as<uint32_t>() );
-      BOOST_REQUIRE_EQUAL( 0u,   evals.back()["decimals"].as<uint8_t>() );
+      BOOST_REQUIRE_EQUAL( unsigned(type), unsigned( evals.back()["type"].as<uint8_t>() ) );
+      BOOST_REQUIRE_EQUAL( 0u,             evals.back()["minimum"].as<uint32_t>() );
+      BOOST_REQUIRE_EQUAL( 0u,             unsigned( evals.back()["decimals"].as<uint8_t>() ) );
       ++expected;
    }
    BOOST_REQUIRE_EQUAL( 5u, evaluation_count() );
@@ -493,7 +506,7 @@ BOOST_FIXTURE_TEST_CASE( wcap_gld_retire_zeroes_score, eosio_guilds_tester ) try
    BOOST_REQUIRE_EQUAL( 0u,   g["score"].as<uint32_t>() );
    BOOST_REQUIRE_EQUAL( 0u,   g["prv_score"].as<uint32_t>() );
    BOOST_REQUIRE_EQUAL( true, g["retired"].as<bool>() );
-   // the legacy money fields are not touched by retire (a live 1.57 WAX balance would survive it)
+   // the legacy money fields keep their defaults; nothing at 718903f can set balance or eligibility
    BOOST_REQUIRE_EQUAL( "0.00000000 WAX", g["balance"].as_string() );
    BOOST_REQUIRE_EQUAL( "0.00000000 WAX", g["eligibility"].as_string() );
    BOOST_REQUIRE_EQUAL( false, g["autopay"].as<bool>() );
@@ -558,8 +571,13 @@ BOOST_FIXTURE_TEST_CASE( wcap_gld_rm_requires_retired, eosio_guilds_tester ) try
 
 BOOST_FIXTURE_TEST_CASE( wcap_gld_003_same_block_pusheval_collides, eosio_guilds_tester ) try {
    // evaluation::primary_key() is the block time, so two pusheval in one transaction (or one block)
-   // emplace the same key and the second fails the uniqueness check. This pins the current behaviour;
-   // WBP-2017 tracks the fix. INVERT ON FIX: the two-action transaction succeeds with two rows.
+   // emplace the same key. The second db_store_i64 fails inside chainbase
+   // (libraries/chaindb/include/chainbase/undo_index.hpp:365, a std::logic_error rethrown by the chain),
+   // not in the contract: there is no eosio_assert, so the message carries no "assertion failure with
+   // message:" prefix and the transaction's own context is appended. This pins the current behaviour;
+   // WBP-2017 tracks the fix. INVERT ON FIX: the two-action transaction succeeds with two rows, i.e.
+   //    push_transaction( trx ); produce_block();
+   //    BOOST_REQUIRE_EQUAL( evals_before + 2, evaluation_count() );
    BOOST_REQUIRE_EQUAL( success(), pusheval( oig, 0, { {prod_a, 10} } ) );
    const auto before = guild_snapshot( { prod_a, prod_b } );
    const auto evals_before = evaluation_count();
@@ -576,14 +594,16 @@ BOOST_FIXTURE_TEST_CASE( wcap_gld_003_same_block_pusheval_collides, eosio_guilds
       return trx;
    };
 
-   // one transaction, two actions: not an eosio_assert but a chainbase uniqueness violation
+   const std::string duplicate_key = error( "could not insert object, most likely a uniqueness constraint was violated"
+                                            ": guilds.oig <= guilds.oig::pusheval pending console output: " );
+
+   // one transaction, two actions
    {
       std::string msg;
       auto trx = two_pushes_one_transaction();
       try { push_transaction( trx ); }
       catch( const fc::exception& ex ) { msg = ex.top_message(); }
-      BOOST_TEST_MESSAGE( "two pusheval, one transaction: " << msg );
-      BOOST_REQUIRE_MESSAGE( msg.find( "could not insert object" ) != std::string::npos, "unexpected: " + msg );
+      BOOST_REQUIRE_EQUAL( duplicate_key, msg );
       require_unchanged( before );
       BOOST_REQUIRE( !has_guild( prod_b ) );
       BOOST_REQUIRE_EQUAL( evals_before, evaluation_count() );
@@ -608,7 +628,7 @@ BOOST_FIXTURE_TEST_CASE( wcap_gld_003_same_block_pusheval_collides, eosio_guilds
       std::string msg;
       try { push_transaction( trx2 ); }
       catch( const fc::exception& ex ) { msg = ex.top_message(); }
-      BOOST_REQUIRE_MESSAGE( msg.find( "could not insert object" ) != std::string::npos, "unexpected: " + msg );
+      BOOST_REQUIRE_EQUAL( duplicate_key, msg );
       produce_block();
       BOOST_REQUIRE_EQUAL( true, chain_has_transaction( trx1.id() ) );
       BOOST_REQUIRE_EQUAL( 11u, score( prod_a ) );
@@ -627,9 +647,9 @@ BOOST_FIXTURE_TEST_CASE( wcap_gld_003_same_block_pusheval_collides, eosio_guilds
 // ---------------------------------------------------------------------------------------------------
 //
 // The plan asked for "empty push zeroes every score" on the mock. It cannot be shown there: pusheval's
-// clearscores() does zero every non-retired score, but the unconditional apply() that follows requires
-// 21 guilds at or above `minimum` (>= 2 by the header check), finds none, and the whole action rolls
-// back with "Less than 21 guilds passing minimum score.". The deployed 6085791 has the same sequence
+// clearscores() does zero every non-retired score, but the unconditional apply() that follows (roster
+// requirement: see legacy_guilds_mock_tester) finds nothing at or above `minimum` (>= 2 by the header
+// check), and the whole action rolls back with its message. The deployed 6085791 has the same sequence
 // (src/guilds_oig.cpp 314, 323, 286, 584). The empty-vector defect is real only where apply() is gone,
 // i.e. the 4d8e2d0 refactor, and 718903f closes it (wcap_gld_008_empty_pusheval_is_refused above).
 // What the deployed-era shape does exhibit, and 718903f changes, is that omission is ejection.
