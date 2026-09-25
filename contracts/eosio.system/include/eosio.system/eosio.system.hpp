@@ -85,6 +85,7 @@ namespace eosiosystem {
    // separately.
    static constexpr uint32_t max_bp_score          = 100'000'000;
    static constexpr uint32_t max_active_producers  = 21;                // largest active schedule setprodcnt allows
+   static constexpr uint16_t max_new_ram_per_block = 8192;              // largest RAM growth rate setramrate allows: ~1.4 GB/day (WCAP-SYS-2026-017)
    // A standby is a runner-up for an active slot, so the standby list gets the same ceiling
    // as the active schedule can ever have (WCAP-SYS-2026-002). It is a constant, not the
    // live active_producer_count, so the two setters stay order-independent. Zero is valid.
@@ -1196,11 +1197,15 @@ namespace eosiosystem {
          void setram( uint64_t max_ram_size );
 
          /**
-          * Set ram rate action, sets the rate of increase of RAM in bytes per block. It is capped by the uint16_t to
-          * a maximum rate of 3 TB per year. If update_ram_supply hasn't been called for the most recent block,
-          * then new ram will be allocated at the old rate up to the present block before switching the rate.
+          * Set ram rate action, sets the rate of increase of RAM in bytes per block. If update_ram_supply hasn't
+          * been called for the most recent block, then new ram will be allocated at the old rate up to the present
+          * block before switching the rate.
           *
           * @param bytes_per_block - the amount of bytes per block increase to set.
+          *
+          * @pre `bytes_per_block` must not exceed `max_new_ram_per_block` (8,192 bytes per block, about 1.4 GB per
+          * day); zero is allowed and disables growth. RAM supply only ever increases (`setram` refuses a decrease),
+          * so a mistaken rate cannot be undone once it has accrued.
           */
          [[eosio::action]]
          void setramrate( uint16_t bytes_per_block );

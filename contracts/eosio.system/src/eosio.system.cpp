@@ -106,20 +106,26 @@ namespace eosiosystem {
       if( cbt <= _gstate2.last_ram_increase ) return;
 
       auto itr = _rammarket.find(ramcore_symbol.raw());
-      auto new_ram = (cbt.slot - _gstate2.last_ram_increase.slot)*_gstate2.new_ram_per_block;
+      // 64-bit product: slots * rate is a uint32 product in C++, and it wrapped once a gap with no RAM-market
+      // action exceeded 2^32 / rate slots (9 hours at the old maximum rate), under-crediting the supply
+      // (WCAP-SYS-2026-017).
+      const uint64_t new_ram = uint64_t(cbt.slot - _gstate2.last_ram_increase.slot) * _gstate2.new_ram_per_block;
       _gstate.max_ram_size += new_ram;
 
       /**
        *  Increase the amount of ram for sale based upon the change in max ram size.
        */
       _rammarket.modify( itr, same_payer, [&]( auto& m ) {
-         m.base.balance.amount += new_ram;
+         m.base.balance.amount += int64_t(new_ram);
       });
       _gstate2.last_ram_increase = cbt;
    }
 
    void system_contract::setramrate( uint16_t bytes_per_block ) {
       require_auth( get_self() );
+      // WCAP-SYS-2026-017: any uint16_t was stored; 65,535 bytes per block would have grown RAM supply by
+      // about 11 GB per day, irreversibly, since setram only ever increases.
+      check( bytes_per_block <= max_new_ram_per_block, "bytes_per_block cannot exceed " + std::to_string( max_new_ram_per_block ) );
 
       update_ram_supply();
       _gstate2.new_ram_per_block = bytes_per_block;

@@ -10,6 +10,14 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+- `setramrate` refuses more than `max_new_ram_per_block` (8,192 bytes per block, about 1.4 GB
+  per day; mainnet runs 0) with a message that names the bound (WCAP-SYS-2026-017). Previously
+  any `uint16_t` was stored, and the maximum, 65,535, would have grown RAM supply by about 11 GB
+  per day - 3.6% of today's pool - irreversibly, since `setram` only ever increases.
+  `update_ram_supply` also computes `slots * rate` in 64 bits: the 32-bit product wrapped once
+  a gap with no RAM-market action exceeded 2^32 / rate slots (9 hours at the old maximum),
+  under-crediting the supply.
+
 ## wax-3.3.1
 
 Security review performed internally using Claude (Anthropic) — Opus 5 for audit phases 0–5,
