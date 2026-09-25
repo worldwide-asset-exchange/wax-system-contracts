@@ -74,13 +74,20 @@ Each carries a class ID used in audit reports.
   and the error message misleads.
 - **C4b** — a `check()` that has been commented out. A disabled assertion is a statement
   that the invariant does not hold.
-- **D3** — a `check()`, `eosio_assert()`, or a throwing table read (`get`, `require_find`,
-  `at`) in any function `onblock` can reach, walking the call graph from `onblock` through
-  every definition in the contract, row methods included. A throw there does not halt the
-  chain — nodeos logs `onblock … is REJECTING` and produces the block anyway — but while it
-  fails every block the election, standby rotation, unpaid-block accounting and name-bid
-  closes freeze on their last state until a contract fix ships by msig. Zero hits at
-  `wax-3.3.2`; the rule exists so that stays true.
+- **D3** — an explicit assertion (`check()`, `eosio_assert()`) or a throwing table read
+  (`get`, `require_find`, `at`, except the `x.exists() ? x.get() : default` shape) in any
+  function `onblock` can reach: the call graph is walked from `onblock` and from the
+  contract's constructor through every definition in the contract, headers and row methods
+  included. Calls into other contracts' headers and asserting *writes* (`emplace` on an
+  existing key, `modify` that changes the key, `erase(end())`) are not followed, so zero hits
+  means "no explicit assertion or throwing read", not "onblock cannot throw" — the
+  throw-capable sites at `wax-3.3.2` (`set_proposed_producers`' host assertions, the
+  blockinfo `emplace`, the foreign `guilds` row read) are each guarded by construction and
+  are recorded in the audit's threat model. Why it matters: a throw in `onblock` does not
+  halt the chain — nodeos logs `onblock … is REJECTING` and produces the block anyway — but
+  while it fails every block the election, standby rotation, unpaid-block accounting and
+  name-bid closes freeze on their last state until a contract fix ships by msig. Zero hits
+  at `wax-3.3.2`; the rule exists so that stays true.
 
 The next five were added under WBP-1998 after the 2026-09 audit found that four of its first
 seven findings had one shape — an action whose validation does not do what its error message
