@@ -33,6 +33,10 @@ struct contracts {
       static std::vector<char>    rng_abi() { return read_abi("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/wax.orng.abi"); }
       static std::vector<uint8_t> guild_test_wasm() { return read_wasm("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/guilds/guilds_oig.wasm"); }
       static std::vector<char>    guild_test_abi() { return read_abi("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/guilds/guilds_oig.abi"); }
+      // guilds.oig at wax-office-of-inspector-general/guilds.oig commit 718903f (WCAP audit target, WBP-2002).
+      // Built with cdt 4.1.1wax01 outside this tree; eosio.guilds_tests.cpp pins its sha256, so replace both files together.
+      static std::vector<uint8_t> guild_718903f_wasm() { return read_wasm("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/guilds/guilds_oig_718903f.wasm"); }
+      static std::vector<char>    guild_718903f_abi() { return read_abi("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/guilds/guilds_oig_718903f.abi"); }
    };
 };
 

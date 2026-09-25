@@ -1,0 +1,151 @@
+{
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT ",
+    "version": "eosio::abi/1.2",
+    "types": [],
+    "structs": [
+        {
+            "name": "evaluation",
+            "base": "",
+            "fields": [
+                {
+                    "name": "timestamp",
+                    "type": "time_point"
+                },
+                {
+                    "name": "minimum",
+                    "type": "uint32"
+                },
+                {
+                    "name": "decimals",
+                    "type": "uint8"
+                },
+                {
+                    "name": "type",
+                    "type": "uint8"
+                },
+                {
+                    "name": "scores",
+                    "type": "scoredata[]"
+                }
+            ]
+        },
+        {
+            "name": "guild",
+            "base": "",
+            "fields": [
+                {
+                    "name": "producer",
+                    "type": "name"
+                },
+                {
+                    "name": "score",
+                    "type": "uint32"
+                },
+                {
+                    "name": "prv_score",
+                    "type": "uint32"
+                },
+                {
+                    "name": "balance",
+                    "type": "asset"
+                },
+                {
+                    "name": "eligibility",
+                    "type": "asset"
+                },
+                {
+                    "name": "autopay",
+                    "type": "bool"
+                },
+                {
+                    "name": "retired",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "pusheval",
+            "base": "",
+            "fields": [
+                {
+                    "name": "type",
+                    "type": "uint8"
+                },
+                {
+                    "name": "scores",
+                    "type": "scoredata[]"
+                }
+            ]
+        },
+        {
+            "name": "retireguild",
+            "base": "",
+            "fields": [
+                {
+                    "name": "producer",
+                    "type": "name[]"
+                }
+            ]
+        },
+        {
+            "name": "rmguild",
+            "base": "",
+            "fields": [
+                {
+                    "name": "producer",
+                    "type": "name[]"
+                }
+            ]
+        },
+        {
+            "name": "scoredata",
+            "base": "",
+            "fields": [
+                {
+                    "name": "guild",
+                    "type": "name"
+                },
+                {
+                    "name": "score",
+                    "type": "uint32"
+                }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "name": "pusheval",
+            "type": "pusheval",
+            "ricardian_contract": "## Intent and authorization\n\nBy authorizing this action, the `oig` account instructs this contract to store\nthe submitted evaluation and update only the listed guilds as described below.\nAuthorization from `oig` is required.\n\nEach submission evaluates its listed guilds independently. It does not require\na complete guild roster or reset guilds that are awaiting evaluation.\n\n## Inputs and conditions\n\n- `type` is an unsigned 8-bit evaluation label. The convention is `0` for a\n  full evaluation and `1` for an update. The contract does not restrict the\n  value to those labels, and the label does not change score processing.\n  In particular, a full evaluation does not reset omitted guilds.\n- `scores` is a non-empty vector of entries containing a guild account name,\n  `guild`, and an unsigned 32-bit integer, `score`. Each score must be between\n  0 and 100,000,000 inclusive. A value above the limit rejects the entire\n  action, even if a later entry supplies a valid score for the same guild.\n  Scores are recorded without validating the evaluation method or applying\n  a score scale. An empty vector is rejected before any evaluation record or\n  guild changes are written.\n- A guild without an existing record must have an entry in the `eosio`\n  account's `producers` table. Active producer status is not checked.\n\n## Effect\n\nThe contract stores the submitted type and score vector in an evaluation\nrecord with the current chain timestamp. The legacy evaluation fields\n`minimum` and `decimals` are stored as zero. The contract account pays for\nnew records' RAM.\n\nBefore applying the submitted scores, each existing guild included in the\nvector has its current score copied to its previous score. Guilds omitted\nfrom the vector remain unchanged, including their current scores, previous\nscores, and retirement flags. This applies to every evaluation type and allows\nguilds to be evaluated asynchronously.\n\nSubmitted entries are then applied in order. Each existing guild receives\nthe submitted current score and is marked non-retired. A missing guild record\nis created with the submitted score, a previous score of zero, and a retirement\nflag of false. Its legacy balance and eligibility fields start at zero WAX,\nand its legacy autopay flag starts at false. Creation uses a private helper;\nthere is no public `addguild` action. If a guild appears more than\nonce, the last submitted score becomes its current score, while its previous score\nremains the value from before this evaluation (zero for a newly created guild).\nThe stored evaluation retains all submitted entries.\n\nThis action does not register producers with the system contract, calculate\nor pay rewards, transfer tokens, or cast votes.\nIf storing the evaluation or applying any entry fails, the evaluation and all\nscore changes from this action are rolled back together."
+        },
+        {
+            "name": "retireguild",
+            "type": "retireguild",
+            "ricardian_contract": "## Intent and authorization\n\nBy authorizing this action, the `oig` account instructs this contract to mark\nthe guilds listed in `producer` as retired. Authorization from `oig` is required.\n\n## Inputs and conditions\n\n`producer` is a vector of guild account names. Every listed guild must have\nan existing record. A guild that is already retired may be listed again.\nAn empty vector makes no changes.\n\n## Effect\n\nEach listed guild's current and previous scores are set to zero, and its\nretirement flag is set to true. Other fields in its record are preserved.\nRetirement does not remove the guild record or its evaluation history and\ndoes not unregister the producer in the system contract.\n\nA subsequent `pusheval` that includes the guild sets its retirement flag\nback to false. This action does not allocate rewards or transfer tokens.\nIf any listed guild is unknown, the action fails without applying any of\nthe requested retirements."
+        },
+        {
+            "name": "rmguild",
+            "type": "rmguild",
+            "ricardian_contract": "## Intent and authorization\n\nBy authorizing this action, the `oig` account instructs this contract to erase\nthe guild records listed in `producer`. Authorization from `oig` is required.\n\n## Inputs and conditions\n\n`producer` is a vector of guild account names. Each listed guild must exist\nand be marked retired. An empty vector makes no changes. Listing the same\nguild more than once causes the action to fail when its record is no longer\nfound after the first removal.\n\n## Effect\n\nEach listed guild's entire record is erased, including its scores and legacy\nbalance, eligibility, and autopay fields. This action does not check or settle\nthose legacy fields before erasing them and does not transfer tokens.\n\nStored evaluations are preserved. The producer's system registration is\nunchanged. The guild can later be added again through `pusheval`, subject to\nits producer registration requirements. If any requested removal fails, none of the\nrequested removals take effect."
+        }
+    ],
+    "tables": [
+        {
+            "name": "evaluations",
+            "type": "evaluation",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "guilds",
+            "type": "guild",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        }
+    ],
+    "ricardian_clauses": [],
+    "variants": [],
+    "action_results": []
+}

@@ -16,6 +16,10 @@ FEATURES:
 
 IMPROVEMENTS:
 
+- New test suite `eosio_guilds_tests` (WBP-2002): authorisation matrix and behaviour tests for
+  the `guilds.oig` contract at `718903f`, run against its checked-in, sha256-pinned wasm/abi
+  in `tests/test_contracts/guilds/`. Tests only; no contract change.
+
 BUG FIXES:
 
 - `editproposal` now enforces the same 30-day minimum `duration` as `regproposal`
