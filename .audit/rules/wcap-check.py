@@ -28,15 +28,18 @@ Classes C6 (message/check mismatch), C6-sibling (duplicated validation that can 
 C6-setter (privileged numeric parameter stored unvalidated), C3 (asset parameter never
 validated) and C2 (64-bit product narrowed into uint32_t) were added under WBP-1998 after
 the 2026-09 audit found that four of its first seven findings had one shape: an action
-whose validation does not do what its error message claims. Self-test:
+whose validation does not do what its error message claims. D3 (a throw reachable from
+onblock) was added under WBP-2026 after the deploy; see README.md for what it means.
+Self-test:
     python3 .audit/rules/test_wcap_check.py
-Tickets: WBP-1985, WBP-1998
+Tickets: WBP-1985, WBP-1998, WBP-2026
 """
 
 import re
 import sys
 import pathlib
 
+KEYWORDS = {'if', 'for', 'while', 'switch', 'catch', 'return', 'sizeof', 'else', 'do', 'operator'}
 UNSIGNED = re.compile(r'\b(uint\d+_t|unsigned|size_t|name)\b')
 SIGNED = re.compile(r'\b(int\d+_t|double|float|\bint\b|asset|time_point)\b')
 
@@ -262,18 +265,37 @@ def split_args(s):
     return out
 
 
-def fn_bodies(text):
-    """(name, params, body, first_line) for every `<type> <class>::<fn>(...) {`.
+def definitions(text, in_class=False):
+    """(name, params, body, first_line, brace_line, cls) for every function definition.
 
-    The parameter list may contain one level of nested parentheses (a std::function
-    type, a default argument); the body walk skips string literals.
+    `T Class::fn(...) {` always; with in_class also the header form `T fn(...) const {`
+    and constructors `Class::Class(...) : init {`. The parameter list may contain one level
+    of nested parentheses (a std::function type, a default argument); the body walk skips
+    string literals. Control flow, calls and lambdas never carry a return type at line
+    start, so they are not definitions.
     """
     out = []
-    for m in re.finditer(r'\w[\w:<>]*\s+\w+::([a-z0-9_]+)\s*\(((?:[^()]|\([^()]*\))*)\)\s*(?:const\s*)?\{', text):
+    if in_class:
+        pat = (r'(?m)^[ \t]*(?:(?:[\w:<>&*]+\s+)+(?:(?P<cls>\w+)::)?(?P<fn>[a-z_][a-z0-9_]*)'
+               r'|(?P<ctor>\w+)::(?P=ctor))\s*\((?P<params>(?:[^()]|\([^()]*\))*)\)\s*'
+               r'(?:const\s*)?(?::[^{;]*)?\{')
+    else:
+        pat = (r'(?P<pre>\w[\w:<>]*\s+)(?P<cls>\w+)::(?P<fn>[a-z0-9_]+)\s*'
+               r'\((?P<params>(?:[^()]|\([^()]*\))*)\)\s*(?:const\s*)?\{')
+    for m in re.finditer(pat, text):
+        fn = m.group('fn') or m.group('ctor')
+        cls = m.group('cls') or m.group('ctor') if in_class else m.group('cls')
+        if fn in KEYWORDS or '[' in m.group('params'):
+            continue
         start = m.end() - 1
-        out.append((m.group(1), m.group(2), text[start:_block_end(text, start)],
-                    text[:m.start()].count('\n') + 1))
+        out.append((fn, m.group('params'), text[start:_block_end(text, start)],
+                    text[:m.start()].count('\n') + 1, text[:start].count('\n') + 1, cls))
     return out
+
+
+def fn_bodies(text):
+    """(name, params, body, first_line) for every `<type> <class>::<fn>(...) {`."""
+    return [(fn, params, body, first) for fn, params, body, first, _, _ in definitions(text)]
 
 
 def strip_comments(text):
@@ -558,7 +580,78 @@ def build_defs_with_params(root):
 # Classes whose message names two things: the function and the specific check, parameter,
 # asset or expression. Keying on the function alone would let a second defect in the same
 # function hide behind the first one's baseline line.
-TWO_PART_KEY = {'C6', 'C6-sibling', 'C6-setter', 'C3', 'C2'}
+
+# ----------------------------------------------------------------------------- WBP-2026
+# D3 - a throw reachable from onblock. What it means and what it does not cover is in
+# README.md ("D3"); keep the prose there, not here.
+
+THROW_SITES = re.compile(r'\b(check\s*\(|eosio_assert\s*\(|(?:\.|->)(?:get|require_find|at)\s*\()')
+
+
+def strip_strings(text):
+    """Blank out string literals but keep their length, so line numbers survive."""
+    return re.sub(r'"(?:[^"\\\n]|\\.)*"', lambda m: '"' + ' ' * (len(m.group(0)) - 2) + '"', text)
+
+
+def build_reach_index(files):
+    """fn name -> [(path, brace_line, body, cls)] for every definition in `files` ({path: text}),
+    .cpp and .hpp alike, in-class methods and constructors included."""
+    index = {}
+    for path, text in files.items():
+        clean = strip_comments(strip_strings(text))    # strings first: a "//" inside one is not a comment
+        for fn, _, body, _, brace_line, cls in definitions(clean, in_class=True):
+            index.setdefault(fn, []).append((path, brace_line, body, cls))
+    return index
+
+
+def contract_of(path, root):
+    """The contracts/<name>/ directory a source file belongs to, so include/ and src/ of one
+    contract form one call graph whatever directory the checker was pointed at."""
+    for parent in path.parents:
+        if parent.parent.name == 'contracts':
+            return parent
+    return pathlib.Path(root)
+
+
+def _guarded(obj, statement):
+    """`x.exists() ? x.get() : default` - the read cannot throw; the constructor's shape."""
+    return bool(obj) and re.search(r'\b' + re.escape(obj) + r'\s*(?:\.|->)\s*exists\s*\(', statement) is not None
+
+
+def check_d3_onblock(index, entry='onblock'):
+    """D3 - check()/assert or a throwing table read in any function onblock reaches, the
+    contract's constructor included (it runs before every action)."""
+    if entry not in index:
+        return []
+    roots = [entry] + sorted({cls for _, _, _, cls in index[entry] if cls and cls in index})
+    out, seen, queue = [], set(), [(fn, []) for fn in roots]
+    while queue:
+        fn, via = queue.pop(0)
+        if fn in seen:
+            continue
+        seen.add(fn)
+        for path, brace_line, body, _ in index[fn]:
+            inner = body[1:-1]
+            for m in THROW_SITES.finditer(inner):
+                stmt_start = max(inner.rfind(c, 0, m.start()) for c in ';{}') + 1
+                stmt_end = inner.find(';', m.end())
+                statement = ' '.join(inner[stmt_start:stmt_end if stmt_end >= 0 else None].split())
+                obj = re.search(r'([A-Za-z_][\w]*)\s*(?:\.|->)\s*(?:get|require_find|at)\s*\($', inner[:m.end()].rstrip())
+                if obj and _guarded(obj.group(1), statement):
+                    continue
+                line = brace_line + inner[:m.start()].count('\n')
+                route = ' -> '.join(via + [fn])
+                out.append((path, line, 'D3',
+                            f'`{fn}` contains `{statement[:80]}` and onblock reaches it ({route}). '
+                            f'A throw here rejects every onblock - see .audit/README.md, D3. Guard it, or return.'))
+            # every call, including `row.method()` and `it->method()`: table-row methods are definitions too
+            for callee in set(re.findall(r'\b([a-z_][a-z0-9_]*)\s*\(', inner)):
+                if callee in index and callee not in seen and callee != fn:
+                    queue.append((callee, via + [fn]))
+    return out
+
+
+TWO_PART_KEY = {'C6', 'C6-sibling', 'C6-setter', 'C3', 'C2', 'D3'}
 
 
 def key_of(path, cls, msg):
@@ -587,10 +680,12 @@ def main():
     actions, wide_members = build_hpp_index(root)
     defs_with_params = build_defs_with_params(root)
     findings = []
+    by_contract = {}
     for path in sorted(pathlib.Path(root).rglob('*')):
         if path.suffix not in ('.cpp', '.hpp') or 'test_contracts' in str(path):
             continue
         text = read(path)
+        by_contract.setdefault(contract_of(path, root), {})[str(path)] = text
         rows = check_c5(path, text) + check_c4(path, text) + check_c4b(path, text)
         if path.suffix == '.hpp':
             rows += check_a1(path, text, defs)
@@ -600,6 +695,9 @@ def main():
                      + check_c6_setter(path, clean) + check_c3(path, clean, actions, defs_with_params)
                      + check_c2_narrowing(path, clean, wide_members))
         findings += [(str(path), ln, cls, msg) for ln, cls, msg in rows]
+
+    for files in by_contract.values():                 # D3 needs the whole contract, not one file
+        findings += check_d3_onblock(build_reach_index(files))
 
     if '--write-baseline' in flags:
         target = flags['--write-baseline']

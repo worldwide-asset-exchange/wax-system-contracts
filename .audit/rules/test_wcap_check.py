@@ -205,5 +205,97 @@ class ReviewCases(unittest.TestCase):
         self.assertEqual(wc.key_of('f.cpp', 'C5', '`check(x >= 0)` is always true: x is `uint32_t`'), 'f.cpp|C5|check(x >= 0)')
 
 
+class D3OnblockReach(unittest.TestCase):                                  # WBP-2026
+    SYS = ('system_contract::system_contract( name s, name code, datastream<const char*> ds )\n'
+           '   :native(s,code,ds),\n'
+           '    _global(get_self(), get_self().value)\n'
+           '   {\n'
+           '      _gstate = _global.exists() ? _global.get() : get_default_parameters();\n'
+           '      {CTOR}\n'
+           '   }\n'
+           'void system_contract::onblock( ignore<block_header> ) {\n'
+           '   require_auth(get_self());\n'
+           '   update_elected_producers( timestamp );\n'
+           '}\n'
+           'void system_contract::update_elected_producers( const block_timestamp& block_time ) {\n'
+           '   auto idx = _producers.get_index<"prototalvote"_n>();\n'
+           '   for( auto it = idx.cbegin(); it != idx.cend() && it->active(); ++it ) {\n'
+           '      double m = get_bp_weight_multiplier( it->owner );\n'
+           '   }\n'
+           '   {BODY}\n'
+           '}\n'
+           'double system_contract::get_bp_weight_multiplier( const name& producer ) const {\n'
+           '   auto guild_itr = guilds.find( producer.value );\n'
+           '   if( guild_itr != guilds.end() ) return 2.0;\n'
+           '   return 1.0;\n'
+           '}\n'
+           'void system_contract::setram( uint64_t max_ram_size ) {\n'
+           '   require_auth( get_self() );\n'
+           '   check( max_ram_size < 1024ll*1024*1024*1024*1024, "ram size is unrealistic" );\n'
+           '}\n')
+    HPP = ('   struct [[eosio::table]] producer_info {\n'
+           '      bool active()const { return is_active; }\n'
+           '      eosio::block_signing_authority get_producer_authority()const {\n'
+           '         {HPPBODY}\n'
+           '         return convert_to_block_signing_authority( producer_key );\n'
+           '      }\n'
+           '   };\n')
+
+    def rows(self, body='', hppbody='', ctor=''):
+        files = {'src/x.cpp': self.SYS.replace('{BODY}', body).replace('{CTOR}', ctor),
+                 'include/x.hpp': self.HPP.replace('{HPPBODY}', hppbody)}
+        return wc.check_d3_onblock(wc.build_reach_index(files))
+
+    def test_clean_election_is_silent(self):                            # develop at d12f261: find(), guarded singleton, early return
+        self.assertEqual(self.rows(), [])
+
+    def test_check_in_unreachable_action_is_silent(self):               # setram's check() is in the fixture and never reached
+        rows = self.rows(body='check( block_time.slot > 0, "no time" );')
+        self.assertEqual(len(rows), 1)
+        self.assertNotIn('setram', rows[0][3])
+
+    def test_check_in_reachable_function_fires_with_route_and_statement_key(self):
+        rows = self.rows(body='check( block_time.slot > 0, "no time" );')
+        self.assertEqual([r[2] for r in rows], ['D3'])
+        self.assertIn('onblock -> update_elected_producers', rows[0][3])
+        self.assertEqual(wc.key_of(rows[0][0], rows[0][2], rows[0][3]),
+                         'src/x.cpp|D3|update_elected_producers/check( block_time.slot > 0, " " )')   # the message literal is blanked
+
+    def test_two_checks_in_one_function_get_two_keys(self):
+        rows = self.rows(body='check( a, "x" );\n   check( b, "y" );')
+        self.assertEqual(len({wc.key_of(r[0], r[2], r[3]) for r in rows}), 2)
+
+    def test_throwing_table_read_fires_dot_and_arrow(self):
+        rows = self.rows(body='auto g = guilds.get( 1, "missing" );\n   auto h = it->require_find( 2 );')
+        self.assertEqual([r[2] for r in rows], ['D3', 'D3'])
+
+    def test_guarded_singleton_read_is_silent_unguarded_fires(self):     # the constructor's shape
+        self.assertEqual(self.rows(ctor='_gstate2 = _global2.exists() ? _global2.get() : eosio_global_state2{};'), [])
+        rows = self.rows(ctor='_gstate8 = _global8.get();')
+        self.assertEqual([r[2] for r in rows], ['D3'])
+        self.assertIn('`system_contract`', rows[0][3])                  # the constructor is a root
+
+    def test_row_method_reached_through_arrow_is_walked(self):           # it->active(), it->get_producer_authority()
+        rows = self.rows(body='auto a = it->get_producer_authority();', hppbody='check( producer_key != eosio::public_key(), "no key" );')
+        self.assertEqual([r[2] for r in rows], ['D3'])
+        self.assertIn('get_producer_authority', rows[0][3])
+
+    def test_allman_and_multiline_signature_lines_are_right(self):
+        files = {'a.cpp': ('void system_contract::f( int a,\n   int b )\n{\n   check( a, "x" );\n}\n'
+                           'void system_contract::onblock( ignore<block_header> ) {\n   f(1,2);\n}\n')}
+        rows = wc.check_d3_onblock(wc.build_reach_index(files))
+        self.assertEqual([(r[1], r[2]) for r in rows], [(4, 'D3')])
+
+    def test_check_inside_string_or_comment_is_silent(self):
+        rows = self.rows(body='// check( x, "y" ) would be wrong here\n   auto s = "call check( x ) later";\n   auto u = "https://x";')
+        self.assertEqual(rows, [])
+
+    def test_contract_grouping_from_any_root(self):
+        P = pathlib.Path
+        self.assertEqual(wc.contract_of(P('contracts/eosio.system/include/e.hpp'), 'contracts'), P('contracts/eosio.system'))
+        self.assertEqual(wc.contract_of(P('contracts/eosio.system/src/v.cpp'), 'contracts/eosio.system'), P('contracts/eosio.system'))
+        self.assertEqual(wc.contract_of(P('other/src/v.cpp'), 'other'), P('other'))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)
