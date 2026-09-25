@@ -123,8 +123,7 @@ namespace eosiosystem {
 
    void system_contract::setramrate( uint16_t bytes_per_block ) {
       require_auth( get_self() );
-      // WCAP-SYS-2026-017: any uint16_t was stored; 65,535 bytes per block would have grown RAM supply by
-      // about 11 GB per day, irreversibly, since setram only ever increases.
+      // WCAP-SYS-2026-017: any uint16_t was stored. The ceiling's derivation is on max_new_ram_per_block.
       check( bytes_per_block <= max_new_ram_per_block, "bytes_per_block cannot exceed " + std::to_string( max_new_ram_per_block ) );
 
       update_ram_supply();
