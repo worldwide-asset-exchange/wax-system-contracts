@@ -16,6 +16,7 @@
 #include <optional>
 #include <string>
 #include <type_traits>
+#include <cmath>
 #include <eosio.system/rng.hpp>
 
 
@@ -208,6 +209,9 @@ namespace eosiosystem {
 
    // Defines new global state parameters added after version 1.0
    struct [[eosio::table("global2"), eosio::contract("eosio.system")]] eosio_global_state2 {
+      // The empty constructor stays: block_timestamp has an explicit constructor, so `{}` cannot
+      // aggregate-initialise this struct. Every scalar member below carries an initializer, which
+      // is what WCAP-SYS-2026-018 requires; keep it that way when adding fields.
       eosio_global_state2(){}
 
       uint16_t          new_ram_per_block = 0;
@@ -222,7 +226,7 @@ namespace eosiosystem {
 
    // Defines new global state parameters added after version 1.3.0
    struct [[eosio::table("global3"), eosio::contract("eosio.system")]] eosio_global_state3 {
-      eosio_global_state3() { }
+      eosio_global_state3() { }      // stays: time_point member (see eosio_global_state2)
       time_point        last_vpay_state_update;
       double            total_vpay_share_change_rate = 0;
 
@@ -231,7 +235,6 @@ namespace eosiosystem {
 
    // Defines new global state parameters added after version 1.3.0
    struct [[eosio::table("global5"), eosio::contract("eosio.system")]] eosio_global_state5 {
-      eosio_global_state5() { }
       uint64_t          rng_rate = 0;
       uint64_t          max_pool_rng = 0;
 
@@ -753,7 +756,7 @@ namespace eosiosystem {
 
    // Defines new global state parameters added after version 1.3.0
    struct [[eosio::table("global4"), eosio::contract("eosio.system")]] eosio_global_state4 {
-      eosio_global_state4() { }
+      eosio_global_state4() { }      // stays: time_point member (see eosio_global_state2)
       time_point        last_standby_state_update;
       uint64_t          standby_bucket = 0;
       uint64_t          total_standby_share = 0;
@@ -770,12 +773,13 @@ namespace eosiosystem {
 
    // Defines new global state parameters for BP weighted voting
    struct [[eosio::table("global.a"), eosio::contract("eosio.system")]] eosio_global_state6 {
-      eosio_global_state6() { }
       name     guilds_contract = "guilds.oig"_n;                     // Guild contract name
       uint32_t bp_score_scaling_factor = 1000;                       // Divisor for score (1000 = 1.0x multiplier)
       uint32_t bp_default_score = 1000;                              // Default score for unacknowledged BPs
       uint32_t max_considered_producers = 100;                       // the maximimum number of producers we will consider in the loop
-      double   min_producer_vote_threshold;                          // the minimum allowable vote weight that the producer already has to be considered in the loop
+      // WCAP-SYS-2026-018: defaulted, and the struct has no user-provided constructor, so a chain
+      // without the global.a row reads a defined floor (see the comparison in voting.cpp).
+      double   min_producer_vote_threshold = 0.0;                    // the minimum allowable vote weight that the producer already has to be considered in the loop
       bool     enable_weighted_voting = true;                        // Kill switch for weighted voting
       std::vector<eosio::checksum256> guilds_code_hashes;            // List of approved guilds contract code hashes
 
@@ -785,12 +789,16 @@ namespace eosiosystem {
 
    // Defines new global state parameters for ORNG contract hash validation
    struct [[eosio::table("global.b"), eosio::contract("eosio.system")]] eosio_global_state7 {
-      eosio_global_state7() { }
       std::vector<eosio::checksum256> orng_code_hashes;            // List of approved ORNG contract code hashes
 
       EOSLIB_SERIALIZE( eosio_global_state7, (orng_code_hashes) )
    };
    typedef eosio::singleton< "global.b"_n, eosio_global_state7 > global_state7_singleton;
+   // WCAP-SYS-2026-018: `T{}` in the contract constructor must be value-initialisation, not a
+   // user-provided constructor that leaves a scalar indeterminate. global2/3/4 cannot be
+   // aggregates (explicit member constructors) and rely on every scalar having an initializer.
+   static_assert( std::is_aggregate_v<eosio_global_state5> && std::is_aggregate_v<eosio_global_state6>
+                  && std::is_aggregate_v<eosio_global_state7>, "global_state structs must stay aggregates (WCAP-SYS-2026-018)" );
 
    // Defines new standby producer info structure
    struct [[eosio::table, eosio::contract("eosio.system")]] standby_producer_info {

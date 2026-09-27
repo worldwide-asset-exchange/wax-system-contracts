@@ -588,8 +588,12 @@ namespace eosiosystem {
 
     void system_contract::setwpsstate(double total_stake) {
         require_auth(get_self());
+        // WCAP-SYS-2026-019: stake2vote() converts this to int64_t; +inf or anything beyond the
+        // int64 range traps in WASM on every later vote tally. Same check as setminvote.
+        check( std::isfinite( total_stake ) && total_stake >= 0.0, "total_stake must be a finite, non-negative number" );
         check(total_stake > 0, "total_stake should be more 0");
-        _wps_state.total_stake = total_stake;
+        check(total_stake < 9223372036854775808.0, "total_stake must fit a 64-bit stake amount");
+        _wps_state.total_stake = total_stake + 0.0;
     }
 
     // Shared by regcommittee and edcommittee (WBP-1998). The two copies had already drifted

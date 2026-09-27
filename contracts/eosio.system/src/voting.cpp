@@ -137,7 +137,7 @@ namespace eosiosystem {
       for( auto it = idx.cbegin();
           it != idx.cend() &&
           it->active() &&
-          it->total_votes > min_vote_threshold &&    // ← Minimum vote requirement
+          it->total_votes > min_vote_threshold &&    // strict: a floor of 0.0 admits only producers with a positive vote weight
           processed < max_considered_producers;       // ← Hard limit on processing
           ++it, ++processed ) {
          double multiplier = get_bp_weight_multiplier( it->owner );

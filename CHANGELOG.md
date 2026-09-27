@@ -23,6 +23,20 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+- `eosio_global_state6::min_producer_vote_threshold` has a default (0.0), and the empty
+  user-provided constructor is removed from `global5`, `global.a` and `global.b` (pinned by a
+  `static_assert` that they stay aggregates), so a chain that starts without a global row elects
+  on a defined vote floor instead of an indeterminate one (WBP-2031; closes WCAP-SYS-2026-018,
+  Info). `global2`/`3`/`4` keep their constructors - `time_point` members have explicit
+  constructors - and every scalar in them already carries an initializer. No effect on mainnet,
+  which has the rows; no ABI change.
+- `setminvote` and `setwpsstate` refuse a non-finite input with the same check: `+inf`
+  passed the old `>= 0` / `> 0` checks and would have excluded every producer from the election,
+  or trapped every WPS vote tally on the double-to-int64 conversion in `stake2vote`, until a
+  second msig (WBP-2032; closes WCAP-SYS-2026-019, Low). Messages: "<field> must be a finite,
+  non-negative number" (setminvote's was "cannot be negative"); `setwpsstate` also refuses a
+  value beyond the 64-bit stake range.
+
 ## wax-3.3.2
 
 Supersedes wax-3.3.1 before it reached mainnet: the same remediation set plus the one finding filed
