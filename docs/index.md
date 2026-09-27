@@ -23,5 +23,9 @@ Block.one implements and maintains EOSIO open source platform which contains, as
 5. [Stake](01_key-concepts/05_stake.md)
 6. [Vote](01_key-concepts/06_vote.md)
 
+## WAX extensions
+
+1. [Architecture overview — election weighting, standby pay, the inflation split, WPS, RAM growth, vote weight](02_wax-extensions/01_architecture-overview.md)
+
 ## Build and deploy
 To build and deploy the system contract follow the instruction from [Build and deploy](03_build-and-deploy.md) section.
