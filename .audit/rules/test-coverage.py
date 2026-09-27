@@ -54,13 +54,18 @@ def strip_comments(text):
     return re.sub(r'//[^\n]*', '', text)
 
 
-def read_all(patterns):
-    text = ""
+def read_each(patterns):
+    """One comment-stripped string per file, in path order."""
+    out = []
     for pat in patterns:
         for path in sorted(glob.glob(os.path.join(ROOT, pat))):
             with open(path, encoding="utf-8", errors="replace") as fh:
-                text += fh.read() + "\n"
-    return strip_comments(text)
+                out.append(strip_comments(fh.read()))
+    return out
+
+
+def read_all(patterns):
+    return "\n".join(read_each(patterns))
 
 
 def abi_actions(path):
@@ -129,16 +134,26 @@ def guard_messages(src):
     return msgs
 
 
-def asserted(msg, prefix_only, tests):
-    """0 = not asserted, 1 = asserted in a direct form, 2 = asserted through a bound literal."""
+NON_LITERAL_ASSERT = re.compile(r'(?:wasm_assert_msg|eosio_assert_message_is)\s*\(\s*[A-Za-z_]')
+
+
+def asserted(msg, prefix_only, tests, test_files):
+    """0 = not asserted, 1 = asserted in a direct form, 2 = asserted through a bound literal.
+
+    The bound form is judged per file: the literal must sit in a file that also passes a
+    non-literal argument to an assertion form, which is what a table-driven test looks like.
+    That still cannot prove the literal reaches the assertion; `--list` names every guard
+    so a reader can check the ones that matter."""
     q = re.escape(msg)
     tail = '' if prefix_only else '"'
     direct = r'(?:wasm_assert_msg|eosio_assert_message_is)\s*\(\s*"%s%s|assertion failure with message: %s%s' % (q, tail, q, tail)
     if re.search(direct, tests):
         return 1
-    bound = r'(?:=\s*"%s%s\s*;|,\s*"%s%s\s*\})' % (q, tail, q, tail)
-    if re.search(bound, tests) and re.search(r'(?:wasm_assert_msg|eosio_assert_message_is)\s*\(\s*[A-Za-z_]', tests):
-        return 2
+    lit = r'"%s[^"]*"' % q if prefix_only else r'"%s"' % q
+    bound = re.compile(r'(?:=\s*%s\s*;|,\s*%s\s*\})' % (lit, lit))
+    for src in test_files:
+        if bound.search(src) and NON_LITERAL_ASSERT.search(src):
+            return 2
     return 0
 
 
@@ -154,7 +169,8 @@ def main():
     args = ap.parse_args()
 
     test_dirs = args.tests or ["tests"]
-    tests = read_all([os.path.join(d, "*.cpp") for d in test_dirs] + [os.path.join(d, "*.hpp") for d in test_dirs])
+    test_files = read_each([os.path.join(d, "*.cpp") for d in test_dirs] + [os.path.join(d, "*.hpp") for d in test_dirs])
+    tests = "\n".join(test_files)
     src = read_all(CONTRACT_SRC)
     if not src.strip() or not tests.strip():
         print(f"no contract or test sources found under {ROOT}", file=sys.stderr)
@@ -174,7 +190,7 @@ def main():
     ref_all = [a for a in actions if referenced(a)]
     ref_cs  = [a for a in contract_side if referenced(a)]
     msgs = guard_messages(src)
-    how = {m: asserted(m, pre, tests) for m, pre in msgs.items()}
+    how = {m: asserted(m, pre, tests, test_files) for m, pre in msgs.items()}
     hit = sorted(m for m, h in how.items() if h)
     via_bound = sum(1 for h in how.values() if h == 2)
 
