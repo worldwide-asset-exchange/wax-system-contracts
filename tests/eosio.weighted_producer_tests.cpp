@@ -13,6 +13,8 @@
 #include <sstream>
 
 #include "eosio.system_tester.hpp"
+#include <limits>
+#include <cmath>
 
 inline const auto alice = "alice1111111"_n;
 inline const auto bob = "bob111111111"_n;
@@ -250,10 +252,27 @@ BOOST_AUTO_TEST_SUITE(eosio_weighted_producer_tests)
 BOOST_FIXTURE_TEST_CASE(test_config_set_and_get, eosio_weighted_producer_tester) try {
    // Test setting and getting weighted producer config values
 
-   // Get initial global state 5
+   // Get the initial global.a row (state 6)
    fc::variant initial_state = get_global_state6();
+   // WCAP-SYS-2026-018: the fresh-chain row is the struct's defaults, every field of them. The
+   // structural fix (no user-provided constructor) is pinned by a static_assert in the header;
+   // this pins the values the row is expected to start with.
+   BOOST_REQUIRE_EQUAL(initial_state["guilds_contract"].as<name>(), GUILDS_OIG);
+   BOOST_REQUIRE_EQUAL(initial_state["bp_score_scaling_factor"].as<uint32_t>(), 1000u);
+   BOOST_REQUIRE_EQUAL(initial_state["bp_default_score"].as<uint32_t>(), 1000u);
+   BOOST_REQUIRE_EQUAL(initial_state["max_considered_producers"].as<uint32_t>(), 100u);
+   BOOST_REQUIRE_EQUAL(initial_state["min_producer_vote_threshold"].as<double>(), 0.0);
+   BOOST_REQUIRE_EQUAL(initial_state["enable_weighted_voting"].as<bool>(), true);
+   BOOST_REQUIRE_EQUAL(initial_state["guilds_code_hashes"].get_array().size(), 0u);
 
-   // Test 1: Set guilds contract name
+   // Test 1: Set guilds contract name - to an account that is NOT the default, so a setter that
+   // never wrote would be caught; then back to the default the rest of the test relies on.
+   const name other_guilds_contract = "bob111111111"_n;
+   BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
+      ("contract", other_guilds_contract)
+   ));
+   produce_blocks(1);
+   BOOST_REQUIRE_EQUAL(get_global_state6()["guilds_contract"].as<name>(), other_guilds_contract);
    const name new_guilds_contract = GUILDS_OIG;
    BOOST_REQUIRE_EQUAL(success(), push_action(config::system_account_name, "setguildcont"_n, mvo()
       ("contract", new_guilds_contract)
@@ -546,9 +565,10 @@ BOOST_FIXTURE_TEST_CASE(test_setmaxprod_validation, eosio_weighted_producer_test
 
 BOOST_FIXTURE_TEST_CASE(test_setminvote_validation, eosio_weighted_producer_tester) try {
    fc::variant before_state = get_global_state6();
+   const std::string not_finite_nonneg = "assertion failure with message: min_producer_vote_threshold must be a finite, non-negative number";
 
    // Test 1: Negative min_producer_vote_threshold should fail
-   BOOST_REQUIRE_EQUAL(error("assertion failure with message: min_producer_vote_threshold cannot be negative"),
+   BOOST_REQUIRE_EQUAL(error(not_finite_nonneg),
       push_action(config::system_account_name, "setminvote"_n, mvo()
          ("min_producer_vote_threshold", -0.1)
       )
@@ -582,6 +602,26 @@ BOOST_FIXTURE_TEST_CASE(test_setminvote_validation, eosio_weighted_producer_test
    fc::variant state_after_positive = get_global_state6();
    BOOST_REQUIRE_EQUAL(state_after_positive["min_producer_vote_threshold"].as<double>(), test_threshold);
 
+
+   // WCAP-SYS-2026-019: +inf satisfied `>= 0.0` and would have emptied the election; NaN and
+   // -0.0 are handled by the same guard. State must be unchanged after each refusal.
+   BOOST_REQUIRE_EQUAL(error(not_finite_nonneg),
+      push_action(config::system_account_name, "setminvote"_n, mvo()
+         ("min_producer_vote_threshold", std::numeric_limits<double>::infinity())
+      ));
+   BOOST_REQUIRE_EQUAL(error(not_finite_nonneg),
+      push_action(config::system_account_name, "setminvote"_n, mvo()
+         ("min_producer_vote_threshold", std::numeric_limits<double>::quiet_NaN())
+      ));
+   produce_blocks(1);
+   BOOST_REQUIRE_EQUAL(get_global_state6()["min_producer_vote_threshold"].as<double>(), test_threshold);
+   BOOST_REQUIRE_EQUAL(success(),
+      push_action(config::system_account_name, "setminvote"_n, mvo()
+         ("min_producer_vote_threshold", -0.0)
+      ));
+   produce_blocks(1);
+   BOOST_REQUIRE_EQUAL(std::signbit(get_global_state6()["min_producer_vote_threshold"].as<double>()), false);
+   BOOST_REQUIRE_EQUAL(get_global_state6()["min_producer_vote_threshold"].as<double>(), 0.0);
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(test_setminbpvote_validation, eosio_weighted_producer_tester) try {

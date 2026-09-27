@@ -547,8 +547,12 @@ namespace eosiosystem {
 
    void system_contract::setminvote( double min_producer_vote_threshold ) {
       require_auth( get_self() );
-      check( min_producer_vote_threshold >= 0.0, "min_producer_vote_threshold cannot be negative" );
-      _gstate6.min_producer_vote_threshold = min_producer_vote_threshold;
+      // WCAP-SYS-2026-019: +inf passed the old `>= 0.0` check and would have excluded every
+      // producer from the election (strict comparison), freezing the schedule until a second msig.
+      // The same check guards setwpsstate; `+ 0.0` normalises -0.0.
+      check( std::isfinite( min_producer_vote_threshold ) && min_producer_vote_threshold >= 0.0,
+             "min_producer_vote_threshold must be a finite, non-negative number" );
+      _gstate6.min_producer_vote_threshold = min_producer_vote_threshold + 0.0;
    }
 
    void system_contract::setrngrate( uint64_t rng_rate, uint64_t max_pool_rng ) {

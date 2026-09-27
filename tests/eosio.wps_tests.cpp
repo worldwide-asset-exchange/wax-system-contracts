@@ -1,4 +1,5 @@
 #include <boost/test/unit_test.hpp>
+#include <limits>
 #include <eosio/chain/contract_table_objects.hpp>
 #include <eosio/chain/global_property_object.hpp>
 #include <eosio/chain/resource_limits.hpp>
@@ -1212,6 +1213,11 @@ BOOST_FIXTURE_TEST_CASE( wps_terminal_row_removal_and_state, eosio_wps_tester ) 
    // setwpsstate: msig only, positive only.
    BOOST_REQUIRE_EQUAL( error("missing authority of eosio"), push_action( "proposer1111"_n, "setwpsstate"_n, mvo()("total_stake", 1.0) ) );
    BOOST_REQUIRE_EQUAL( wasm_assert_msg("total_stake should be more 0"), push_action( eosio, "setwpsstate"_n, mvo()("total_stake", 0.0) ) );
+   // WCAP-SYS-2026-019: +inf and NaN passed `> 0` (inf) or were unreachable by JSON; a value beyond
+   // int64 would trap in stake2vote on the next vote tally. All refused at the setter now.
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("total_stake must be a finite, non-negative number"), push_action( eosio, "setwpsstate"_n, mvo()("total_stake", std::numeric_limits<double>::infinity()) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("total_stake must be a finite, non-negative number"), push_action( eosio, "setwpsstate"_n, mvo()("total_stake", std::numeric_limits<double>::quiet_NaN()) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("total_stake must fit a 64-bit stake amount"), push_action( eosio, "setwpsstate"_n, mvo()("total_stake", 1e19) ) );
    BOOST_REQUIRE_EQUAL( success(), push_action( eosio, "setwpsstate"_n, mvo()("total_stake", 1000000.0) ) );
    {
       vector<char> data = get_row_by_account( eosio, eosio, "wpsstate"_n, "wpsstate"_n );
