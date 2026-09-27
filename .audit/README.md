@@ -12,7 +12,7 @@ not once at audit time.
 | `rules/antelope.yaml` | semgrep ruleset for Antelope/C++ contract idioms. |
 | `rules/wcap-check.py` | Type-aware checks that regex cannot decide. |
 | `rules/run-sweep.sh` | Runs both engines. |
-| `rules/test-coverage.py` | Reports action-reference and guard-branch test coverage (the toolchain cannot instrument line/branch coverage). Advisory: always exits 0. |
+| `rules/test-coverage.py` | Reports action-reference and guard-branch test coverage (the toolchain cannot instrument line/branch coverage). A guard counts when a test asserts its message directly (`wasm_assert_msg("…")`, `eosio_assert_message_is("…")`, `assertion failure with message: …`) or through a bound literal that a table-driven test passes to one of those forms; the summary says how many were counted the second way. Advisory: always exits 0. |
 | `report/` | The audit report PDF pipeline: data in, WAX-branded PDF out. Template, theme, fonts and non-sensitive metadata only — see [`report/README.md`](report/README.md). |
 
 ## What is deliberately *not* here

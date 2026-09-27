@@ -5108,4 +5108,119 @@ BOOST_FIXTURE_TEST_CASE( wcap_014_rng_share_does_not_wrap_after_a_long_gap, wcap
    BOOST_REQUIRE_EQUAL( (distributed - deposit) * 3 / 10, funded );
 } FC_LOG_AND_RETHROW()
 
+
+// ---------------------------------------------------------------------------
+// WBP-2027. Guard-branch coverage for init and the privileged setters: each message below is
+// raised for exactly one bad input, with the rest valid.
+
+BOOST_AUTO_TEST_CASE( wbp_2027_init_guards ) try {
+   eosio_system_tester t( eosio_system_tester::setup_level::core_token );
+   t.deploy_contract( false );
+
+   // nothing that needs the core symbol works before init (delegatebw reads it on entry)
+   BOOST_REQUIRE_EQUAL( t.wasm_assert_msg("system contract must first be initialized"),
+                        t.stake( config::system_account_name, config::system_account_name, core_sym::from_string("1.0000"), core_sym::from_string("1.0000") ) );
+   BOOST_REQUIRE_EQUAL( t.wasm_assert_msg("unsupported version for init action"),
+                        t.push_action( config::system_account_name, "init"_n, mvo()("version", 1)("core", CORE_SYM_STR) ) );
+   BOOST_REQUIRE_EQUAL( t.wasm_assert_msg("specified core symbol does not exist (precision mismatch)"),
+                        t.push_action( config::system_account_name, "init"_n, mvo()("version", 0)("core", "3," CORE_SYM_NAME) ) );
+   // a token that exists but has nothing issued
+   t.create_currency( "eosio.token"_n, config::system_account_name, asset::from_string("1000.0000 ZZZ") );
+   BOOST_REQUIRE_EQUAL( t.wasm_assert_msg("system token supply must be greater than 0"),
+                        t.push_action( config::system_account_name, "init"_n, mvo()("version", 0)("core", "4,ZZZ") ) );
+   BOOST_REQUIRE_EQUAL( t.success(),
+                        t.push_action( config::system_account_name, "init"_n, mvo()("version", 0)("core", CORE_SYM_STR) ) );
+   BOOST_REQUIRE_EQUAL( t.wasm_assert_msg("system contract has already been initialized"),
+                        t.push_action( config::system_account_name, "init"_n, mvo()("version", 0)("core", CORE_SYM_STR) ) );
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( wbp_2027_privileged_setter_guards, eosio_system_tester ) try {
+   // setram: the size sanity bound (1 PiB), above the current maximum so the first check passes
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("ram size is unrealistic"),
+                        push_action( config::system_account_name, "setram"_n, mvo()("max_ram_size", 1024ll*1024*1024*1024*1024) ) );
+
+   // setparams: the authority depth floor
+   {
+      // every field of the ABI struct, from the live configuration; the serializer ignores extras
+      fc::mutable_variant_object params( fc::variant( control->get_global_properties().configuration ).get_object() );
+      params( "max_authority_depth", 2 );
+      BOOST_REQUIRE_EQUAL( wasm_assert_msg("max_authority_depth should be at least 3"),
+                           push_action( config::system_account_name, "setparams"_n, mvo()("params", params) ) );
+   }
+
+   // updtrevision: strictly +1, and only a revision the code knows
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("can only increment revision by one"),
+                        push_action( config::system_account_name, "updtrevision"_n, mvo()("revision", 2) ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "updtrevision"_n, mvo()("revision", 1) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("specified revision is not yet supported by the code"),
+                        push_action( config::system_account_name, "updtrevision"_n, mvo()("revision", 2) ) );
+
+   // setguildcont: the guilds contract must be an account
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("guild contract account does not exist"),
+                        push_action( config::system_account_name, "setguildcont"_n, mvo()("contract", "nosuchacct11") ) );
+
+   // setacctram / setacctnet / setacctcpu: unmanaging an account that is not managed, and the value floors
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("RAM of account is already unmanaged"),
+                        push_action( config::system_account_name, "setacctram"_n, mvo()("account", "alice1111111")("ram_bytes", fc::variant()) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("not allowed to set RAM limit to unlimited"),
+                        push_action( config::system_account_name, "setacctram"_n, mvo()("account", "alice1111111")("ram_bytes", -1) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("Network bandwidth of account is already unmanaged"),
+                        push_action( config::system_account_name, "setacctnet"_n, mvo()("account", "alice1111111")("net_weight", fc::variant()) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("invalid value for net_weight"),
+                        push_action( config::system_account_name, "setacctnet"_n, mvo()("account", "alice1111111")("net_weight", -2) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("CPU bandwidth of account is already unmanaged"),
+                        push_action( config::system_account_name, "setacctcpu"_n, mvo()("account", "alice1111111")("cpu_weight", fc::variant()) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("invalid value for cpu_weight"),
+                        push_action( config::system_account_name, "setacctcpu"_n, mvo()("account", "alice1111111")("cpu_weight", -2) ) );
+
+   // setalimits refuses an account whose resources are managed (eosio.saving has no resource
+   // row, so it is otherwise eligible - see change_limited_account_back_to_unlimited)
+   BOOST_REQUIRE_EQUAL( success(),
+                        push_action( config::system_account_name, "setacctnet"_n, mvo()("account", "eosio.saving")("net_weight", 1000) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("cannot use setalimits on an account with managed resources"),
+                        push_action( config::system_account_name, "setalimits"_n, mvo()
+                                     ("account", "eosio.saving")("ram_bytes", 100000)("net_weight", -1)("cpu_weight", -1) ) );
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( wbp_2027_namebid_refund_and_vote_guards, eosio_system_tester ) try {
+   cross_15_percent_threshold();
+   produce_block( fc::hours(14*24) );    // name auctions open 14 days after activation
+   transfer( config::system_account_name, "alice1111111"_n, core_sym::from_string("10000.0000") );
+   transfer( config::system_account_name, "bob111111111"_n, core_sym::from_string("10000.0000") );
+
+   // bidname and bidrefund input guards
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("account already exists"),    bidname( "alice1111111", "eosio", core_sym::from_string("1.0000") ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("asset must be system token"), bidname( "alice1111111", "prefa", asset::from_string("1.0000 XYZ") ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("insufficient bid"),           bidname( "alice1111111", "prefa", core_sym::from_string("0.0000") ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("refund not found"),
+                        push_action( "alice1111111"_n, "bidrefund"_n, mvo()("bidder", "alice1111111")("newname", "prefa") ) );
+
+   // the high bidder cannot create the name while the auction is open, and nobody can bid once it has closed
+   BOOST_REQUIRE_EQUAL( success(), bidname( "alice1111111", "prefa", core_sym::from_string("50.0000") ) );
+   produce_blocks(1);
+   BOOST_REQUIRE_EXCEPTION( create_account_with_resources( "prefa"_n, "alice1111111"_n ),
+                            eosio_assert_message_exception, eosio_assert_message_is( "auction for name is not closed yet" ) );
+   produce_block( fc::hours(100) );
+   produce_block( fc::hours(100) );
+   produce_block();
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("this auction has already closed"), bidname( "bob111111111", "prefa", core_sym::from_string("100.0000") ) );
+
+   // refund with no pending request
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("refund request not found"),
+                        push_action( "alice1111111"_n, "refund"_n, mvo()("owner", "alice1111111") ) );
+
+   // a proxy target that has stake (so it is a voter) but never registered as a proxy
+   BOOST_REQUIRE_EQUAL( success(), stake( "alice1111111", core_sym::from_string("10.0000"), core_sym::from_string("10.0000") ) );
+   BOOST_REQUIRE_EQUAL( success(), stake( "bob111111111", core_sym::from_string("10.0000"), core_sym::from_string("10.0000") ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("proxy not found"), vote( "bob111111111"_n, vector<account_name>(), "alice1111111" ) );
+
+   // regproducer bounds the url
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("url too long"),
+                        push_action( "alice1111111"_n, "regproducer"_n, mvo()
+                                     ("producer", "alice1111111")
+                                     ("producer_key", get_public_key( "alice1111111"_n, "active" ))
+                                     ("url", std::string(512, 'u'))
+                                     ("location", 0) ) );
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()

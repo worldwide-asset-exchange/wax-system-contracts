@@ -890,4 +890,11 @@ BOOST_FIXTURE_TEST_CASE( wcap_013_setsbslot_zero_deactivates_standbys, eosio_sta
    BOOST_REQUIRE_EQUAL( total_settled - settled[former], get_global_state4()["total_standby_share"].as<uint64_t>() );
 } FC_LOG_AND_RETHROW()
 
+
+// WBP-2027: claimstandby by an account that is not a standby
+BOOST_FIXTURE_TEST_CASE( wbp_2027_claimstandby_requires_a_standby_row, eosio_standby_tester ) try {
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("account not in standby list"),
+                        push_action( "alice1111111"_n, "claimstandby"_n, mvo()("owner", "alice1111111") ) );
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()

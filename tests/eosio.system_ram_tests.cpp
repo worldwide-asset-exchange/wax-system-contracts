@@ -235,4 +235,34 @@ BOOST_FIXTURE_TEST_CASE( buy_ram_self, eosio_system_tester ) try {
 } FC_LOG_AND_RETHROW()
 
 
+
+// WBP-2027: the RAM actions' input guards, each asserted by message.
+BOOST_FIXTURE_TEST_CASE( wbp_2027_ram_action_input_guards, eosio_system_tester ) try {
+   const std::vector<account_name> accounts = { "alice"_n, "bob"_n };
+   create_accounts_with_resources( accounts );
+   const account_name alice = accounts[0];
+   const account_name bob = accounts[1];
+   transfer( config::system_account_name, alice, core_sym::from_string("100.0000"), config::system_account_name );
+   BOOST_REQUIRE_EQUAL( success(), buyrambytes( alice, alice, 10000 ) );
+   const int64_t alice_bytes = get_total_stake( alice )["ram_bytes"].as_int64();
+
+   // buyram and buyramburn: core token only, positive only
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("must buy ram with core token"),   buyram( alice, alice, asset::from_string("1.0000 XYZ") ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("must purchase a positive amount"), buyram( alice, alice, core_sym::from_string("0.0000") ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("quantity must be core token"),    buyramburn( alice, asset::from_string("1.0000 XYZ"), "memo" ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("quantity must be positive"),      buyramburn( alice, core_sym::from_string("0.0000"), "memo" ) );
+
+   // ramtransfer: the memo bound, then the reduce_ram guards it shares with sellram
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("memo has more than 256 bytes"), ramtransfer( alice, bob, 1, std::string(257, 'm') ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("cannot reduce negative byte"),  ramtransfer( alice, bob, 0, "" ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("insufficient quota"),           ramtransfer( alice, bob, alice_bytes + 1, "" ) );
+   // eosio.saving was created by the chain before the system contract and has no resource row
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("no resource row"),              ramtransfer( "eosio.saving"_n, bob, 1, "" ) );
+
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("cannot reduce negative byte"),  sellram( alice, 0 ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("insufficient quota"),           sellram( alice, alice_bytes + 1 ) );
+   // one byte is worth less than one minimum unit of the core token
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("token amount received from selling ram is too low"), sellram( alice, 1 ) );
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()
