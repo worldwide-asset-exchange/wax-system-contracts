@@ -48,6 +48,13 @@ cmake-build-debug/
 /.audit/auth-inventory.tsv
 /.audit/phase3-leads.md
 /.audit/rules/triage.md
+/.audit/handoff-*.md
+/.audit/phase4-notes.md
+/.audit/track-h-*.md
+/.audit/guilds/
+/.audit/guilds-*.json
+/.audit/report-src/
+/.audit/render.py
 /.audit/report/out/
 /.audit/report/*.json
 /.audit/report/*.pdf
