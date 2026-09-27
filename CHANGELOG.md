@@ -8,6 +8,19 @@ FEATURES:
 
 IMPROVEMENTS:
 
+BUG FIXES:
+
+## wax-3.3.3
+
+Carries the two findings filed after wax-3.3.2 shipped (WCAP-SYS-2026-018 and -019) and the
+post-review test-coverage and ratchet work; no mainnet-safety change, no ABI change.
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
+
 - Guard-branch test coverage (WBP-2027): every WPS field and state validator, the RAM action
   input guards, `init`, the privileged resource setters, `setparams`, `updtrevision`, name
   bidding and the WPS vote guards now have a test asserting their `check()` message.
