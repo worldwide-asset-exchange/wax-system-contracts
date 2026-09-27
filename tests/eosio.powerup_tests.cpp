@@ -259,6 +259,13 @@ BOOST_FIXTURE_TEST_CASE(config_tests, powerup_tester) try {
    // net assertions
    BOOST_REQUIRE_EQUAL(wasm_assert_msg("current_weight_ratio is too large"),
                        configbw(make_config([](auto& c) { c.net.current_weight_ratio = powerup_frac + 1; })));
+   // WBP-2027: the lower bounds, and the exponent-1 price rule
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("current_weight_ratio is too small"),
+                       configbw(make_config([](auto& c) { c.net.current_weight_ratio = 0; })));
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("target_weight_ratio is too small"),
+                       configbw(make_config([](auto& c) { c.net.target_weight_ratio = 0; })));
+   BOOST_REQUIRE_EQUAL(wasm_assert_msg("min_price and max_price must be the same if the exponent is 1"),
+                       configbw(make_config([](auto& c) { c.net.exponent = 1; })));
    BOOST_REQUIRE_EQUAL(wasm_assert_msg("assumed_stake_weight/target_weight_ratio is too large"),
                        configbw(make_config([](auto& c) {
                           c.net.assumed_stake_weight = 100000;

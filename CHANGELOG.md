@@ -8,6 +8,13 @@ FEATURES:
 
 IMPROVEMENTS:
 
+- Guard-branch test coverage (WBP-2027): every WPS field and state validator, the RAM action
+  input guards, `init`, the privileged resource setters, `setparams`, `updtrevision`, name
+  bidding and the WPS vote guards now have a test asserting their `check()` message.
+  `test-coverage.py` also recognises the table-driven form the WBP-1998 tests use (a message
+  bound to a variable and passed to `wasm_assert_msg`), and reports how many guards it
+  counted that way. Tests and tooling only; no contract change.
+
 BUG FIXES:
 
 ## wax-3.3.2

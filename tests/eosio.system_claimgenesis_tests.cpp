@@ -54,6 +54,10 @@ BOOST_FIXTURE_TEST_CASE( claim_genesis_too_late, eosio_system_tester ) try {
 
    BOOST_REQUIRE_EQUAL( core_sym::from_string("2.0000"), get_balance("user11111111"_n));
 
+   // WBP-2027: the full amount is out; a day later there is nothing left to claim
+   produce_block(fc::days(1));
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("nothing to claim"), claimgenesis( "user11111111"_n ) );
+
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE( claim_genesis_no_rewards_yet, eosio_system_tester ) try {

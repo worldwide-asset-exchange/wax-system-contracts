@@ -1643,4 +1643,167 @@ BOOST_FIXTURE_TEST_CASE( wbp_1998_reviewer_and_committee_pairs_share_validation,
     BOOST_REQUIRE_EQUAL(wasm_assert_msg("The reviewer account does not exist"), rmvreviewer("committee111"_n, "committee111"_n, "nosuchacct11"_n));
 } FC_LOG_AND_RETHROW()
 
+
+// ---------------------------------------------------------------------------
+// WBP-2027. Guard-branch coverage. Each assertion below is the message the contract raises for
+// exactly one bad input with every other input valid, so a dropped check or a reworded
+// message fails here. These are the validation checks the audit's C6 class is about; none of
+// them had a test naming its message before.
+
+BOOST_FIXTURE_TEST_CASE( wbp_2027_proposal_field_bounds_and_state_guards, eosio_wps_tester ) try {
+   for( const auto& a : { "committee111"_n, "reviewer1111"_n, "proposer1111"_n, "proposer2222"_n } )
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("100.0000"), false,
+                                     core_sym::from_string("10.0000"), core_sym::from_string("10.0000") );
+   BOOST_REQUIRE_EQUAL( success(), setwpsenv( config::system_account_name, 5, 30, 500, 6 ) );
+   BOOST_REQUIRE_EQUAL( success(), regcommittee( config::system_account_name, "committee111"_n, "categoryX", true ) );
+   BOOST_REQUIRE_EQUAL( success(), regreviewer( "committee111"_n, "committee111"_n, "reviewer1111"_n, "bob", "bob" ) );
+   BOOST_REQUIRE_EQUAL( success(), regproposer( "proposer1111"_n, "proposer1111"_n, "user", "one", "img", "bio", "country", "tg", "web", "in" ) );
+   produce_blocks(1);
+
+   struct proposal_args {
+      name        committee   = "committee111"_n;
+      uint16_t    subcategory = 1;
+      std::string title = "title", summary = "summary", img = "project_img_url", description = "description", roadmap = "roadmap";
+      uint64_t    duration    = 30;
+      std::vector<std::string> members = { "user" };
+      asset       goal        = core_sym::from_string("9000.0000");
+      uint32_t    iterations  = 3;
+   };
+   auto reg = [&]( const name& who, const proposal_args& a ) {
+      return regproposal( who, who, a.committee, a.subcategory, a.title, a.summary, a.img, a.description, a.roadmap,
+                          a.duration, a.members, a.goal, a.iterations );
+   };
+   auto edit = [&]( const name& who, const proposal_args& a ) {
+      return editproposal( who, who, a.committee, a.subcategory, a.title, a.summary, a.img, a.description, a.roadmap,
+                           a.duration, a.members, a.goal, a.iterations );
+   };
+
+   // validate_proposal_fields runs before the proposer and proposal lookups in both actions, so
+   // one table drives regproposal and editproposal for a proposer that has no proposal yet.
+   struct bound { void (*set)(proposal_args&); std::string message; };
+   const std::vector<bound> bounds = {
+      { [](proposal_args& a){ a.committee   = "nosuchacct11"_n; },           "committee account doesn't exist" },
+      { [](proposal_args& a){ a.title       = ""; },                          "title should be more than 0 characters long" },
+      { [](proposal_args& a){ a.summary     = ""; },                          "summary should be more than 0 characters long" },
+      { [](proposal_args& a){ a.img         = ""; },                          "URL should be more than 0 characters long" },
+      { [](proposal_args& a){ a.description = ""; },                          "description should be more than 0 characters long" },
+      { [](proposal_args& a){ a.roadmap     = ""; },                          "roadmap should be more than 0 characters long" },
+      { [](proposal_args& a){ a.members     = {}; },                          "member should be more than 0" },
+      { [](proposal_args& a){ a.subcategory = 10; },                          "invalid sub-category" },
+      { [](proposal_args& a){ a.title       = std::string(256, 'x'); },       "title should be shorter than 256 characters." },
+      { [](proposal_args& a){ a.summary     = std::string(400, 'x'); },       "summary should be shorter than 400 characters." },
+      { [](proposal_args& a){ a.img         = std::string(128, 'x'); },       "URL should be shorter than 128 characters." },
+      { [](proposal_args& a){ a.description = std::string(5000, 'x'); },      "description should be shorter than 5000 characters." },
+      { [](proposal_args& a){ a.roadmap     = std::string(2000, 'x'); },      "roadmap should be shorter than 2000 characters." },
+      { [](proposal_args& a){ a.members     = std::vector<std::string>(50, "m"); }, "members must list fewer than 50 entries" },
+      { [](proposal_args& a){ a.goal        = core_sym::from_string("0.0000"); }, "must request positive amount" },
+      { [](proposal_args& a){ a.iterations  = 100; },                         "total iterations must be less than 100" },
+   };
+   for( const auto& b : bounds ) {
+      proposal_args a;
+      b.set( a );
+      BOOST_REQUIRE_EQUAL( wasm_assert_msg(b.message), reg( "proposer1111"_n, a ) );
+      BOOST_REQUIRE_EQUAL( wasm_assert_msg(b.message), edit( "proposer1111"_n, a ) );
+   }
+   BOOST_REQUIRE( get_proposal( "proposer1111"_n ).is_null() );
+
+   // the lookups that follow the field checks
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("This account is not a registered proposer"), reg( "proposer2222"_n, proposal_args{} ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("This account is not a registered proposer"), edit( "proposer2222"_n, proposal_args{} ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("Account not found in proposal table"), edit( "proposer1111"_n, proposal_args{} ) );
+
+   BOOST_REQUIRE_EQUAL( success(), reg( "proposer1111"_n, proposal_args{} ) );
+   produce_blocks(1);
+   BOOST_REQUIRE_EQUAL( success(), acceptprop( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n ) );
+   produce_blocks(1);
+
+   // once a proposal has left PENDING it can be neither edited nor accepted again
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("Proposal::status is not PROPOSAL_STATUS::PENDING"), edit( "proposer1111"_n, proposal_args{} ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("Proposal::status is not proposal_status::PENDING"),
+                        acceptprop( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n ) );
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( wbp_2027_reviewer_committee_and_rejection_guards, eosio_wps_tester ) try {
+   for( const auto& a : { "committee111"_n, "committee222"_n, "reviewer1111"_n, "proposer1111"_n } )
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("100.0000"), false,
+                                     core_sym::from_string("10.0000"), core_sym::from_string("10.0000") );
+   BOOST_REQUIRE_EQUAL( success(), setwpsenv( config::system_account_name, 5, 30, 500, 6 ) );
+   // two ordinary (non-oversight) committees; the reviewer and the proposal belong to the first
+   BOOST_REQUIRE_EQUAL( success(), regcommittee( config::system_account_name, "committee111"_n, "categoryX", false ) );
+   BOOST_REQUIRE_EQUAL( success(), regcommittee( config::system_account_name, "committee222"_n, "categoryY", false ) );
+   BOOST_REQUIRE_EQUAL( success(), regreviewer( "committee111"_n, "committee111"_n, "reviewer1111"_n, "bob", "bob" ) );
+   BOOST_REQUIRE_EQUAL( success(), regproposer( "proposer1111"_n, "proposer1111"_n, "user", "one", "img", "bio", "country", "tg", "web", "in" ) );
+   BOOST_REQUIRE_EQUAL( success(), regproposal( "proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                                                "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 3 ) );
+   produce_blocks(1);
+
+   // another committee can neither edit nor remove a reviewer it does not own
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("The given reviewer is not part of this committee"),
+                        editreviewer( "committee222"_n, "committee222"_n, "reviewer1111"_n, "bob", "bob" ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("The given reviewer is not part of this committee"),
+                        rmvreviewer( "committee222"_n, "committee222"_n, "reviewer1111"_n ) );
+
+   // rejection reasons are bounded on both sides, in rejectprop and rejectfund alike
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("must provide a brief reason"), rejectprop( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n, "" ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("reason is too long"),          rejectprop( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n, std::string(256, 'r') ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("must provide a brief reason"), rejectfund( "committee111"_n, "committee111"_n, "proposer1111"_n, "" ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("reason is too long"),          rejectfund( "committee111"_n, "committee111"_n, "proposer1111"_n, std::string(256, 'r') ) );
+
+   // a committee that is neither the proposal's nor oversight cannot reject its funding
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("Committee is not associated with this proposal"),
+                        rejectfund( "committee222"_n, "committee222"_n, "proposer1111"_n, "reason" ) );
+
+   // cleanvotes needs a non-empty positional range
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("Invalid range"), cleanvotes( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n, 5, 5 ) );
+
+   // a proposal is rejected once from PENDING; a second rejection finds no status it may act on
+   BOOST_REQUIRE_EQUAL( success(), rejectprop( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n, "reason" ) );
+   produce_blocks(1);
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("invalid proposal status"), rejectprop( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n, "reason" ) );
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE( wbp_2027_wpsenv_and_vote_guards, eosio_wps_tester ) try {
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("total_voting_percent should be more 0"),         setwpsenv( config::system_account_name, 0, 30, 500, 6 ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("duration_of_voting should be more than 0"),      setwpsenv( config::system_account_name, 5,  0, 500, 6 ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("total_iteration_of_funding should be more than 0"), setwpsenv( config::system_account_name, 5, 30, 500, 0 ) );
+   BOOST_REQUIRE_EQUAL( success(), setwpsenv( config::system_account_name, 5, 30, 500, 6 ) );
+
+   for( const auto& a : { "committee111"_n, "reviewer1111"_n, "proposer1111"_n, "smallvoter11"_n, "neverstaked1"_n } )
+      create_account_with_resources( a, config::system_account_name, core_sym::from_string("100.0000"), false,
+                                     core_sym::from_string("10.0000"), core_sym::from_string("10.0000") );
+   BOOST_REQUIRE_EQUAL( success(), regcommittee( config::system_account_name, "committee111"_n, "categoryX", true ) );
+   BOOST_REQUIRE_EQUAL( success(), regreviewer( "committee111"_n, "committee111"_n, "reviewer1111"_n, "bob", "bob" ) );
+   BOOST_REQUIRE_EQUAL( success(), regproposer( "proposer1111"_n, "proposer1111"_n, "user", "one", "img", "bio", "country", "tg", "web", "in" ) );
+   BOOST_REQUIRE_EQUAL( success(), regproposal( "proposer1111"_n, "proposer1111"_n, "committee111"_n, 1, "title", "summary", "project_img_url",
+                                                "description", "roadmap", 30, {"user"}, core_sym::from_string("9000.0000"), 3 ) );
+   BOOST_REQUIRE_EQUAL( success(), acceptprop( "reviewer1111"_n, "reviewer1111"_n, "proposer1111"_n ) );
+   issue_and_transfer( "smallvoter11", core_sym::from_string("1000.0000"), config::system_account_name );
+   BOOST_REQUIRE_EQUAL( success(), stake( "smallvoter11", core_sym::from_string("100.0000"), core_sym::from_string("50.0000") ) );
+   produce_blocks(1);
+
+   // the shape of the vote, checked before anything about the voter
+   std::vector<name> too_many;
+   for( int i = 0; i < 31; ++i ) too_many.push_back( name( std::string("vp") + char('a' + i / 5) + char('1' + i % 5) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("attempt to vote for too many proposals"), voteproposal( "smallvoter11"_n, "smallvoter11"_n, too_many ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("proposal votes must be unique"),
+                        voteproposal( "smallvoter11"_n, "smallvoter11"_n, { "proposer1111"_n, "proposer1111"_n } ) );
+
+   // an account that never staked has no voter row
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("user must stake before they can vote"),
+                        voteproposal( "neverstaked1"_n, "neverstaked1"_n, { "proposer1111"_n } ) );
+
+   // WPS voting waits for the 15% activation threshold
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("cannot update wps votes until the chain is activated (at least 15% of all tokens participate in voting)"),
+                        voteproposal( "smallvoter11"_n, "smallvoter11"_n, { "proposer1111"_n } ) );
+   cross_15_percent_threshold();
+   produce_blocks(1);
+
+   // a registered proxy cannot vote on proposals; the same account can once it deregisters
+   BOOST_REQUIRE_EQUAL( success(), push_action( "smallvoter11"_n, "regproxy"_n, mvo()("proxy", "smallvoter11")("isproxy", true) ) );
+   BOOST_REQUIRE_EQUAL( wasm_assert_msg("Proxies can't vote for worker proposals"),
+                        voteproposal( "smallvoter11"_n, "smallvoter11"_n, { "proposer1111"_n } ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( "smallvoter11"_n, "regproxy"_n, mvo()("proxy", "smallvoter11")("isproxy", false) ) );
+   BOOST_REQUIRE_EQUAL( success(), voteproposal( "smallvoter11"_n, "smallvoter11"_n, { "proposer1111"_n } ) );
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()

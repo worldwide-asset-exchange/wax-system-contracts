@@ -502,4 +502,13 @@ BOOST_FIXTURE_TEST_CASE(disallow_perms_tests, limitauth_tester) try {
 } // disallow_perms_tests
 FC_LOG_AND_RETHROW()
 
+
+// WBP-2027: the allow and disallow lists are exclusive
+BOOST_FIXTURE_TEST_CASE(exclusive_lists_tests, limitauth_tester) try {
+   BOOST_REQUIRE_EQUAL(
+      "assertion failure with message: either allow_perms or disallow_perms must be empty",
+      limitauthchg({alice, active}, alice, {owner, active}, {owner}));
+} // exclusive_lists_tests
+FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()
