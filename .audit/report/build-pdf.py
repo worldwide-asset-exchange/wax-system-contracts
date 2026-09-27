@@ -45,7 +45,10 @@ if src.suffix == ".json":                                 # render.py --report-d
         "findings": [f for f in rd["findings"] if f["severity"] != "info"],
         "informational": [f for f in rd["findings"] if f["severity"] == "info"],
         "counts": {s: rd["counts"]["by_severity"].get(s, 0) for s in SEV},
-        "by_status": rd["counts"].get("by_status", {}),
+        # status counts over the security findings only, to match the line they sit under;
+        # informational items carry their own status in their own section
+        "by_status": {k: sum(1 for f in rd["findings"] if f["severity"] != "info" and f["status"] == k)
+                      for k in ("fixed", "open")},
         "source": "render.py --report-data",
     }
 else:                                                     # proof-of-concept YAML
