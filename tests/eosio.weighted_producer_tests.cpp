@@ -1,11 +1,13 @@
 #include <boost/test/unit_test.hpp>
 #include <cstdlib>
+#include <algorithm>
 #include <eosio/chain/contract_table_objects.hpp>
 #include <eosio/chain/exceptions.hpp>
 #include <eosio/chain/global_property_object.hpp>
 #include <eosio/chain/resource_limits.hpp>
 #include <eosio/chain/wast_to_wasm.hpp>
 #include <eosio/chain/fixed_bytes.hpp>
+#include <eosio/chain/block_timestamp.hpp>
 #include <fc/log/logger.hpp>
 #include <iostream>
 #include <sstream>
@@ -3413,6 +3415,113 @@ BOOST_FIXTURE_TEST_CASE( test_bp_score_ceiling_leaves_live_snapshot_unchanged_at
    // cryptolions1 on the name tie-break instead of waxswedenorg.
    replay_snapshot_at( *this, 1 );
    BOOST_REQUIRE( std::set<name>{ "waxswedenorg"_n } == active_schedule() );
+} FC_LOG_AND_RETHROW()
+
+
+// ---------------------------------------------------------------------------
+// WBP-2029 (WCAP invariant I6). Election cost against 500 REAL candidates, not just the cap.
+// The merge-gate measurement only widened max_considered_producers with the candidate set
+// unchanged; this one registers and votes in 500 producers so update_elected_producers does
+// its worst-case work (one guilds-table read and one get_code_hash per candidate, then the
+// sort). Long-running, so it is opt-in: the case returns immediately unless WCAP_LONG_TESTS
+// is set. Run it as
+//   WCAP_LONG_TESTS=1 ./build/tests/unit_test --run_test=eosio_weighted_producer_tests/wcap_i6_election_cost_with_500_candidates
+// and record the two numbers it prints.
+BOOST_FIXTURE_TEST_CASE( wcap_i6_election_cost_with_500_candidates, eosio_weighted_producer_tester ) try {
+   if( !std::getenv( "WCAP_LONG_TESTS" ) ) {
+      BOOST_TEST_MESSAGE( "wcap_i6_election_cost_with_500_candidates: skipped (set WCAP_LONG_TESTS=1 to run)" );
+      return;
+   }
+
+   configure_weighted_voting();                       // guilds contract wired in and allow-listed: the multiplier is really read
+   const auto base_producers = active_and_vote_producers();   // 21 producers, chain activated, schedule = 21
+   BOOST_REQUIRE( base_producers.size() >= 21 );
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setmaxprod"_n, mvo()("max_considered_producers", 500) ) );
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setminvote"_n, mvo()("min_producer_vote_threshold", 0.0) ) );
+
+   // onblock rebuilds the schedule when head.slot - last_producer_schedule_update.slot > 120.
+   // Walk to the block just before that threshold, then time the single block that carries
+   // the election, and prove it did by checking the update timestamp moved. Median of five.
+   auto last_update_slot = [&]() -> uint32_t {
+      const auto t = fc::time_point::from_iso_string( get_global_state()["last_producer_schedule_update"].as_string() );
+      return eosio::chain::block_timestamp_type( t ).slot;
+   };
+   auto time_election_block = [&]() -> int64_t {
+      produce_blocks( 122 );                  // one untimed election first, so every sample is steady state
+      std::vector<int64_t> samples;
+      for( int n = 0; n < 5; ++n ) {
+         const uint32_t last = last_update_slot();
+         while( eosio::chain::block_timestamp_type( control->head_block_time() ).slot - last < 120 ) produce_blocks( 1 );
+         const auto start = fc::time_point::now();
+         produce_blocks( 1 );
+         samples.push_back( ( fc::time_point::now() - start ).count() );   // microseconds
+         BOOST_REQUIRE_MESSAGE( last_update_slot() != last, "the timed block did not carry an election" );
+      }
+      std::sort( samples.begin(), samples.end() );
+      return samples[2];
+   };
+   const int64_t at_21 = time_election_block();
+   // Standby seats make the ranking beyond the schedule observable.
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setsbslot"_n, mvo()("num_slots", 21) ) );
+
+   // 479 more candidates: 12-character names from the name alphabet, no dots.
+   auto candidate_name = []( int i ) {
+      static const char* alphabet = "12345abcdefghijklmnopqrstuvwxyz";   // 31 symbols
+      std::string s( "cand" );
+      std::string tail;
+      for( int k = 0; k < 8; ++k ) { tail.insert( tail.begin(), alphabet[i % 31] ); i /= 31; }
+      return name( s + tail );
+   };
+   std::vector<name> extra;
+   for( int i = 0; i < 479; ++i ) extra.push_back( candidate_name( i ) );
+   for( size_t off = 0; off < extra.size(); off += 20 ) {
+      std::vector<account_name> batch( extra.begin() + off, extra.begin() + std::min( off + 20, extra.size() ) );
+      setup_producer_accounts( batch );
+      for( const auto& p : batch ) BOOST_REQUIRE_EQUAL( success(), regproducer( p ) );
+      produce_blocks( 1 );
+   }
+
+   // 16 voters, each voting for a sorted block of 30 of the new candidates with a distinct
+   // stake, so every candidate has non-zero votes and sits above the (zero) threshold.
+   std::sort( extra.begin(), extra.end() );
+   for( size_t v = 0; v * 30 < extra.size(); ++v ) {
+      const name voter( std::string( "wcapvotera" ) + std::string( 1, 'a' ) + std::string( 1, char( 'a' + v ) ) );
+      create_account_with_resources( voter, config::system_account_name, core_sym::from_string("10.0000"), false,
+                                     core_sym::from_string("80.0000"), core_sym::from_string("80.0000") );
+      transfer( config::system_account_name, voter, core_sym::from_string("2000.0000"), config::system_account_name );
+      const asset half = core_sym::from_string( std::to_string( 500 + int(v) ) + ".0000" );
+      BOOST_REQUIRE_EQUAL( success(), stake( voter, half, half ) );
+      std::vector<account_name> picks( extra.begin() + v * 30, extra.begin() + std::min( (v + 1) * 30, extra.size() ) );
+      BOOST_REQUIRE_EQUAL( success(), vote( voter, picks ) );
+   }
+   produce_blocks( 2 );
+
+   const int64_t at_500 = time_election_block();
+   BOOST_REQUIRE_EQUAL( 21u, control->head_block_state()->active_schedule.producers.size() );
+   // The new candidates are in the ranking: every base producer with votes that is not in
+   // the schedule takes a standby seat ahead of them (it carries the big voter's weight),
+   // and every remaining seat must go to a new candidate.
+   {
+      size_t voted_base = 0;
+      for( const auto& b : base_producers )
+         if( get_producer_info( b )["total_votes"].as_double() > 0 ) ++voted_base;
+      BOOST_REQUIRE( voted_base >= 21 );
+      const size_t expected = 21 - std::min<size_t>( 21, voted_base - 21 );
+      size_t cand_standbys = 0;
+      for( const auto& sb : get_standby_table() )
+         if( sb.is_active && sb.owner.to_string().rfind( "cand", 0 ) == 0 ) ++cand_standbys;
+      BOOST_REQUIRE_MESSAGE( cand_standbys == expected, cand_standbys << " of the new candidates reached the standby list, expected " << expected );
+   }
+
+   BOOST_TEST_MESSAGE( "I6 election block (median of 5): 21 candidates = " << at_21 << " us; 500 candidates = " << at_500
+                       << " us; ratio = " << ( at_21 > 0 ? double(at_500) / double(at_21) : 0.0 ) );
+
+   // Envelope: 500/21 ≈ 24x the candidates. Linear work with generous slack for the sort and
+   // for timer noise, tied to the baseline (a floor of 50 ms only guards a sub-ms baseline);
+   // a super-linear blow-up (a quadratic scan, or per-candidate work that dominates block
+   // production) fails here. Measured 2026-09-27: 3.3 ms vs 44.5 ms.
+   BOOST_REQUIRE_MESSAGE( at_500 < std::max<int64_t>( 60 * at_21, 50'000 ),
+      "election with 500 real candidates cost " << at_500 << " us against " << at_21 << " us with 21: outside the linear envelope" );
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
