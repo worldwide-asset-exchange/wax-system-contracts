@@ -126,8 +126,30 @@ def has_auth_transitive(action, defs, depth=2, seen=None):
     return False
 
 
-def check_a1(path, text, defs_index):
-    """A1 - declared action whose definition (or its delegate) contains no auth check."""
+# Actions nodeos applies itself (apply_eosio_newaccount, apply_eosio_setabi, ...) when the
+# receiver is the system account: the chain's native handler enforces their authorization
+# before any contract handler runs, so a contract-side body that exists for one of them
+# (newaccount's name-bid rules, setabi's hash table) adds no auth of its own by design. The
+# native handlers are registered for receiver `eosio` only, so this classification applies
+# only to the contracts that are deployed there (NATIVE_RECEIVERS); the same name in any
+# other contract is an ordinary action and is judged as one. Reported as information under
+# --verbose, never as findings (WBP-2030).
+NATIVE_ACTIONS = frozenset({'newaccount', 'updateauth', 'deleteauth', 'linkauth', 'unlinkauth',
+                            'canceldelay', 'setcode', 'setabi'})
+NATIVE_RECEIVERS = frozenset({'eosio.bios', 'eosio.boot', 'eosio.system'})
+# onerror is not a native handler: nodeos dispatches it to the sender contract when a
+# deferred transaction fails, and refuses a direct push ("onerror action cannot be sent
+# directly"), so no third party can invoke it. Same treatment, different reason.
+CHAIN_ONLY_SENDER = frozenset({'onerror'})
+
+
+def check_a1(path, text, defs_index, info=None, native_receiver=False):
+    """A1 - declared action whose definition (or its delegate) contains no auth check.
+
+    `info`, when given, collects the informational rows (native actions, chain-only senders,
+    empty receipt emitters) that are not findings but that a reader of --verbose output may
+    want to see. `native_receiver` says whether the header belongs to a contract deployed on
+    the system account (see NATIVE_RECEIVERS); only then do NATIVE_ACTIONS get the pass."""
     out = []
     lines = text.splitlines()
     for i, line in enumerate(lines):
@@ -138,11 +160,28 @@ def check_a1(path, text, defs_index):
         if not m:
             continue
         action = m.group(1)
+        if native_receiver and action in NATIVE_ACTIONS:
+            if info is not None:
+                info.append((i + 1, 'A1-native',
+                             f'action `{action}` is applied by nodeos for the system account, '
+                             f'which enforces its authorization before any contract handler runs.'))
+            continue
+        if native_receiver and action in CHAIN_ONLY_SENDER:
+            if info is not None:
+                info.append((i + 1, 'A1-chain-only',
+                             f'action `{action}` can only be dispatched by the chain (a direct '
+                             f'push is refused by nodeos); no third party can invoke it.'))
+            continue
         if action not in defs_index:
-            out.append((i + 1, 'A1-native',
-                        f'action `{action}` is declared with no contract-side definition '
-                        f'(implemented by nodeos). Auth is enforced by the chain, not here '
-                        f'- confirm that is intended.'))
+            out.append((i + 1, 'A1-undefined',
+                        f'action `{action}` is declared with no contract-side definition and '
+                        f'is not a nodeos-native action: either the definition is missing or '
+                        f'this rule cannot see it.'))
+        elif not defs_index[action].strip('{} \t\r\n'):
+            if info is not None:
+                info.append((i + 1, 'A1-receipt',
+                             f'action `{action}` has an empty body: a receipt emitter whose '
+                             f'data appears in the trace and that mutates nothing.'))
         elif not has_auth_transitive(action, defs_index):
             out.append((i + 1, 'A1',
                         f'action `{action}` has no require_auth()/has_auth() in its '
@@ -680,6 +719,7 @@ def main():
     actions, wide_members = build_hpp_index(root)
     defs_with_params = build_defs_with_params(root)
     findings = []
+    info = []
     by_contract = {}
     for path in sorted(pathlib.Path(root).rglob('*')):
         if path.suffix not in ('.cpp', '.hpp') or 'test_contracts' in str(path):
@@ -688,7 +728,10 @@ def main():
         by_contract.setdefault(contract_of(path, root), {})[str(path)] = text
         rows = check_c5(path, text) + check_c4(path, text) + check_c4b(path, text)
         if path.suffix == '.hpp':
-            rows += check_a1(path, text, defs)
+            a1_info = []
+            rows += check_a1(path, text, defs, info=a1_info,
+                             native_receiver=contract_of(path, root).name in NATIVE_RECEIVERS)
+            info += [(str(path), ln, cls, msg) for ln, cls, msg in a1_info]
         if path.suffix == '.cpp':
             clean = strip_comments(text)               # C4b needs comments; these do not
             rows += (check_c6(path, clean) + check_c6_sibling(path, clean)
@@ -709,6 +752,10 @@ def main():
         pathlib.Path(target).write_text('\n'.join(lines) + '\n')
         print(f'wrote {len(findings)} entries to {target}', file=sys.stderr)
         return 0
+
+    if '--verbose' in sys.argv:
+        for path, ln, cls, msg in info:
+            print(f'{path}:{ln}: [info {cls}] {msg}')
 
     baseline = load_baseline(flags['--baseline']) if '--baseline' in flags else set()
     new = [f for f in findings if key_of(f[0], f[2], f[3]) not in baseline]
