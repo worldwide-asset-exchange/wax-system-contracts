@@ -297,5 +297,49 @@ class D3OnblockReach(unittest.TestCase):                                  # WBP-
         self.assertEqual(wc.contract_of(P('other/src/v.cpp'), 'other'), P('other'))
 
 
+
+class A1Auth(unittest.TestCase):
+    """WBP-2030: nodeos-native actions and empty receipts are information, not findings."""
+
+    def hpp(self, *actions):
+        return '\n'.join(f'[[eosio::action]]\nvoid {a}( const name& x );' for a in actions) + '\n'
+
+    def test_native_declaration_is_informational(self):
+        info = []
+        rows = wc.check_a1('t.hpp', self.hpp('newaccount', 'setcode', 'onerror'), {}, info=info, native_receiver=True)
+        self.assertEqual(rows, [])
+        self.assertEqual([cls for _, cls, _ in info], ['A1-native', 'A1-native', 'A1-chain-only'])
+
+    def test_native_name_in_another_contract_is_judged_as_an_ordinary_action(self):   # eosio.msig declaring setabi
+        self.assertEqual(classes(wc.check_a1('t.hpp', self.hpp('setabi'), {}, native_receiver=False)), ['A1-undefined'])
+        defs = {'setabi': '{ table.emplace( acnt, [&]( auto& row ) { row.owner = acnt; } ); }'}
+        self.assertEqual(classes(wc.check_a1('t.hpp', self.hpp('setabi'), defs, native_receiver=False)), ['A1'])
+
+    def test_native_with_a_bodied_handler_and_no_auth_is_informational(self):
+        defs = {'setabi': '{ table.emplace( acnt, [&]( auto& row ) { row.owner = acnt; } ); }'}
+        self.assertEqual(wc.check_a1('t.hpp', self.hpp('setabi'), defs, native_receiver=True), [])
+
+    def test_declared_only_non_native_fires(self):
+        rows = wc.check_a1('t.hpp', self.hpp('setfoo'), {})
+        self.assertEqual(classes(rows), ['A1-undefined'])
+
+    def test_bodied_action_without_auth_fires(self):
+        defs = {'setfoo': '{ _foo.modify( itr, same_payer, [&]( auto& f ) { f.x = x; } ); }'}
+        self.assertEqual(classes(wc.check_a1('t.hpp', self.hpp('setfoo'), defs)), ['A1'])
+
+    def test_auth_through_a_delegate_is_silent(self):
+        defs = {'setfoo': '{ do_set( x ); }', 'do_set': '{ require_auth( get_self() ); _foo.set( x, _self ); }'}
+        self.assertEqual(wc.check_a1('t.hpp', self.hpp('setfoo'), defs), [])
+
+    def test_empty_body_receipt_is_informational(self):
+        info = []
+        rows = wc.check_a1('t.hpp', self.hpp('powupresult'), {'powupresult': '{ }'}, info=info)
+        self.assertEqual(rows, [])
+        self.assertEqual([cls for _, cls, _ in info], ['A1-receipt'])
+
+    def test_read_only_check_without_auth_still_fires(self):               # bios::reqactivated stays baselined
+        defs = {'reqactivated': '{ check( is_feature_activated( d ), "protocol feature is not activated" ); }'}
+        self.assertEqual(classes(wc.check_a1('t.hpp', self.hpp('reqactivated'), defs)), ['A1'])
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

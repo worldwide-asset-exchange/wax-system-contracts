@@ -66,7 +66,16 @@ Each carries a class ID used in audit reports.
 **type-aware** (`rules/wcap-check.py`)
 
 - **A1** — action whose definition, and anything it delegates to, contains no
-  `require_auth()`/`has_auth()`.
+  `require_auth()`/`has_auth()`. In the contracts deployed on the system account
+  (`eosio.bios`, `eosio.boot`, `eosio.system`), the actions nodeos applies itself
+  (`newaccount`, `setcode`, `setabi`, `updateauth`, `deleteauth`, `linkauth`, `unlinkauth`,
+  `canceldelay`) are not findings: the chain enforces their authorization before any
+  contract handler runs, and its native handlers are registered for receiver `eosio` only,
+  so the same name in another contract is judged as an ordinary action. `onerror` is not a
+  finding for a different reason: nodeos dispatches it only on a deferred-transaction
+  failure and refuses a direct push. Nor is an empty-bodied receipt emitter such as
+  `powupresult`. All three are listed under `--verbose` as information (WBP-2030). A
+  declared action with no definition that is not one of these fires as `A1-undefined`.
 - **C4** — a sort comparator ordering on a `double`/`float` member. If that ordering
   reaches consensus, determinism depends on every node agreeing on floating-point
   evaluation.

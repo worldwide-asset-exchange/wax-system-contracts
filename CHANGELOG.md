@@ -15,6 +15,12 @@ IMPROVEMENTS:
   bound to a variable and passed to `wasm_assert_msg`), and reports how many guards it
   counted that way. Tests and tooling only; no contract change.
 
+- WCAP static ratchet (WBP-2030): the A1 rule classifies nodeos-native actions and
+  empty receipt emitters itself instead of carrying them in `baseline.txt`; the baseline
+  shrinks from 34 lines to 6 (`reqactivated` ×2, `bidrefund`, `weighted_votes`, and the two
+  WBP-1998 dismissals), each of which is a real, reasoned acceptance. Rule precision only;
+  no contract change and no score effect.
+
 BUG FIXES:
 
 ## wax-3.3.2
