@@ -126,3 +126,11 @@ Alternatively, use the prebuilt contracts development docker image to get up and
 ## License
 
 [MIT](LICENSE)
+
+## Security audits
+
+Contract security work follows the [WAX Contract Audit Protocol](WCAP.md): a repeatable,
+evidence-driven process whose tooling lives under [`.audit/`](.audit/README.md). Findings,
+threat models and report sources are kept in a private audit repository and referenced here
+by tracker ID only; see [`SECURITY.md`](SECURITY.md) for the disclosure policy and the
+supported-versions table.
