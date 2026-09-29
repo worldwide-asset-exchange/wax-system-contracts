@@ -45,17 +45,20 @@ if src.suffix == ".json":                                 # render.py --report-d
         "findings": [f for f in rd["findings"] if f["severity"] != "info"],
         "informational": [f for f in rd["findings"] if f["severity"] == "info"],
         "counts": {s: rd["counts"]["by_severity"].get(s, 0) for s in SEV},
+        "open_counts": {s: sum(1 for f in rd["findings"] if f["severity"] == s and f["status"] == "open") for s in SEV},
         # status counts over the security findings only, to match the line they sit under;
         # informational items carry their own status in their own section
         "by_status": {k: sum(1 for f in rd["findings"] if f["severity"] != "info" and f["status"] == k)
                       for k in ("fixed", "open")},
+        "all_status": {k: sum(1 for f in rd["findings"] if f["status"] == k) for k in ("fixed", "open")},
         "source": "render.py --report-data",
     }
 else:                                                     # proof-of-concept YAML
     y = yaml.safe_load(src.read_text())
     data = {"audit": y["audit"], "findings": y.get("findings", []), "informational": [],
             "counts": {s: sum(1 for f in y.get("findings", []) if f["severity"] == s) for s in SEV},
-            "by_status": {}, "source": src.name}
+            "open_counts": {s: sum(1 for f in y.get("findings", []) if f["severity"] == s and f.get("status") == "open") for s in SEV},
+            "by_status": {}, "all_status": {}, "source": src.name}
 
 OPTIONAL = ("invariant", "asset", "impact", "likelihood", "attack_scenario", "proof", "remediation",
             "remediation_notes", "notes", "location", "class")
