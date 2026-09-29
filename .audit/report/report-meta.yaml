@@ -84,7 +84,7 @@ method:
   depth:
     - {surface: "WAX-only code (worker proposals, standby pay, RNG carve-out, election weighting, guilds boundary)", how: "full manual review"}
     - {surface: "Forked files with large deltas (voting, producer pay, bandwidth, system setters)", how: "full manual review of the delta and its callers"}
-    - {surface: "Files byte-identical to upstream (token, msig, wrap, exchange state, native, name bidding, limit-auth)", how: "differential only; deployed binaries reproduced"}
+    - {surface: "Files byte-identical to upstream (eosio.token, eosio.msig, eosio.wrap, exchange state, native, name bidding, limit-auth)", how: "differential only; deployed binaries reproduced"}
     - {surface: "guilds.oig (external repository)", how: "full manual review at two commits; auth-matrix tests against the deployed wasm by hash"}
   limits: >-
     Time-boxed and internal: it is not a third-party attestation. No formal verification and no
@@ -92,3 +92,38 @@ method:
     off-chain service were out of scope. Line and branch coverage cannot be instrumented in the
     contract toolchain, so coverage is stated per validation branch. The absence of a finding is not
     a statement that none exists.
+
+# Editions (WBP-2034). `build-pdf.py --profile <name>` merges the named block over everything
+# above: dicts recursively, lists of records by their `dimension` / `phase` key, so an edition
+# restates only what differs. The `internal` profile is the file as is. The data JSON must have
+# been rendered for the same profile.
+editions:
+  external:                   # the code-only edition: no custody, configuration or operations
+    edition: External edition — code assessment
+    scope_statement: >-
+      In scope: the source of eosio.system (worldwide-asset-exchange/wax-system-contracts) and of
+      guilds.oig (wax-office-of-inspector-general/guilds.oig) at the stated commits, the chain
+      state that code reads, and the tests and tooling that prove its properties. Out of scope:
+      key custody, producer-set configuration and deployment operations, which are held in the
+      internal record. Severity is judged from the code alone.
+    scores:                   # Scorecard v8, external (2026-09-29); keep in step with the Confluence page
+      - dimension: Security
+        basis: >-
+          25 code findings, 23 fixed on chain and independently re-verified; the two open are
+          accepted informational items. No attacker-reachable path to fund loss or chain halt.
+          Held under 10 because the score ceiling that closes the election-weight finding bounds
+          magnitude, not ranking, so who may write the guilds table remains the control, and
+          because this is a self-assessment.
+      - dimension: Governance & upgrade safety
+        score: 8.0
+        basis: >-
+          Judged from the code: every privileged setter reviewed carries a bound or a finite-value
+          check; the code-hash allow-list the election reads equals the deployed guilds hash, so an
+          unlisted build turns weighting off rather than on; the upgrade path is tooled (build,
+          plan, verify by hash) and both September upgrades verified against the reproducible
+          build; the onblock ratchet closes the freeze path. No timelock on consensus-affecting
+          parameters, and an unlisted guilds hash fails open to unweighted votes rather than
+          refusing.
+    method:
+      phases:
+        - {phase: "1 — Threat model", what: "Assets, actors, trust boundaries and seven invariants (I1–I7) stated before reading code."}
