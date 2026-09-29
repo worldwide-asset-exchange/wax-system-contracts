@@ -3,7 +3,14 @@
 
 Usage:
   .audit/report/build-pdf.py <data> <out.pdf> [--template template.html] [--meta report-meta.yaml]
-                             [--theme theme.css] [--chrome google-chrome]
+                             [--theme theme.css] [--chrome google-chrome] [--profile internal|<edition>]
+
+--profile selects an edition of the metadata: `internal` (the default) renders report-meta.yaml
+as is; any other name must be a key under its `editions:` map, whose block is merged over the
+top-level metadata (dicts recursively; lists of records by their `dimension` / `phase` /
+`surface` / `band` key, so an edition restates only the entries it changes). The data JSON
+carries the profile it was rendered for, and a mismatch is refused: an edition's metadata is
+never combined with another edition's findings.
 
 <data> is either the JSON emitted by `render.py --report-data` (the production path: the findings
 YAML is the single source of truth, so the PDF cannot drift from it) or a small hand-written YAML in
@@ -31,14 +38,56 @@ ap.add_argument("--template", default=HERE / "template.html", type=pathlib.Path)
 ap.add_argument("--meta", default=HERE / "report-meta.yaml", type=pathlib.Path)
 ap.add_argument("--theme", default=HERE / "theme.css", type=pathlib.Path)
 ap.add_argument("--chrome", default="google-chrome")
+ap.add_argument("--profile", default="internal",
+                help="edition to render: 'internal' (default) or a key under `editions:` in the metadata")
 a = ap.parse_args()
+
+RECORD_KEYS = ("dimension", "phase", "surface", "band")
+
+
+def merge(base, over):
+    """Edition metadata over the base: dicts merge recursively; a list of records merges by the
+    first RECORD_KEYS key both sides carry (unknown entries are appended); anything else is
+    replaced."""
+    if isinstance(base, dict) and isinstance(over, dict):
+        out = dict(base)
+        for k, v in over.items():
+            out[k] = merge(base[k], v) if k in base else v
+        return out
+    if isinstance(base, list) and isinstance(over, list) and base and over \
+            and all(isinstance(x, dict) for x in base + over):
+        key = next((k for k in RECORD_KEYS if all(k in x for x in base + over)), None)
+        if key:
+            out = [dict(x) for x in base]
+            index = {x[key]: i for i, x in enumerate(out)}
+            for o in over:
+                if o[key] in index:
+                    out[index[o[key]]] = merge(out[index[o[key]]], o)
+                else:
+                    out.append(o)
+            return out
+    return over
+
+
+def edition(meta, profile, where):
+    """The metadata for one profile: `internal` is the block as is (minus `editions`); any other
+    profile must be a key under `editions:` and is merged over it."""
+    editions = meta.pop("editions", None) or {}
+    if profile == "internal":
+        return meta
+    if profile not in editions:
+        sys.exit(f"{where}: no edition '{profile}' under editions: (have {sorted(editions) or 'none'})")
+    return merge(meta, editions[profile])
 
 SEV = ["critical", "high", "medium", "low", "info"]
 
 src = pathlib.Path(a.data)
 if src.suffix == ".json":                                 # render.py --report-data
     rd = json.loads(src.read_text())
-    meta = yaml.safe_load(a.meta.read_text())
+    if rd.get("profile", "internal") != a.profile:
+        sys.exit(f"{src} was rendered for the '{rd.get('profile', 'internal')}' profile; "
+                 f"asked to render '{a.profile}'. Regenerate the data with the same --profile.")
+    meta = edition(yaml.safe_load(a.meta.read_text()), a.profile, a.meta)
     data = {
         "audit": {**meta, "provenance": rd["provenance"], "protocol": rd.get("protocol", "WCAP v1"),
                   "generated_at": rd.get("generated_at", "")},
@@ -55,7 +104,7 @@ if src.suffix == ".json":                                 # render.py --report-d
     }
 else:                                                     # proof-of-concept YAML
     y = yaml.safe_load(src.read_text())
-    data = {"audit": y["audit"], "findings": y.get("findings", []), "informational": [],
+    data = {"audit": edition(y["audit"], a.profile, src), "findings": y.get("findings", []), "informational": [],
             "counts": {s: sum(1 for f in y.get("findings", []) if f["severity"] == s) for s in SEV},
             "open_counts": {s: sum(1 for f in y.get("findings", []) if f["severity"] == s and f.get("status") == "open") for s in SEV},
             "by_status": {}, "all_status": {}, "source": src.name}
@@ -97,4 +146,4 @@ cmd = [a.chrome, "--headless=new", "--no-sandbox", "--disable-gpu", "--no-pdf-he
 r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
 if r.returncode or not out.exists():
     sys.exit(f"chrome failed: {r.stderr[-800:]}")
-print(f"wrote {out} from {data['source']}")
+print(f"wrote {out} from {data['source']} [{a.profile}]")
