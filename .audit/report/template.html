@@ -17,13 +17,31 @@
 
 <div class="callout"><strong>Provenance.</strong> {{ audit.provenance }}</div>
 
+{% set method = audit.get('method') %}{% if method %}
+<h2>Scope and method</h2>
+<p class="prose">{{ method.summary }}{% if method.get('window') %} Review window {{ method.window }}.{% endif %}</p>
+<table><tr><th>Phase</th><th>What was done</th></tr>
+{% for p in method.phases %}<tr><td class="mono">{{ p.phase }}</td><td>{{ p.what }}</td></tr>{% endfor %}</table>
+<p class="meta">Review depth by surface</p>
+<table><tr><th>Surface</th><th>Depth</th></tr>
+{% for d in method.depth %}<tr><td>{{ d.surface }}</td><td>{{ d.how }}</td></tr>{% endfor %}</table>
+<p class="prose small"><strong>Limits.</strong> {{ method.limits }}</p>
+{% endif %}
+
 <h2>Findings by severity</h2>
-<div class="tiles">{% for s in ['critical','high','medium','low','info'] %}<div class="tile"><div class="n">{{ counts[s] }}</div><div class="l">{{ s }}</div></div>{% endfor %}</div>
+<div class="tiles">{% for s in ['critical','high','medium','low','info'] %}<div class="tile"><div class="n">{{ counts[s] }}</div><div class="l">{{ s }}</div><div class="l">{% if counts[s] %}{{ open_counts[s] }} open{% else %}&nbsp;{% endif %}</div></div>{% endfor %}</div>
+{% if all_status %}<p class="meta">Counts are findings recorded over the whole review. Of the {{ counts.values()|sum }}, <strong>{{ all_status.get('fixed', 0) }} are fixed</strong> (deployed and independently re-verified) and <strong>{{ all_status.get('open', 0) }} remain open</strong>; the open set is listed by status in the register below.</p>{% endif %}
 
 <h2>Assessment scores</h2>
-<table><tr><th>Dimension</th><th>Score</th><th>Weight</th></tr>
-{% for s in audit.scores %}<tr><td>{{ s.dimension }}</td><td>{{ s.score }} / 10</td><td>{{ s.weight }}%</td></tr>{% endfor %}
-<tr><td><strong>Overall (weighted)</strong></td><td><strong>{{ overall }} / 10</strong></td><td></td></tr></table>
+{% set with_basis = audit.scores and audit.scores[0].get('basis') %}
+<table><tr><th>Dimension</th><th>Score</th><th>Weight</th>{% if with_basis %}<th>Basis</th>{% endif %}</tr>
+{% for s in audit.scores %}<tr><td>{{ s.dimension }}</td><td>{{ s.score }} / 10</td><td>{{ s.weight }}%</td>{% if with_basis %}<td class="small">{{ s.get('basis', '') }}</td>{% endif %}</tr>{% endfor %}
+<tr><td><strong>Overall (weighted)</strong></td><td><strong>{{ overall }} / 10</strong></td><td></td>{% if with_basis %}<td></td>{% endif %}</tr></table>
+{% set rubric = audit.get('rubric') %}{% if rubric %}
+<p class="meta">Scores are judgements, not measurements, read on this scale; the weights reflect what an exchange integration depends on.</p>
+<table><tr><th>Band</th><th>Meaning</th></tr>
+{% for r in rubric %}<tr><td class="mono">{{ r.band }}</td><td>{{ r.meaning }}</td></tr>{% endfor %}</table>
+{% endif %}
 
 <h2>Findings</h2>
 <p class="meta">{{ findings|length }} security findings{% if by_status %} · {{ by_status.get('fixed', 0) }} fixed, {{ by_status.get('open', 0) }} open{% endif %}; informational items follow in their own section.</p>

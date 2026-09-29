@@ -14,9 +14,9 @@ findings data ──► build-pdf.py ──► Jinja2 (template.html + theme.css
 | Path | Purpose |
 |---|---|
 | `build-pdf.py` | The single command. Data in, PDF out. Needs `python3`, `jinja2`, `pyyaml`, `google-chrome`. |
-| `template.html` | Jinja2 template: cover, scope, provenance, severity tiles, scorecard, findings, informational items, disclaimer. |
+| `template.html` | Jinja2 template: cover, scope, provenance, scope and method (when `method` is present), severity tiles, scorecard with basis and rubric (when present), findings, informational items, disclaimer. |
 | `theme.css` | WAX brand tokens (colours from wax.io/branding), A4 page setup, running footer. |
-| `report-meta.yaml` | Non-sensitive metadata the data file does not carry: title, client, scope, scorecard. |
+| `report-meta.yaml` | Non-sensitive metadata the data file does not carry: title, client, scope, the scorecard with a one-line `basis` per dimension, the `rubric` the scores are read on, and the `method` block (window, summary, WCAP phases, review depth by surface, limits) that renders as the "Scope and method" section. Keep `scores`/`basis` in step with the Confluence scorecard. |
 | `logo.svg` | WAX word mark for the cover. |
 | `fonts/` | Open Sans 400/600/700, self-hosted so the PDF is reproducible offline. Licence: `fonts/OFL.txt`. |
 | `sample-findings.yaml` | Illustrative data in the proof-of-concept shape. Not a real finding; exercises the template. |
