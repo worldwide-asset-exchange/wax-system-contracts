@@ -45,9 +45,10 @@ namespace eosiosystem {
       // applies from now rather than to time already served (WCAP-SYS-2026-013).
       fill_buckets();
       // WCAP-SYS-2026-002: `ratio >= 0` was always true for an unsigned value, and the
-      // message named a constant the code did not compare against.
-      check( ratio <= PAY_SPLIT_SCALE, "ratio cannot exceed PAY_SPLIT_SCALE (" + std::to_string( PAY_SPLIT_SCALE ) + ")" );
+      // message named a constant the code did not compare against. The bound itself lives in
+      // validate_inflation_policy with the rest of the split (WBP-2035).
       _gstate4.standby_slot_weight = ratio;
+      validate_inflation_policy();
    }
 
    void system_contract::setsbslot( uint32_t num_slots ){
@@ -60,8 +61,9 @@ namespace eosiosystem {
       // rows elected before a switch to zero are deactivated at the next one
       // (WCAP-SYS-2026-013). What the action lacked was a ceiling: until now only
       // max_considered_producers, in another file, kept the standby list bounded.
-      check( num_slots <= max_standby_slots, "num_slots cannot exceed " + std::to_string( max_standby_slots ) );
+      // The ceiling lives in validate_inflation_policy with the rest of the split (WBP-2035).
       _gstate4.num_standby_slots = num_slots;
+      validate_inflation_policy();
    }
    
    void system_contract::update_standby_share(){

@@ -1444,12 +1444,21 @@ public:
       }
    }
 
-   action_result setinflation( int64_t annual_rate, int64_t inflation_pay_factor, int64_t votepay_factor ) {
-      return push_action( "eosio"_n, "setinflation"_n, mvo()
-               ("annual_rate",     annual_rate)
-               ("inflation_pay_factor", inflation_pay_factor)
-               ("votepay_factor", votepay_factor)
+   // WBP-2035: the inflation policy. Signer defaults to eosio; pass another account to
+   // exercise the auth guard.
+   action_result setinflation( int64_t annual_rate_bps, uint16_t producers_bps, uint16_t voters_bps, uint16_t savings_bps,
+                               const account_name& signer = config::system_account_name ) {
+      return push_action( signer, "setinflation"_n, mvo()
+               ("annual_rate_bps", annual_rate_bps)
+               ("producers_bps",   producers_bps)
+               ("voters_bps",      voters_bps)
+               ("savings_bps",     savings_bps)
       );
+   }
+
+   fc::variant get_global_state8() {
+      vector<char> data = get_row_by_account( config::system_account_name, config::system_account_name, "global.c"_n, "global.c"_n );
+      return data.empty() ? fc::variant() : abi_ser.binary_to_variant( "eosio_global_state8", data, abi_serializer::create_yield_function(abi_serializer_max_time) );
    }
 
    abi_serializer abi_ser;
