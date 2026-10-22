@@ -486,16 +486,41 @@ def check_c6_sibling(path, text):
     return out
 
 
-def check_c6_setter(path, text):
+def _validated_by_helper(body, name, defs_index):
+    """True if the field `name` is stored into is bounded by a validate_* helper the body calls.
+
+    WBP-2035: the inflation setters assign first and then call validate_inflation_policy(),
+    which checks the *state* (`_gstate8.annual_rate_bps`, `_gstate4.standby_slot_weight`, ...)
+    so that one function owns every bound the split depends on. The check is on the field,
+    not the parameter, and lives in a helper - possibly in another file - so the rule follows
+    the assignment to its field and the call to its definition, one level deep, like
+    _validates_asset does for C3.
+    """
+    fields = {m.group(1) for m in re.finditer(r'\.(\w+)\s*=\s*' + re.escape(name) + r'\s*;', body)}
+    if not fields:
+        return False
+    for callee in re.findall(r'\b(validate_\w+)\s*\(', body):
+        if callee not in defs_index:
+            continue
+        _, cbody = defs_index[callee]
+        if any(re.search(r'\b' + re.escape(f) + r'\b', cond) for f in fields for _, cond, _ in checks_in(cbody, 0)):
+            return True
+    return False
+
+
+def check_c6_setter(path, text, defs_index=None):
     """C6-setter - a set* action stores a numeric parameter that nothing bounds.
 
     WCAP-SYS-2026-005: setbpdefscore stored an arbitrary uint32 that reweighted the
     election, while its sibling setbpscale validated. A privileged setter without a
     check() on the value is not a vulnerability by itself - the msig can still be
     trusted - but it is the shape, and the message that would have caught it is the
-    check that is missing.
+    check that is missing. A check() in the setter body on the parameter counts, and so
+    does a validate_* helper the body calls that checks the field the parameter was
+    stored into (see _validated_by_helper).
     """
     out = []
+    defs_index = {**(defs_index or {}), **{fn: (params, body) for fn, params, body, _ in fn_bodies(text)}}
     for fn, params, body, first in fn_bodies(text):
         if not fn.startswith('set'):
             continue
@@ -506,6 +531,8 @@ def check_c6_setter(path, text):
             if any(re.search(r'\b' + re.escape(name) + r'\b', cond) for _, cond, _ in checks_in(body, first)):
                 continue
             if not re.search(r'(?<![=!<>])=\s*[^;=]*\b' + re.escape(name) + r'\b[^;]*;', body):
+                continue
+            if _validated_by_helper(body, name, defs_index):
                 continue
             out.append((first, 'C6-setter',
                         f'`{fn}` stores `{name}` (`{p}`) into state with no check() on it. '
@@ -735,7 +762,7 @@ def main():
         if path.suffix == '.cpp':
             clean = strip_comments(text)               # C4b needs comments; these do not
             rows += (check_c6(path, clean) + check_c6_sibling(path, clean)
-                     + check_c6_setter(path, clean) + check_c3(path, clean, actions, defs_with_params)
+                     + check_c6_setter(path, clean, defs_with_params) + check_c3(path, clean, actions, defs_with_params)
                      + check_c2_narrowing(path, clean, wide_members))
         findings += [(str(path), ln, cls, msg) for ln, cls, msg in rows]
 

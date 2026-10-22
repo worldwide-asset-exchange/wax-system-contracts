@@ -1,6 +1,6 @@
 # WAX Tokenomics Upgrade
 
-> Design note from the 2023 PowerUp rollout. For the mechanics as implemented at the current tag — the 3/10 : 4/10 : 3/10 inflation split, lazy settlement on claims, standby pay and the election weighting — see [docs/02_wax-extensions/01_architecture-overview.md](../docs/02_wax-extensions/01_architecture-overview.md).
+> Design note from the 2023 PowerUp rollout. For the mechanics as implemented at the current tag — the inflation policy (`setinflation`: annual rate and the producer : voter : savings split, default 5% and 3/10 : 4/10 : 3/10), lazy settlement on claims, standby pay and the election weighting — see [docs/02_wax-extensions/01_architecture-overview.md](../docs/02_wax-extensions/01_architecture-overview.md).
 
 
 # Summary
