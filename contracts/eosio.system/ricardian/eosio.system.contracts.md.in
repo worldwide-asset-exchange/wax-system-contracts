@@ -636,11 +636,14 @@ summary: 'Set inflation parameters'
 icon: @ICON_BASE_URL@/@ADMIN_ICON_URI@
 ---
 
-{{$action.account}} sets the inflation parameters as follows:
+{{$action.account}} sets the inflation policy as follows, every value in basis points (10000 = 100%):
 
-* Annual inflation rate (in units of a hundredth of a percent): {{annual_rate}}
-* Fraction of inflation used to reward block producers: 10000/{{inflation_pay_factor}}
-* Fraction of block producer rewards to be distributed proportional to blocks produced: 10000/{{votepay_factor}}
+* Annual inflation rate: {{annual_rate_bps}} (500 = 5.00% per year; at most 1000)
+* Share of inflation, after the RNG carve-out, paid to block producers and standbys: {{producers_bps}}
+* Share paid to voters: {{voters_bps}}
+* Share sent to the savings account: {{savings_bps}}
+
+The three shares must sum to 10000. The buckets are settled under the policy in force before the new policy is stored, so the change applies from this moment onward and never to the interval since the last claim.
 
 <h1 class="contract">undelegatebw</h1>
 

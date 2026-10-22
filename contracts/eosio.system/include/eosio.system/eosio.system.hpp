@@ -812,7 +812,9 @@ namespace eosiosystem {
       int64_t  annual_rate_bps = default_annual_rate_bps;   // of RATE_DENOMINATOR; 500 = 5.00%/yr
       uint16_t producers_bps   = default_producers_bps;     // share of post-RNG inflation to block pay (active + standby)
       uint16_t voters_bps      = default_voters_bps;        // share to the voters bucket
-      uint16_t savings_bps     = default_savings_bps;       // share to eosio.saving; also takes the rounding remainder
+      // Stored so an msig states the whole split and the sum check can hold it to 10000; the
+      // split itself derives savings as the remainder (fill_buckets), so rounding dust lands here.
+      uint16_t savings_bps     = default_savings_bps;
 
       EOSLIB_SERIALIZE( eosio_global_state8, (annual_rate_bps)(producers_bps)(voters_bps)(savings_bps) )
    };

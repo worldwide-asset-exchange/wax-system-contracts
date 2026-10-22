@@ -496,13 +496,17 @@ def _validated_by_helper(body, name, defs_index):
     the assignment to its field and the call to its definition, one level deep, like
     _validates_asset does for C3.
     """
-    fields = {m.group(1) for m in re.finditer(r'\.(\w+)\s*=\s*' + re.escape(name) + r'\s*;', body)}
-    if not fields:
+    stores = [(m.end(), m.group(1)) for m in re.finditer(r'\b(\w+\.\w+)\s*=\s*' + re.escape(name) + r'\s*;', body)]
+    if not stores:
         return False
-    for callee in re.findall(r'\b(validate_\w+)\s*\(', body):
+    for call in re.finditer(r'\b(validate_\w+)\s*\(', body):
+        callee = call.group(1)
         if callee not in defs_index:
             continue
+        # The call must come after the store: a validator run on the old state bounds nothing.
+        fields = [f for end, f in stores if end <= call.start()]
         _, cbody = defs_index[callee]
+        # And it must check the same `struct.field` token, not a same-named field of another global.
         if any(re.search(r'\b' + re.escape(f) + r'\b', cond) for f in fields for _, cond, _ in checks_in(cbody, 0)):
             return True
     return False

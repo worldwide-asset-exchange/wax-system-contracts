@@ -197,6 +197,35 @@ BOOST_FIXTURE_TEST_CASE( setinflation_settles_before_change, eosio_inflation_tes
    BOOST_REQUIRE_EQUAL( 0, post_rng.orng - pre_rng.orng );
 } FC_LOG_AND_RETHROW()
 
+// setprodcnt changes a term of the block-pay weight, so it settles first too: the interval
+// before the call is split at the old active count.
+BOOST_FIXTURE_TEST_CASE( setprodcnt_settles_before_change, eosio_inflation_tester ) try {
+   const uint64_t sb_weight = 5000;
+   const uint32_t sb_slots  = 2;
+   BOOST_REQUIRE_EQUAL( success(), setsbratio( sb_weight ) );
+   BOOST_REQUIRE_EQUAL( success(), setsbslot( sb_slots ) );
+   activate_with_one_producer();
+   BOOST_REQUIRE_EQUAL( success(), claim_producer() );
+
+   produce_block( fc::hours(10) );
+   produce_blocks( 1 );
+   const uint64_t apc_before = get_global_state4()["active_producer_count"].as_uint64();
+   const ledger before = snap();
+   BOOST_REQUIRE_EQUAL( success(), push_action( config::system_account_name, "setprodcnt"_n, mvo()("count", apc_before - 1) ) );
+   const ledger settled = snap();
+   BOOST_REQUIRE_EQUAL( apc_before - 1, get_global_state4()["active_producer_count"].as_uint64() );
+
+   BOOST_REQUIRE_GT( settled.fill, before.fill );
+   const int64_t d = expected_distribute( before.supply, settled.fill - before.fill, 0.04879 );
+   BOOST_REQUIRE_GT( d, 0 );
+   BOOST_REQUIRE_EQUAL( d, settled.supply - before.supply );
+   const int64_t  block_pay    = share( d, 3000 );
+   const uint64_t total_weight = apc_before * 10000 + sb_weight * sb_slots;      // the count in force during the interval
+   const int64_t  to_active    = int64_t( (unsigned __int128)(block_pay) * apc_before * 10000 / total_weight );
+   BOOST_REQUIRE_EQUAL( to_active, settled.perblock_bucket - before.perblock_bucket );
+   BOOST_REQUIRE_EQUAL( uint64_t( block_pay - to_active ), settled.standby_bucket - before.standby_bucket );
+} FC_LOG_AND_RETHROW()
+
 // The whole composition at non-default values: the RNG carve-out off the top, the policy
 // shares of the remainder, and the standby weight inside the producer share.
 BOOST_FIXTURE_TEST_CASE( rng_then_shares_then_standby_weight, eosio_inflation_tester ) try {

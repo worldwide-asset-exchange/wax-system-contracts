@@ -584,6 +584,11 @@ namespace eosiosystem {
    }
 
    void system_contract::validate_inflation_policy() const {
+      // Validates the stored state, not the caller's arguments, so every setter re-checks the
+      // whole policy. The consequence: a stored value that predates its bound makes the other
+      // setters refuse (naming the offending term) until that value is corrected first. Every
+      // live mainnet value is inside its bound (checked 2026-10-22), so this is a property of
+      // forks and testnets, where fixing the named term first is the recovery.
       // The policy row. Zero issuance and a zero share are both legal: every claim path already
       // fails closed on an empty bucket ("no rewards available." and friends).
       check( 0 <= _gstate8.annual_rate_bps && _gstate8.annual_rate_bps <= max_annual_rate_bps,
@@ -604,7 +609,9 @@ namespace eosiosystem {
 
    double system_contract::get_continuous_rate() const {
       // ln(1 + r), truncated to continuous_rate_precision decimals (see the constant for why):
-      // 500 bps -> 0.04879 exactly, 1000 bps -> 0.09531.
+      // 500 bps -> 0.04879 exactly, 1000 bps -> 0.09531. The truncation under-issues by less than
+      // 1e-5 absolute, i.e. by a relative amount of at most 1e-5 / ln(1 + r): 0.02% at 500 bps,
+      // 0.1% at 100 bps, 1% at 10 bps. A policy below ~100 bps should be read with that in mind.
       const double exact = std::log1p( double(_gstate8.annual_rate_bps) / double(RATE_DENOMINATOR) );
       return std::floor( exact * continuous_rate_precision ) / continuous_rate_precision;
    }
@@ -626,9 +633,12 @@ namespace eosiosystem {
       uint32_t now = current_time_point().sec_since_epoch();
       check(now - *_gstate4.last_change_time >= *_gstate4.min_cooldown_secs, "cool-down not elapsed");
 
+      // The count is a term of the block-pay weight, so settle the interval served under the
+      // old count before storing the new one (WCAP-SYS-2026-013, as the other setters; WBP-2035).
+      fill_buckets();
       _gstate4.active_producer_count = count;
       _gstate4.last_change_time = now;
-      validate_inflation_policy();   // the count is a term of the block-pay weight (WBP-2035)
+      validate_inflation_policy();
 
       // adjust the min_bps_voting_reward accordingly
       uint32_t current_min_bps = *_gstate4.min_bps_voting_reward;

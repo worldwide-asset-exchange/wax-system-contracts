@@ -124,6 +124,20 @@ class C6Setter(unittest.TestCase):
         index = {fn: (params, body) for fn, params, body, _ in wc.fn_bodies(helper)}
         self.assertEqual(wc.check_c6_setter('t.cpp', setter, index), [])
 
+    def test_validate_before_store_fires(self):                       # the validator ran on the old state
+        helper = wrap('check( _gstate8.annual_rate_bps <= 1000, "annual_rate_bps must be between 0 and 1000" );',
+                      sig='void system_contract::validate_inflation_policy() const')
+        setter = wrap('validate_inflation_policy();\n_gstate8.annual_rate_bps = n;',
+                      sig='void system_contract::setinflation( int64_t n )')
+        self.assertEqual(classes(wc.check_c6_setter('t.cpp', helper + setter)), ['C6-setter'])
+
+    def test_helper_checking_same_field_of_another_global_fires(self):
+        helper = wrap('check( _gstate8.annual_rate_bps <= 1000, "annual_rate_bps must be between 0 and 1000" );',
+                      sig='void system_contract::validate_inflation_policy() const')
+        setter = wrap('_gstate9.annual_rate_bps = n;\nvalidate_inflation_policy();',
+                      sig='void system_contract::setinflation( int64_t n )')
+        self.assertEqual(classes(wc.check_c6_setter('t.cpp', helper + setter)), ['C6-setter'])
+
     def test_store_with_helper_that_checks_another_field_fires(self):
         helper = wrap('check( _gstate8.voters_bps <= 10000, "voters_bps must not exceed 10000" );',
                       sig='void system_contract::validate_inflation_policy() const')
