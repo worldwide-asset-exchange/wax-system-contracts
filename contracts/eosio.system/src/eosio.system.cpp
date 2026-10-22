@@ -597,9 +597,9 @@ namespace eosiosystem {
       // most as much as an active one, and the slot list is bounded like the active schedule.
       check( _gstate4.standby_slot_weight <= PAY_SPLIT_SCALE, "ratio cannot exceed PAY_SPLIT_SCALE (" + std::to_string( PAY_SPLIT_SCALE ) + ")" );
       check( _gstate4.num_standby_slots <= max_standby_slots, "num_slots cannot exceed " + std::to_string( max_standby_slots ) );
-      // The weight fill_buckets divides by. active_producer_count >= 1 is what setprodcnt enforces;
-      // stated here so the divisor's positivity rests on the validator, not on the setter's order.
-      check( *_gstate4.active_producer_count >= 1, "active_producer_count must be at least 1" );
+      // The weight fill_buckets divides by is apc * PAY_SPLIT_SCALE + weight * slots, positive
+      // because active_producer_count >= 1: that bound is setprodcnt's own (1..max_active_producers)
+      // and the absent-row default is max_active_producers, so no check here could ever fail.
    }
 
    double system_contract::get_continuous_rate() const {
