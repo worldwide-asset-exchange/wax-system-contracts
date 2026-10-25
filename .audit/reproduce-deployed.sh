@@ -21,7 +21,7 @@
 #
 # The build runs with --rm and no --name, so it never collides with the Makefile's
 # development container, and it is capped so it cannot take a shared host down: set
-# WCAP_DOCKER_OPTS to override the default "--cpus 6" (e.g. add --cgroup-parent=...), and
+# WCAP_DOCKER_OPTS to override the default "--cpus 6" (e.g. add --memory 16g --memory-swap 17g), and
 # WCAP_JOBS for make's -j (default 6). The container runs as the calling user, so the scratch
 # tree it leaves behind is yours to delete. The ref is exported with `git archive` into a
 # scratch directory (WCAP_SCRATCH, default a mktemp dir); the working tree is never touched.
@@ -41,6 +41,14 @@ SCRATCH="$(cd "$SCRATCH" && pwd)"                     # docker needs an absolute
 WORK="$SCRATCH/reproduce-${REF//\//_}"
 DOCKER_OPTS="${WCAP_DOCKER_OPTS:---cpus 6}"
 JOBS="${WCAP_JOBS:-6}"
+# Run the container as the invoking user so the bind mount comes back owned by them. On a rootless
+# daemon container root already maps to that user, and --user would map to a subordinate uid that
+# cannot write the mount, so there the flag is omitted.
+if docker info --format '{{.SecurityOptions}}' 2>/dev/null | grep -q 'name=rootless'; then
+  AS_USER=()
+else
+  AS_USER=(--user "$(id -u):$(id -g)")
+fi
 
 declare -A DEPLOYED=(
   [eosio]=eosio.system
@@ -56,7 +64,7 @@ echo "image $IMAGE"
 
 docker image inspect "$IMAGE" >/dev/null 2>&1 || docker pull -q "$IMAGE" >/dev/null
 # shellcheck disable=SC2086
-docker run --rm $DOCKER_OPTS --user "$(id -u):$(id -g)" -e HOME=/tmp \
+docker run --rm $DOCKER_OPTS ${AS_USER[@]+"${AS_USER[@]}"} -e HOME=/tmp \
   -e EXTRA_CMAKE="$EXTRA_CMAKE" -e JOBS="$JOBS" \
   -v "$WORK":/opt/contracts -w /opt/contracts "$IMAGE" bash -lc '
   set -e

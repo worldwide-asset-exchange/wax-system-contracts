@@ -20,7 +20,7 @@
 #   PROPOSER     msig proposer        default admin2.wax  (needs free RAM >= the packed proposal)
 #   EXPIRE_DAYS  proposal lifetime    default 7
 #   IMAGE        toolchain image      default waxteam/waxdev:<DEV_VERSION from the TAG's Makefile>
-#   WCAP_DOCKER_OPTS  build container caps, default "--cpus 6" (shared host: add --cgroup-parent=...)
+#   WCAP_DOCKER_OPTS  build container caps, default "--cpus 6" (shared host: add --memory 16g --memory-swap 17g)
 #   WCAP_JOBS         make -j, default 6            (both as .audit/reproduce-deployed.sh reads them)
 # Needs docker, git, curl, jq. cleos runs inside the image; nothing is installed on the host.
 # The build itself is .audit/reproduce-deployed.sh - one recipe, so the hash the runbook prints is
@@ -38,12 +38,20 @@ EXPIRE_DAYS="${EXPIRE_DAYS:-7}"
 IMAGE="${IMAGE:-waxteam/waxdev:$(git -C "$ROOT" show "$TAG:Makefile" | sed -n 's/^DEV_VERSION=//p')}"
 OUT="$ROOT/deploy/out/$TAG"
 CONTRACT_ACCOUNT=eosio
+# Run the container as the invoking user so the bind mount comes back owned by them. On a rootless
+# daemon container root already maps to that user, and --user would map to a subordinate uid that
+# cannot write the mount, so there the flag is omitted.
+if docker info --format '{{.SecurityOptions}}' 2>/dev/null | grep -q 'name=rootless'; then
+  AS_USER=()
+else
+  AS_USER=(--user "$(id -u):$(id -g)")
+fi
 
 chain() { curl -sf --max-time 20 -X POST "$API/v1/chain/$1" -d "$2"; }
 # cleos from the pinned image, as the calling user, with deploy/out/<tag> mounted at /opt/out.
 # --network host so a local API (a dry run against a test chain) works the same as mainnet.
 cleos() {
-  docker run --rm --cpus 1 --network host --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  docker run --rm --cpus 1 --network host ${AS_USER[@]+"${AS_USER[@]}"} -e HOME=/tmp \
     -v "$OUT":/opt/out -w /opt/out "$IMAGE" cleos -u "$API" "$@"
 }
 sha() { sha256sum "$1" | cut -d' ' -f1; }
