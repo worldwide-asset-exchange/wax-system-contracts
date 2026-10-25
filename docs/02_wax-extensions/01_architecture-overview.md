@@ -125,23 +125,60 @@ last_standby_state_update` plus the producer-count controls above).
 
 ## 3. Producer pay and the inflation split
 
-`fill_buckets()` (`src/producer_pay.cpp:76-155`), on every claim:
+`fill_buckets()` (`src/producer_pay.cpp`), on every claim and before every change to a term of the policy:
 
-1. `distribute = continuous_rate × supply × Δt / year`, with `continuous_rate = 0.04879` (5% annual).
-   The `eosio.fees` balance (PowerUp fees) is spent first and only the shortfall is issued; any fee balance left
-   over is retired.
+1. `distribute = continuous_rate × supply × Δt / year`, where `continuous_rate = ln(1 + annual_rate_bps / 10,000)`
+   truncated to five decimals — `0.04879` at the default 500 bps (5% annual), `0.09531` at the 1,000 bps
+   ceiling. The `eosio.fees` balance (PowerUp fees) is spent first and only the shortfall is issued; any fee
+   balance left over is retired.
 2. **RNG carve-out:** `rng_rate / 10,000` of `distribute` is deposited to the ORNG treasury (`orng.wax`) — only if
    that account's code hash is on the `global.b` allow-list (`addornghash`/`rmornghash`/`setornghash`) and capped
-   at `max_pool_rng` minus the treasury's current pool. If verification fails, the carve-out stays with the
-   producer split. `setrngrate(rng_rate, max_pool_rng)` requires `rng_rate < 10,000`.
-3. **The split** of what remains: `3/10` per-block producer pay, `4/10` voters, and the remainder (3/10) to
-   `eosio.saving`, transferred to `eosio.bpay`, `eosio.voters` and `eosio.saving` respectively.
+   at `max_pool_rng` minus the treasury's current pool (a top-up to a balance ceiling, not a cumulative budget).
+   If verification fails or the pool is full, the carve-out stays with the split below.
+   `setrngrate(rng_rate, max_pool_rng)` requires `rng_rate < 10,000`.
+3. **The policy split** of what remains (`global.c`, `setinflation`, WBP-2035): `producers_bps / 10,000` to
+   block pay, `voters_bps / 10,000` to voters, and the remainder — `savings_bps` plus any rounding — to
+   `eosio.saving`; transferred to `eosio.bpay`, `eosio.voters` and `eosio.saving` respectively. The defaults are
+   `3000 / 4000 / 3000`, i.e. the `3/10 : 4/10 : 3/10` the chain ran as constants before the row existed. A
+   zero share sends nothing to that bucket and its claims fail closed with their usual message.
 4. **Producers : standbys.** The per-block share is divided by weight: active producers weigh
    `active_producer_count × 10,000`, standbys `standby_slot_weight × num_standby_slots` (the *configured*
    slot count, not the number actually seated). The producer part goes to `perblock_bucket`, the rest to
    `standby_bucket`.
 
-`claimrewards(owner)` and `claimgbmprod(owner)` (`:158-227`; `require_auth(owner)`, active producer, chain
+**The policy and its bounds.** `setinflation(annual_rate_bps, producers_bps, voters_bps, savings_bps)` (msig only)
+settles the buckets under the policy in force, stores the new one, then runs `validate_inflation_policy()`, the
+single owner of every bound the split depends on. `setrngrate`, `setsbratio`, `setsbslot` and `setprodcnt` all settle
+first and run the same validator after storing their value, so no setter can leave a combination the split cannot
+apply. The validator checks the stored state, so a value that predates its bound (possible on a fork or testnet,
+not on mainnet as of 2026-10-22) makes every setter refuse, naming that term, until it is corrected first:
+
+| term | where | bound |
+|---|---|---|
+| `annual_rate_bps` | `global.c` | `0 … 1,000` (10%) |
+| `producers_bps + voters_bps + savings_bps` | `global.c` | `== 10,000` |
+| `rng_rate` | `global5` | `< 10,000` |
+| `standby_slot_weight` | `global4` | `≤ 10,000` (`PAY_SPLIT_SCALE`) |
+| `num_standby_slots` | `global4` | `≤ 21` (`max_standby_slots`) |
+| `active_producer_count` | `global4` | `1 … 21` — `setprodcnt`'s own bound; the validator relies on it rather than repeating it |
+
+**Effective share of each unit of inflation**, with `r = rng_rate / 10,000` (when the treasury has headroom and
+the ORNG hash verifies; otherwise `r = 0`), `p / v / s` the policy shares as fractions, `A = active_producer_count
+× 10,000` and `S = standby_slot_weight × num_standby_slots`:
+
+| destination | share of `distribute` | mainnet, 2026-10-22 (`r = 0.01`, `p/v/s = 0.3/0.4/0.3`, `A = 70,000`, `S = 4,444 × 3`) |
+|---|---|---|
+| ORNG treasury | `r` | 1.00% |
+| active producers (`perblock_bucket`) | `(1 − r) · p · A / (A + S)` | 24.95% |
+| standbys (`standby_bucket`) | `(1 − r) · p · S / (A + S)` | 4.75% |
+| voters | `(1 − r) · v` | 39.60% |
+| `eosio.saving` | `(1 − r) · s` | 29.70% |
+
+The RNG rate is nested, not a fourth share: raising it scales the other three down together, and when the RNG
+pool is full its carve-out falls through to them in the same proportions. The row defaults mean an upgrade needs
+no `setinflation` call; `eosio_inflation_tests/defaults_are_the_legacy_constants` pins that.
+
+`claimrewards(owner)` and `claimgbmprod(owner)` (`claim_producer_rewards`; `require_auth(owner)`, active producer, chain
 activated, once per day) pay `perblock_bucket × unpaid_blocks / total_unpaid_blocks` from `eosio.bpay`. **There is
 no per-vote producer pay on WAX**; the upstream `pervote_bucket` and vote-pay constants are unused, and
 `claimgbmprod` is an alias of `claimrewards` (`claimgbmprod_is_claimrewards_after_gbm`).
@@ -251,12 +288,13 @@ without a claim.
 | `global3` | `last_vpay_state_update`, `total_vpay_share_change_rate` |
 | `global4` | standby bucket and slots; `active_producer_count`, `min_cooldown_secs`, `last_change_time`, `min_bps_voting_reward` |
 | `global5` | `rng_rate`, `max_pool_rng` |
+| `global.c` | inflation policy: `annual_rate_bps`, `producers_bps`, `voters_bps`, `savings_bps` (WBP-2035) |
 | `global.a` | weighted voting: guilds contract, scaling factor, default score, candidate cap and threshold, enable flag, guilds code-hash allow-list |
 | `global.b` | ORNG code-hash allow-list |
 | `wpsglobal`, `wpsstate` | WPS environment; `total_stake` |
 
 Related material: `tokenomics/README.md` is the 2023 design note for the PowerUp / inflation change and
-predates the 3/10 : 4/10 : 3/10 split and lazy settlement described here; `SECURITY.md` lists the supported
+predates the configurable split (default 3/10 : 4/10 : 3/10) and lazy settlement described here; `SECURITY.md` lists the supported
 versions and the disclosure policy; `.audit/README.md` describes the static checks and the reproduction recipes
 for the deployed contracts.
 

@@ -79,7 +79,7 @@ namespace eosiosystem {
       const auto usecs_since_last_fill = (ct - _gstate.last_pervote_bucket_fill).count();
       if( usecs_since_last_fill > 0 && _gstate.last_pervote_bucket_fill > time_point() ) {
          auto current_fees =  eosio::token::get_balance(token_account, fees_account, core_symbol().code() );
-         auto distribute_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
+         auto distribute_tokens = static_cast<int64_t>( (get_continuous_rate() * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
          check( distribute_tokens >= 0, "inflation to distribute must not be negative" );
          auto fees_to_use = std::min( distribute_tokens, current_fees.amount );
          auto issue_tokens = distribute_tokens - fees_to_use;
@@ -100,13 +100,15 @@ namespace eosiosystem {
          }
          // else rng_deposit stays 0, funds go to producers instead
 
-         // 3/10 Savings, 4/10 Voters, 3/10 Producers
-         auto token_for_producers = distribute_tokens - rng_deposit;
-         auto to_per_block_pay = (token_for_producers * 3) / 10;
-         auto to_voters        = (token_for_producers * 4) / 10;
-         auto to_savings       = token_for_producers - (to_voters + to_per_block_pay);
+         // The policy split of what the RNG carve-out left (WBP-2035): producers_bps to block pay,
+         // voters_bps to the voters bucket, and savings takes the rest so the three transfers
+         // always sum to the remainder exactly. Defaults 3000/4000/3000 = the old 3/10, 4/10, 3/10.
+         const int64_t token_for_producers = distribute_tokens - static_cast<int64_t>( rng_deposit );
+         const int64_t to_per_block_pay    = share_of( token_for_producers, _gstate8.producers_bps );
+         const int64_t to_voters           = share_of( token_for_producers, _gstate8.voters_bps );
+         const int64_t to_savings          = token_for_producers - (to_voters + to_per_block_pay);
 
-         auto total_block_pay = to_per_block_pay;
+         const int64_t total_block_pay = to_per_block_pay;
          uint32_t apc = *_gstate4.active_producer_count;
          auto total_weight = (apc * PAY_SPLIT_SCALE) + (_gstate4.standby_slot_weight * _gstate4.num_standby_slots);
          // 128-bit intermediate: total_block_pay * 21 * 10000 wrapped uint64 once a single fill covered
@@ -129,10 +131,16 @@ namespace eosiosystem {
             }
          }
          {
+            // A share can be zero under the policy (and every amount is zero at a zero rate);
+            // eosio.token refuses a zero transfer, which would abort every claim, so each
+            // transfer is sent only when there is something to move (WBP-2035).
             token::transfer_action transfer_act{ token_account, { {get_self(), active_permission} } };
-            transfer_act.send( get_self(), saving_account, asset(to_savings, core_symbol()), "unallocated inflation" );
-            transfer_act.send( get_self(), voters_account, asset(to_voters, core_symbol()), "fund voters bucket" );
-            transfer_act.send( get_self(), bpay_account, asset(to_per_block_pay, core_symbol()), "fund bpay bucket" );
+            if( to_savings > 0 )
+               transfer_act.send( get_self(), saving_account, asset(to_savings, core_symbol()), "unallocated inflation" );
+            if( to_voters > 0 )
+               transfer_act.send( get_self(), voters_account, asset(to_voters, core_symbol()), "fund voters bucket" );
+            if( to_per_block_pay > 0 )
+               transfer_act.send( get_self(), bpay_account, asset(to_per_block_pay, core_symbol()), "fund bpay bucket" );
          }
 
          _gstate.perblock_bucket    += to_producers_pay;

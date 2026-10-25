@@ -6,6 +6,22 @@ BREAKING CHANGES:
 
 FEATURES:
 
+- Configurable inflation (WBP-2035): the annual issuance rate and the producer : voter : savings
+  split move from compile-time constants into a new `global.c` singleton and are set with
+  `setinflation(annual_rate_bps, producers_bps, voters_bps, savings_bps)` (msig only, settles
+  the buckets first). The row defaults to the pre-existing values (500 bps, 3000/4000/3000) and
+  the continuous rate is derived as ln(1 + r) truncated to five decimals, so an upgrade changes
+  no issuance and needs no configuration call. One `validate_inflation_policy()` now owns every
+  bound the split depends on - the policy row (annual rate 0..1000 bps, shares summing to
+  10000), the RNG rate (< 10000) and the standby split (weight <= 10000, slots <= 21) - and runs
+  from `setinflation`, `setrngrate`, `setsbratio`, `setsbslot` and `setprodcnt`. `setrngrate`
+  settles the buckets before storing, as `setsbratio` already did. A zero share or a zero rate
+  is legal: `fill_buckets` skips the empty transfers instead of tripping eosio.token's
+  positive-quantity check, so claims keep working. The dead upstream pay constants
+  (`inflation_pay_factor`, `votepay_factor`, `default_*`, `min_pervote_daily_pay`,
+  `inflation_precision`, `pay_factor_precision`) are removed. The static ratchet's C6-setter rule
+  follows a `validate_*` helper that checks the stored field, with self-tests.
+
 IMPROVEMENTS:
 
 BUG FIXES:

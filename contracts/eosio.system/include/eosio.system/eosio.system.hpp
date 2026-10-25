@@ -71,10 +71,6 @@ namespace eosiosystem {
 
    static constexpr int64_t  min_activated_stake   = 150'000'000'0000;
    static constexpr int64_t  ram_gift_bytes        = 1400;
-   static constexpr int64_t  min_pervote_daily_pay = 100'0000;
-   static constexpr double   continuous_rate       = 0.04879;          // 5% annual rate
-   static constexpr int64_t  inflation_pay_factor  = 5;                // 20% of the inflation
-   static constexpr int64_t  votepay_factor        = 4;                // 25% of the producer pay
    static constexpr uint32_t refund_delay_sec      = 3 * seconds_per_day;
    // Ceiling on a BP guild score, whether stored as the default or read from the external
    // guilds table (WCAP-SYS-2026-005). Taken from the live table on 2026-09-17: scores run
@@ -108,15 +104,28 @@ namespace eosiosystem {
    static const time_point gbm_initial_time(eosio::seconds(1561939200));     // July 1st 2019 00:00:00
    static const time_point gbm_final_time = gbm_initial_time + eosio::microseconds(useconds_in_gbm_period);   // July 1st 2022 00:00:00
 
-   //static const uint32_t seconds_per_day = 60 * 60 * 24;
-   static constexpr int64_t  inflation_precision           = 100;     // 2 decimals
-   static constexpr int64_t  default_annual_rate           = 500;     // 5% annual rate
-   static constexpr int64_t  pay_factor_precision          = 10000;
-   static constexpr int64_t  default_inflation_pay_factor  = 50000;   // producers pay share = 10000 / 50000 = 20% of the inflation
-   static constexpr int64_t  default_votepay_factor        = 40000;   // per-block pay share = 10000 / 40000 = 25% of the producer pay
-
    static const     uint64_t PAY_SPLIT_SCALE               = 10000;   // produce base weight for payout scaling
    static constexpr int64_t  RATE_DENOMINATOR              = 10000;   // basis points (100.00% = 10000)
+
+   // Inflation policy (WBP-2035). Every value here is a basis point of RATE_DENOMINATOR. The
+   // defaults are the numbers the chain ran as compile-time constants before the policy row
+   // existed (5%/yr, split 3/10 producers : 4/10 voters : 3/10 savings), so a chain without
+   // the global.c row - mainnet at upgrade - issues and splits exactly as before. The RNG
+   // rate (global5) is taken off the top first and the three shares split what remains, so
+   // the shares must sum to RATE_DENOMINATOR and the RNG rate is bounded on its own.
+   static constexpr int64_t  default_annual_rate_bps       = 500;
+   static constexpr uint16_t default_producers_bps         = 3000;
+   static constexpr uint16_t default_voters_bps            = 4000;
+   static constexpr uint16_t default_savings_bps           = 3000;
+   // Ceiling on the annual rate setinflation stores: 10%. Twice the 5% WAX has run since genesis
+   // and the cap the tokenomics note states; anything above it is a tokenomics redesign that
+   // should go through a contract upgrade, not an msig parameter change. Zero is legal (no issuance).
+   static constexpr int64_t  max_annual_rate_bps           = 1000;
+   // The continuous rate derived from the annual rate (ln(1 + r)) is truncated to this many
+   // decimals: 500 bps gives exactly 0.04879, the constant fill_buckets used before the policy
+   // row existed, so issuance is bit-identical at the default. The truncation is the rule, not
+   // a rounding accident: it is what keeps the upgrade free of any change to mainnet issuance.
+   static constexpr double   continuous_rate_precision     = 100'000.0;
    
 #ifdef SYSTEM_BLOCKCHAIN_PARAMETERS
    struct blockchain_parameters_v1 : eosio::blockchain_parameters
@@ -794,11 +803,28 @@ namespace eosiosystem {
       EOSLIB_SERIALIZE( eosio_global_state7, (orng_code_hashes) )
    };
    typedef eosio::singleton< "global.b"_n, eosio_global_state7 > global_state7_singleton;
+
+   // Inflation policy (WBP-2035): the annual rate and the producer/voter/savings split that
+   // fill_buckets applies, settable by setinflation. Defaulted to the pre-policy constants so an
+   // absent row - the state of mainnet at upgrade - changes nothing. See validate_inflation_policy
+   // for the bounds, which also cover the RNG rate (global5) and the standby split (global4).
+   struct [[eosio::table("global.c"), eosio::contract("eosio.system")]] eosio_global_state8 {
+      int64_t  annual_rate_bps = default_annual_rate_bps;   // of RATE_DENOMINATOR; 500 = 5.00%/yr
+      uint16_t producers_bps   = default_producers_bps;     // share of post-RNG inflation to block pay (active + standby)
+      uint16_t voters_bps      = default_voters_bps;        // share to the voters bucket
+      // Stored so an msig states the whole split and the sum check can hold it to 10000; the
+      // split itself derives savings as the remainder (fill_buckets), so rounding dust lands here.
+      uint16_t savings_bps     = default_savings_bps;
+
+      EOSLIB_SERIALIZE( eosio_global_state8, (annual_rate_bps)(producers_bps)(voters_bps)(savings_bps) )
+   };
+   typedef eosio::singleton< "global.c"_n, eosio_global_state8 > global_state8_singleton;
    // WCAP-SYS-2026-018: `T{}` in the contract constructor must be value-initialisation, not a
    // user-provided constructor that leaves a scalar indeterminate. global2/3/4 cannot be
    // aggregates (explicit member constructors) and rely on every scalar having an initializer.
    static_assert( std::is_aggregate_v<eosio_global_state5> && std::is_aggregate_v<eosio_global_state6>
-                  && std::is_aggregate_v<eosio_global_state7>, "global_state structs must stay aggregates (WCAP-SYS-2026-018)" );
+                  && std::is_aggregate_v<eosio_global_state7> && std::is_aggregate_v<eosio_global_state8>,
+                  "global_state structs must stay aggregates (WCAP-SYS-2026-018)" );
 
    // Defines new standby producer info structure
    struct [[eosio::table, eosio::contract("eosio.system")]] standby_producer_info {
@@ -854,6 +880,7 @@ namespace eosiosystem {
          global_state5_singleton _global5;
          global_state6_singleton _global6;
          global_state7_singleton _global7;
+         global_state8_singleton _global8;
          eosio_global_state      _gstate;
          eosio_global_state2     _gstate2;
          eosio_global_state3     _gstate3;
@@ -861,6 +888,7 @@ namespace eosiosystem {
          eosio_global_state5     _gstate5;
          eosio_global_state6     _gstate6;
          eosio_global_state7     _gstate7;
+         eosio_global_state8     _gstate8;
          standby_disallow_table  _standby_disallow;
          standby_table           _standbys;
          rammarket               _rammarket;
@@ -1619,6 +1647,25 @@ namespace eosiosystem {
       [[eosio::action]]
       void setrngrate( uint64_t rng_rate, uint64_t max_pool_rng );
 
+      /**
+       * Set the inflation policy (WBP-2035): the annual issuance rate and how the inflation left
+       * after the RNG carve-out is split between block pay, voters and savings. Every parameter is
+       * in basis points of `RATE_DENOMINATOR` (10000 = 100%). The buckets are settled under the
+       * policy in force before the new one is stored, so a change applies from now and never to
+       * the interval since the last claim.
+       *
+       * @param annual_rate_bps - annual issuance rate; 500 = 5.00%/yr. 0 stops issuance.
+       * @param producers_bps - share of post-RNG inflation to block pay (active producers and standbys by weight)
+       * @param voters_bps - share to the voters bucket
+       * @param savings_bps - share to `eosio.saving`
+       *
+       * @pre Requires the authority of the contract account itself (msig)
+       * @pre `0 <= annual_rate_bps <= max_annual_rate_bps`
+       * @pre `producers_bps + voters_bps + savings_bps == RATE_DENOMINATOR`
+       */
+      [[eosio::action]]
+      void setinflation( int64_t annual_rate_bps, uint16_t producers_bps, uint16_t voters_bps, uint16_t savings_bps );
+
       [[eosio::action]]
       void setprodcnt( uint32_t count );
 
@@ -1692,6 +1739,7 @@ namespace eosiosystem {
        using add_standby_block_action = eosio::action_wrapper<"disallowsb"_n, &system_contract::disallowsb>;
        using rm_standby_block_action = eosio::action_wrapper<"allowsb"_n, &system_contract::allowsb>;
        using setrngrate_action = eosio::action_wrapper<"setrngrate"_n, &system_contract::setrngrate>;
+       using setinflation_action = eosio::action_wrapper<"setinflation"_n, &system_contract::setinflation>;
        using setguildcont_action = eosio::action_wrapper<"setguildcont"_n, &system_contract::setguildcont>;
        using setbpscale_action = eosio::action_wrapper<"setbpscale"_n, &system_contract::setbpscale>;
        using setbpdefscore_action = eosio::action_wrapper<"setbpdefscore"_n, &system_contract::setbpdefscore>;
@@ -1711,6 +1759,13 @@ namespace eosiosystem {
          int64_t get_unclaimed_gbm_balance( name claimer );
          int64_t collect_voter_reward(const name owner);
          void fill_buckets();
+         // Inflation policy (WBP-2035). validate_inflation_policy owns every bound on the
+         // parameters fill_buckets combines - the policy row, the RNG rate and the standby
+         // split - and every setter that writes one of them calls it after assigning, so no
+         // single setter can store a combination the split cannot apply.
+         void    validate_inflation_policy() const;
+         double  get_continuous_rate() const;
+         static int64_t share_of( int64_t amount, uint16_t bps );
 
          // Implementation details:
 

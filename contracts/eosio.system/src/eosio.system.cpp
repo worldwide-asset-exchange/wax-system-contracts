@@ -24,6 +24,7 @@ namespace eosiosystem {
     _global5(get_self(), get_self().value),
     _global6(get_self(), get_self().value),
     _global7(get_self(), get_self().value),
+    _global8(get_self(), get_self().value),
     _standbys(get_self(), get_self().value),
     _standby_disallow(get_self(), get_self().value),
     _rammarket(get_self(), get_self().value),
@@ -41,6 +42,7 @@ namespace eosiosystem {
       _gstate5 = _global5.exists() ? _global5.get() : eosio_global_state5{};
       _gstate6 = _global6.exists() ? _global6.get() : eosio_global_state6{};
       _gstate7 = _global7.exists() ? _global7.get() : eosio_global_state7{};
+      _gstate8 = _global8.exists() ? _global8.get() : eosio_global_state8{};
 
       // Initialize binary_extension fields with defaults if they don't have values
       // This ensures tests and deployments have consistent behavior
@@ -78,6 +80,7 @@ namespace eosiosystem {
       _global5.set( _gstate5, get_self() );
       _global6.set( _gstate6, get_self() );
       _global7.set( _gstate7, get_self() );
+      _global8.set( _gstate8, get_self() );
    }
 
    void system_contract::setram( uint64_t max_ram_size ) {
@@ -557,12 +560,67 @@ namespace eosiosystem {
 
    void system_contract::setrngrate( uint64_t rng_rate, uint64_t max_pool_rng ) {
       require_auth( get_self() );
-      // WCAP-SYS-2026-002: `rng_rate >= 0` was always true for an unsigned value.
-      check( rng_rate < uint64_t(RATE_DENOMINATOR), "rng_rate must be less than " + std::to_string( RATE_DENOMINATOR ) );
+      // Settle the interval since the last fill under the rate in force, so the new rate
+      // applies from now rather than to time already served (WCAP-SYS-2026-013, as setsbratio).
+      fill_buckets();
       _gstate5.rng_rate = rng_rate;
       _gstate5.max_pool_rng = max_pool_rng;
-      
+      validate_inflation_policy();   // rng_rate < RATE_DENOMINATOR (WCAP-SYS-2026-002)
+
       _global5.set( _gstate5, get_self() );
+   }
+
+   void system_contract::setinflation( int64_t annual_rate_bps, uint16_t producers_bps, uint16_t voters_bps, uint16_t savings_bps ) {
+      require_auth( get_self() );
+      // Settle under the policy in force first: distribute_tokens scales with the gap since the
+      // last fill, so storing a new rate or split before settling would apply it to that gap
+      // (WCAP-SYS-2026-013).
+      fill_buckets();
+      _gstate8.annual_rate_bps = annual_rate_bps;
+      _gstate8.producers_bps   = producers_bps;
+      _gstate8.voters_bps      = voters_bps;
+      _gstate8.savings_bps     = savings_bps;
+      validate_inflation_policy();
+   }
+
+   void system_contract::validate_inflation_policy() const {
+      // Validates the stored state, not the caller's arguments, so every setter re-checks the
+      // whole policy. The consequence: a stored value that predates its bound makes the other
+      // setters refuse (naming the offending term) until that value is corrected first. Every
+      // live mainnet value is inside its bound (checked 2026-10-22), so this is a property of
+      // forks and testnets, where fixing the named term first is the recovery.
+      // The policy row. Zero issuance and a zero share are both legal: every claim path already
+      // fails closed on an empty bucket ("no rewards available." and friends).
+      check( 0 <= _gstate8.annual_rate_bps && _gstate8.annual_rate_bps <= max_annual_rate_bps,
+             "annual_rate_bps must be between 0 and " + std::to_string( max_annual_rate_bps ) );
+      check( uint32_t(_gstate8.producers_bps) + _gstate8.voters_bps + _gstate8.savings_bps == uint32_t(RATE_DENOMINATOR),
+             "producers_bps + voters_bps + savings_bps must equal " + std::to_string( RATE_DENOMINATOR ) );
+      // The RNG carve-out, taken off the top before the shares apply. At RATE_DENOMINATOR nothing
+      // would be left to split (WCAP-SYS-2026-002).
+      check( _gstate5.rng_rate < uint64_t(RATE_DENOMINATOR), "rng_rate must be less than " + std::to_string( RATE_DENOMINATOR ) );
+      // The standby split of the producer share (WCAP-SYS-2026-002). A standby slot can weigh at
+      // most as much as an active one, and the slot list is bounded like the active schedule.
+      check( _gstate4.standby_slot_weight <= PAY_SPLIT_SCALE, "ratio cannot exceed PAY_SPLIT_SCALE (" + std::to_string( PAY_SPLIT_SCALE ) + ")" );
+      check( _gstate4.num_standby_slots <= max_standby_slots, "num_slots cannot exceed " + std::to_string( max_standby_slots ) );
+      // The weight fill_buckets divides by is apc * PAY_SPLIT_SCALE + weight * slots, positive
+      // because active_producer_count >= 1: that bound is setprodcnt's own (1..max_active_producers)
+      // and the absent-row default is max_active_producers, so no check here could ever fail.
+   }
+
+   double system_contract::get_continuous_rate() const {
+      // ln(1 + r), truncated to continuous_rate_precision decimals (see the constant for why):
+      // 500 bps -> 0.04879 exactly, 1000 bps -> 0.09531. The truncation under-issues by less than
+      // 1e-5 absolute, i.e. by a relative amount of at most 1e-5 / ln(1 + r): 0.02% at 500 bps,
+      // 0.1% at 100 bps, 1% at 10 bps. A policy below ~100 bps should be read with that in mind.
+      const double exact = std::log1p( double(_gstate8.annual_rate_bps) / double(RATE_DENOMINATOR) );
+      return std::floor( exact * continuous_rate_precision ) / continuous_rate_precision;
+   }
+
+   int64_t system_contract::share_of( int64_t amount, uint16_t bps ) {
+      // 128-bit intermediate so a long claim gap at mainnet supply cannot wrap (WCAP-SYS-2026-014).
+      // floor(amount * 3000 / 10000) == floor(amount * 3 / 10), so the defaults reproduce the old
+      // integer split exactly.
+      return static_cast<int64_t>( (uint128_t(amount) * bps) / uint128_t(RATE_DENOMINATOR) );
    }
 
    void system_contract::setprodcnt( uint32_t count ) {
@@ -575,8 +633,12 @@ namespace eosiosystem {
       uint32_t now = current_time_point().sec_since_epoch();
       check(now - *_gstate4.last_change_time >= *_gstate4.min_cooldown_secs, "cool-down not elapsed");
 
+      // The count is a term of the block-pay weight, so settle the interval served under the
+      // old count before storing the new one (WCAP-SYS-2026-013, as the other setters; WBP-2035).
+      fill_buckets();
       _gstate4.active_producer_count = count;
       _gstate4.last_change_time = now;
+      validate_inflation_policy();
 
       // adjust the min_bps_voting_reward accordingly
       uint32_t current_min_bps = *_gstate4.min_bps_voting_reward;
