@@ -36,7 +36,9 @@ image the tag's own `Makefile` pins (so a rollback to an older tag builds with i
 then keeps the artefacts. One build recipe, so the hash the runbook shows is the hash
 `.audit/verify-hashes.sh` will match after the deploy; before the deploy the comparison table it
 prints shows `eosio` as `no`, which is the point. On a shared host, cap the container:
-`WCAP_DOCKER_OPTS="--cgroup-parent=wax-build.slice --cpus 6"`.
+`WCAP_DOCKER_OPTS="--memory 16g --memory-swap 17g --cpus 6"`. Both scripts run the container as the
+invoking user on a rootful daemon and as container root on a rootless one (where root already maps to
+the invoking user, and `--user` would map to a subordinate uid that cannot write the bind mount).
 
 ## What the runbook contains
 
