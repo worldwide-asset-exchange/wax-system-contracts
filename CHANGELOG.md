@@ -6,6 +6,20 @@ BREAKING CHANGES:
 
 FEATURES:
 
+IMPROVEMENTS:
+
+BUG FIXES:
+
+## wax-3.4.0
+
+Adds the configurable inflation policy (WBP-2035). ABI change: new action `setinflation` and new
+table `global.c`; no action removed, and an upgrade with no configuration call issues exactly
+what wax-3.3.3 did.
+
+BREAKING CHANGES:
+
+FEATURES:
+
 - Configurable inflation (WBP-2035): the annual issuance rate and the producer : voter : savings
   split move from compile-time constants into a new `global.c` singleton and are set with
   `setinflation(annual_rate_bps, producers_bps, voters_bps, savings_bps)` (msig only, settles
