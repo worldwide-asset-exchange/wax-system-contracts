@@ -58,6 +58,14 @@ Both gates are closed, so **`rng_rate = 100` currently moves nothing**:
    WAX a day, and the **last deposit of any size was 2026-03-06**, three months before the hash
    drifted. Fixing the hash alone therefore restores the mechanism, not a flow: deposits stay at
    0 until `pool_balance` drops below `max_pool_rng` or the cap is raised.
+3. **By design the pool drains through oracle stipend claims** (`orng.wax::claim(oracle)`: pays
+   the oracle's accrued USD stipend in WAX out of `pool_balance`, plus its per-call fees), and the
+   system contract tops the pool back up. That drain is blocked on the ORNG side as of 2026-10-27:
+   `config.a` has no `stipendmonth` / `minclaimint` entry (`configv3` never called, so accrual is 0),
+   and the stipend table `ostip.a` is **empty** for all three oracles (`rng1.wax`, `rng2.wax`,
+   `rng3.wax`), so `claim` fails with `not an oracle` before it reaches the pool. Even the 293 WAX
+   of per-call fees each oracle has in `balances` is unclaimable. Nothing has decremented
+   `pool_balance` since the last top-up on 2026-03-06.
 
 Consequence for the other runbooks: the live split is an exact 30/40/30 of the full issuance
 (189,290 / 252,386 / 189,290 WAX a day), not the 29.7/39.6/29.7 the parameters suggest. If either
@@ -87,9 +95,11 @@ gate re-opens, every other destination drops by 1% relative, with no action on `
   number.
 - **Settles first.** `setrngrate` calls `fill_buckets()` before storing (since `wax-3.3.x`), so a
   change never applies to time already served.
-- **`pool_balance` is the ORNG contract's word.** If that singleton is wrong (today it reports
-  6,000,000 WAX while the account holds 790,355 WAX), the system contract follows it. Resolve that on
-  the ORNG side before reasoning about headroom.
+- **`pool_balance` is the ORNG contract's word.** It rises with every WAX transfer carrying the
+  memo `treasury` and falls only when an oracle `claim` pays a stipend. Today it reports
+  6,000,000 WAX while the account holds 790,355 WAX, so stipend payouts will be capped by the real
+  balance long before the counter reaches 0; the system contract follows the counter regardless.
+  Resolve that on the ORNG side before reasoning about headroom.
 
 ## Procedures
 
@@ -107,8 +117,14 @@ gate re-opens, every other destination drops by 1% relative, with no action on `
 
    Approve, exec, then `cleos get table eosio eosio global.b` shows both hashes. Optionally
    `rmornghash` the stale `4e516c80…` afterwards.
-3. Check headroom: `cleos get table orng.wax orng.wax treasury`. If `pool_balance ≥ max_pool_rng`
-   deposits stay at 0; either accept that (deposits resume as ORNG spends) or raise the cap:
+3. Get the ORNG side draining again (ORNG owners, `orng.wax@active`): `configv3(stipendmonth,
+   minclaimint)` to set the monthly USD stipend and the claim interval, then
+   `setstipend(rng1.wax, true)` / `setstipend(rng2.wax, true)` / `setstipend(rng3.wax, true)` to
+   create the `ostip.a` rows (preferred over re-running `setoracles`, which erases and re-creates
+   the oracles table). From then on each oracle `claim` lowers `pool_balance` and the next system
+   claim refills the gap, up to 1% of the fill. Check headroom with
+   `cleos get table orng.wax orng.wax treasury`. Only if a faster or larger refill is wanted does
+   the cap need to move:
 
    ```bash
    cleos -u $API multisig propose rng.cap "$REQ" "$AUTH" eosio setrngrate \
