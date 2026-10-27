@@ -52,6 +52,12 @@ Both gates are closed, so **`rng_rate = 100` currently moves nothing**:
    `pool_balance` is incremented by every WAX transfer into `orng.wax` and decremented only by
    oracle stipend claims (`wax-orng` `src/orng.cpp`, `_treasury_deposit` / `claim`), so any other
    outflow leaves it overstated; the account holds 790,355 WAX against a recorded 6,000,000.
+   The deposit history shows the cap has bound for a long time: every `eosio → orng.wax`
+   `treasury` transfer indexed in 2026 is a few WAX (200 deposits in March 2026 totalled 958 WAX,
+   each one the headroom a stipend claim had just opened), against a nominal carve-out of ~6,300
+   WAX a day, and the **last deposit of any size was 2026-03-06**, three months before the hash
+   drifted. Fixing the hash alone therefore restores the mechanism, not a flow: deposits stay at
+   0 until `pool_balance` drops below `max_pool_rng` or the cap is raised.
 
 Consequence for the other runbooks: the live split is an exact 30/40/30 of the full issuance
 (189,290 / 252,386 / 189,290 WAX a day), not the 29.7/39.6/29.7 the parameters suggest. If either
