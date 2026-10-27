@@ -27,5 +27,14 @@ Block.one implements and maintains EOSIO open source platform which contains, as
 
 1. [Architecture overview — election weighting, standby pay, the inflation split, WPS, RAM growth, vote weight](02_wax-extensions/01_architecture-overview.md)
 
+## Operator runbooks (parameter changes by msig, no upgrade)
+
+1. [Overview — formula, live values, interaction matrix, msig procedure](04_guides/09_runbook-tokenomics-parameters.md)
+2. [Inflation rate and split — `setinflation`](04_guides/10_runbook-inflation.md)
+3. [RNG payouts — `setrngrate`, ORNG hash allow-list](04_guides/11_runbook-rng-payouts.md)
+4. [Standby producers — `setsbslot`, `setsbratio`](04_guides/12_runbook-standbys.md)
+5. [Active producer count — `setprodcnt`, `setminbpvote`](04_guides/13_runbook-producer-count.md)
+6. [Upgrading an allow-listed contract — `guilds.oig`, `orng.wax`](04_guides/14_runbook-allowlisted-contract-upgrade.md)
+
 ## Build and deploy
 To build and deploy the system contract follow the instruction from [Build and deploy](03_build-and-deploy.md) section.
