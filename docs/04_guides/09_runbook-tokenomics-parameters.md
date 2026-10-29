@@ -57,15 +57,17 @@ Downstream of the buckets:
 
 All setters `require_auth(eosio)`; `eosio@active` is `admin.wax@active`, a 2-of-3 of
 `admin1.wax`, `admin2.wax`, `admin3.wax`, so every change is an `eosio.msig` proposal.
-Live values read from mainnet on 2026-10-26 23:10 UTC:
+Live values read from mainnet on 2026-10-29 19:40 UTC. The inflation policy changed on
+2026-10-29 15:25 UTC (`setinflation`, msig `admin2.wax/infoct2eight`, trx `6d27bdb8…`) and the RNG
+carve-out has been live since 2026-10-28; values before those dates are given where they matter.
 
 | Field | Table | Setter | Bound (refusal text) | Live |
 |---|---|---|---|---|
-| `annual_rate_bps` | `global.c` | `setinflation` | `0 … 1000` — "annual_rate_bps must be between 0 and 1000" | 500 (5%/yr → 0.04879 continuous) |
-| `producers_bps` / `voters_bps` / `savings_bps` | `global.c` | `setinflation` | sum `== 10000` — "producers_bps + voters_bps + savings_bps must equal 10000" | 3000 / 4000 / 3000 |
-| `rng_rate` | `global5` | `setrngrate` | `< 10000` — "rng_rate must be less than 10000" | 100 (1%) — **inert, see below** |
-| `max_pool_rng` | `global5` | `setrngrate` | none (base units, 10⁻⁸ WAX) | 60000000000000 (6,000,000 WAX) |
-| `orng_code_hashes` | `global.b` | `setornghash`, `addornghash`, `rmornghash` | — | `4e516c80…` — **does not match `orng.wax` live code `c913ee95…`** |
+| `annual_rate_bps` | `global.c` | `setinflation` | `0 … 1000` — "annual_rate_bps must be between 0 and 1000" | 600 (6%/yr → 0.05826 continuous), since 2026-10-29; 500 before |
+| `producers_bps` / `voters_bps` / `savings_bps` | `global.c` | `setinflation` | sum `== 10000` — "producers_bps + voters_bps + savings_bps must equal 10000" | 2500 / 1667 / 5833, since 2026-10-29; 3000 / 4000 / 3000 before |
+| `rng_rate` | `global5` | `setrngrate` | `< 10000` — "rng_rate must be less than 10000" | 100 (1%) — **live since 2026-10-28** (hash listed, pool refills to its cap) |
+| `max_pool_rng` | `global5` | `setrngrate` | none (base units, 10⁻⁸ WAX) | 60000000000000 (600,000 WAX) |
+| `orng_code_hashes` | `global.b` | `setornghash`, `addornghash`, `rmornghash` | — | `fa4bee5f…` **== live `orng.wax` code** (wax-orng v3.4.0, since 2026-10-29) |
 | `num_standby_slots` | `global4` | `setsbslot` | `≤ 21` — "num_slots cannot exceed 21"; 0 allowed | 3 |
 | `standby_slot_weight` | `global4` | `setsbratio` | `≤ 10000` — "ratio cannot exceed PAY_SPLIT_SCALE (10000)" | 4444 (a seat earns 44.44% of an active seat) |
 | `sbdisallow` rows | `sbdisallow` | `disallowsb` / `allowsb` | no duplicate / must exist | empty |
@@ -75,18 +77,27 @@ Live values read from mainnet on 2026-10-26 23:10 UTC:
 | `min_producer_vote_threshold` | `global.a` | `setminvote` | finite, `≥ 0` | 1000.0 |
 | `max_considered_producers` | `global.a` | `setmaxprod` | `21 … 500` | 100 |
 
-Other live facts the examples below use: supply 4,707,350,510.919 WAX; schedule of 7
+Other live facts the examples below use: supply 4,709,168,913.129 WAX; schedule of 7
 (`eosiodetroit`, `ivote4waxusa`, `nation.wax`, `waxswedenorg`, `waxhiveguild`, `eosphereiobp`,
 `bp.alcor`); seated standbys `alohaeosprod`, `bountyblokbp`, `eosdacserver`; `perblock_bucket`
-3,221,797 WAX; `standby_bucket` 3,738,858 WAX; `voters_bucket` 2,495,101 WAX; `eosio.saving`
-22,164,749 WAX. At these values one day issues **630,966 WAX**, split (RNG inert):
+3,318,191 WAX; `standby_bucket` 3,773,657 WAX; `voters_bucket` 2,536,084 WAX; `eosio.saving`
+22,205,935 WAX; `orng.wax` `pool_balance` 600,000 WAX (at its cap). At these values one day
+issues **753,726 WAX**, split (RNG live, pool below cap):
 
 | destination | share | WAX / day |
 |---|---|---|
-| active producers (`eosio.bpay`, `perblock_bucket`) | 25.2% | 159,006 (22,715 per producer) |
-| standbys (`eosio.bpay`, `standby_bucket`) | 4.8% | 30,284 (10,095 per seat) |
-| voters (`eosio.voters`) | 40.0% | 252,386 |
-| `eosio.saving` | 30.0% | 189,290 |
+| `orng.wax` treasury (memo `treasury`) | 1.0% | 7,537 — only while `pool_balance < max_pool_rng` |
+| active producers (`eosio.bpay`, `perblock_bucket`) | 20.8% | 156,702 (22,386 per producer) |
+| standbys (`eosio.bpay`, `standby_bucket`) | 4.0% | 29,845 (9,948 per seat) |
+| voters (`eosio.voters`) | 16.5% | 124,390 |
+| `eosio.saving` | 57.7% | 435,252 |
+
+When the pool sits at its cap (its steady state between oracle stipend claims) the 1% is not
+deposited and the same fill splits 158,285 / 30,146 / 125,646 / 439,648 instead. Under the previous
+policy (500 / 3000 / 4000 / 3000, in force until 2026-10-29) the same supply issued 631,210 WAX a
+day: 157,477 (22,497 each) active, 29,993 (9,998 per seat) standby, 249,959 voters, 187,469 savings,
+6,312 RNG. The 2026-10-29 change was designed to hold block pay flat in WAX while raising the rate:
+the producers share fell from 30% to 25% as the continuous rate rose by the inverse ratio.
 
 ## Interaction matrix — what else moves when you change one thing
 
@@ -184,9 +195,9 @@ candidate policy, so the proposal text can state what will change in WAX per day
 
 ```python
 import math
-supply = 4_707_350_510.919          # cleos get currency stats eosio.token WAX
-rate_bps, p_bps, v_bps = 500, 3000, 4000     # global.c (savings = remainder)
-rng_bps, rng_live = 100, False                # global5 rng_rate; rng_live = hash allow-listed AND pool below max
+supply = 4_709_168_913.129          # cleos get currency stats eosio.token WAX
+rate_bps, p_bps, v_bps = 600, 2500, 1667     # global.c (savings = remainder); live since 2026-10-29
+rng_bps, rng_live = 100, True                 # global5 rng_rate; rng_live = hash allow-listed AND pool below max
 apc, slots, weight = 7, 3, 4444               # global4
 cont = math.floor(math.log1p(rate_bps / 10000) * 1e5) / 1e5
 day = supply * cont / 364
@@ -201,16 +212,17 @@ print(f"day {day:,.0f}  rng {rng:,.0f}  active {active:,.0f} ({active/apc:,.0f} 
 
 ## Known state quirks the examples assume
 
-- **RNG carve-out is inert on mainnet today, for two independent reasons.** `global.b` allow-lists
-  `4e516c80…` but `orng.wax` runs `c913ee95…`, so `verify_orng_contract()` fails; and the `orng.wax`
-  `treasury` singleton reports `pool_balance` = 6,000,000 WAX, exactly `max_pool_rng`, so even a
-  verified hash would deposit 0. The 1% falls through to the split. The RNG runbook covers
-  re-enabling it and the alternative of setting the rate to 0 so the state says what it does.
+- **The RNG carve-out is live but usually saturated.** Since 2026-10-28 the allow-listed hash matches
+  the live `orng.wax` code and the pool is refilled to `max_pool_rng` (600,000 WAX) on every fill
+  that finds headroom. Headroom only appears when an oracle claims its accrued stipend (manual,
+  with the oracle key; ~2,100 WAX per oracle per day of accrual at today's price) and is refilled
+  within hours, so most fills deposit 0 and the 1% falls through to the split; the examples above
+  show both cases. The RNG runbook has the history of the 2026-06-03 to 2026-10-28 outage.
 - **`perblock_bucket` carries ~3.0 M unpaid blocks from the 2019 genesis producers** (`producera` …
   `producert`, inactive since 2019-06-24, never claimed). They cannot claim (`claimrewards` requires
   an active key), so about 3.2 M WAX sits in `eosio.bpay` permanently and every producer's daily
   claim is `perblock_bucket × own / total`. This is steady-state: the bucket holds ~20 days of
   inflow instead of ~1, and daily pay still equals daily inflow. Removing it needs a contract change.
-- **Standby pay is claimed lazily.** `eosdacserver` has never claimed and holds 44.6% of
-  `total_standby_share` (≈1.67 M WAX of today's bucket). Cutting slots or weight does not touch
+- **Standby pay is claimed lazily.** `eosdacserver` has never claimed and holds 45.1% of
+  `total_standby_share` (≈1.70 M WAX of today's bucket). Cutting slots or weight does not touch
   accrued shares or the bucket.

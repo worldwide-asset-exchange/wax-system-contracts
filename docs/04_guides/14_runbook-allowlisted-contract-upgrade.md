@@ -8,10 +8,10 @@ link_text: Runbook — upgrading an allow-listed contract (guilds.oig, orng.wax)
 `eosio.system` trusts two external contracts only while their **deployed code hash** is on an
 allow-list it keeps:
 
-| Contract | Allow-list | Setters (`eosio` msig) | What stops, silently, when the hash is not listed | Live (2026-10-26) |
+| Contract | Allow-list | Setters (`eosio` msig) | What stops, silently, when the hash is not listed | Live (2026-10-29) |
 |---|---|---|---|---|
 | `guilds.oig` | `global.a.guilds_code_hashes` | `addguildhash`, `rmguildhash` | Weighted voting: every multiplier becomes 1.0 and the schedule reverts to plain vote order at the next election (~1 min). | listed `cca52864…` **== live** |
-| `orng.wax` | `global.b.orng_code_hashes` | `addornghash`, `rmornghash`, `setornghash` (replaces the list) | The RNG treasury carve-out: `rng_deposit` is 0 and the money flows to producers/voters/savings instead. | listed `4e516c80…` **≠ live `c913ee95…`** (since 2026-06-03) |
+| `orng.wax` | `global.b.orng_code_hashes` | `addornghash`, `rmornghash`, `setornghash` (replaces the list) | The RNG treasury carve-out: `rng_deposit` is 0 and the money flows to producers/voters/savings instead. | listed `fa4bee5f…` **== live** (v3.4.0; the list was `4e516c80…` ≠ live `c913ee95…` from 2026-06-03 to 2026-10-28) |
 
 Neither failure raises an error, logs anything, or blocks the deploy. The check runs at every
 election (guilds) or every claim (ORNG), so the switch-off is immediate and total. The order
@@ -86,8 +86,10 @@ in a file-scope namespace instead (wax-orng `tokenview::`).
 python3 -c 'import json,sys;a=json.load(open(sys.argv[1]));n={s["name"] for s in a["structs"]};d=[t for t in a["tables"]+a["actions"] if t["type"] not in n];print("dangling:",d);sys.exit(bool(d))' build/orng.abi
 ```
 
-Checked 2026-10-27: `wax-orng` v3.3.0 reproduces to `f9f1e880…` (fresh clone of the tag), the
-live code since 2026-10-27 03:03 UTC; v3.2.1 to `c913ee95…` (live 2026-06-03 to 2026-10-27); v3.2.0 to
+Checked 2026-10-29: `wax-orng` v3.4.0 reproduces to `fa4bee5f…`, the live code since 2026-10-29
+01:16 UTC (allow-list re-pointed the same day: `addornghash` then `rmornghash f9f1e880…`, so the
+list holds only the live hash). Checked 2026-10-27: v3.3.0 reproduces to `f9f1e880…` (fresh clone
+of the tag), live 2026-10-27 03:03 UTC to 2026-10-29; v3.2.1 to `c913ee95…` (live 2026-06-03 to 2026-10-27); v3.2.0 to
 `daf16db3…`, v3.1.0 to `4939107c…`, v3.0.3 `f70f9912…`, v3.0.2 `032acae7…`, v3.0.1 `300a7c6c…`,
 v3.0.0 `ef6f7d61…`. A hash that does not reproduce from a tag must not be allow-listed; tag first.
 

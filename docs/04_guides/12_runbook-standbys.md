@@ -28,7 +28,8 @@ producers share → active bucket  × A/(A+S)
 ```
 
 Today: `A = 70,000`, `S = 13,332`, so standbys receive 16.0% of the producers share
-(4.8% of all issuance, 30,284 WAX a day, 10,095 per seat; an active producer gets 22,715).
+(4.0% of all issuance, 29,845 WAX a day, 9,948 per seat; an active producer gets 22,386 — at the
+600 / 2500 / 1667 / 5833 policy live since 2026-10-29, RNG carve-out live).
 
 Who is seated: at every election (about once a minute) the producers ranked `active_producer_count + 1`
 onward by **weighted** votes (guild score × votes, see overview §1 of the architecture page) fill
@@ -48,16 +49,16 @@ pays `standby_bucket × share / total_share`, once a day, from `eosio.bpay`.
   pool, or if `disallowsb` empties a seat. Paying by seated count instead would be a contract
   change, which is not planned.
 - **Changing slots or weight changes active-producer pay.** Same producers share, different
-  `A/(A+S)`. Cutting slots 3 → 2 raises each active producer from 22,715 to 23,995 WAX a day.
+  `A/(A+S)`. Cutting slots 3 → 2 raises each active producer from 22,386 to 23,647 WAX a day.
 - **Changing the producer count changes standby pay** without touching anything here: `A` shrinks
   when `setprodcnt` lowers the count, so standbys' share of the producers bucket rises
-  (7 → 6 producers: per seat 10,095 → 11,471). See the
+  (7 → 6 producers: per seat 9,948 → 11,305). See the
   [producer-count runbook](13_runbook-producer-count.md).
 - **A cut deactivates at the next election, not immediately.** `setsbslot` stores the value and
   settles the buckets; the surplus standby rows are set `is_active = false` within about a minute
   (`update_standby_producers` runs on every election, even with an empty list).
 - **Deactivated standbys keep their accrued share and can still claim it.** The bucket is not
-  redistributed. Today `eosdacserver` holds 44.6% of `total_standby_share` and has never claimed
+  redistributed. Today `eosdacserver` holds 45.1% of `total_standby_share` and has never claimed
   (≈1.67 M WAX of the bucket is theirs on demand). Reducing slots to 0 stops new pay but leaves the
   bucket claimable until drained.
 - **`disallowsb` is not a pay switch for an already-seated standby.** It removes the account from
@@ -97,17 +98,19 @@ cleos -u $API multisig propose sb.allow "$REQ" "$AUTH" eosio allowsb    '{"accou
 
 Refusals: `account already in standby disallow list`, `account not exist in standby disallow list`.
 
-## Worked examples (today's supply, 7 active producers, RNG inert)
+## Worked examples (today's supply, 7 active producers, 600 / 2500 / 1667 / 5833, RNG live)
 
 | Change | standbys / day (per seat) | active producers / day (each) | note |
 |---|---|---|---|
-| **3 slots × 4444 (live)** | 30,284 (10,095) | 159,006 (22,715) | seat = 44.4% of an active producer |
-| 2 slots × 4444 | 21,327 (10,663) | 167,963 (23,995) | former standby #3 deactivated at next election, keeps share |
-| 4 slots × 4444 | 38,334 (9,584) | 150,956 (21,565) | needs a 4th eligible candidate or the seat is paid to the other three |
-| 3 slots × 5000 | 33,404 (11,135) | 155,886 (22,269) | seat = 50% of an active producer |
-| 3 slots × 10000 | 56,787 (18,929) | 132,503 (18,929) | a standby seat paid like an active one (the ceiling) |
-| 0 slots | 0 | 189,290 (27,041) | all producers share to active; bucket remains claimable |
-| 3 × 4444 but 6 active producers (`setprodcnt`) | 34,414 (11,471) | 154,876 (25,813) | no standby action taken |
+| **3 slots × 4444 (live)** | 29,845 (9,948) | 156,702 (22,386) | seat = 44.4% of an active producer |
+| 2 slots × 4444 | 21,018 (10,509) | 165,530 (23,647) | former standby #3 deactivated at next election, keeps share |
+| 4 slots × 4444 | 37,779 (9,445) | 148,768 (21,253) | needs a 4th eligible candidate or the seat is paid to the other three |
+| 3 slots × 5000 | 32,920 (10,973) | 153,627 (21,947) | seat = 50% of an active producer |
+| 3 slots × 10000 | 55,964 (18,655) | 130,583 (18,655) | a standby seat paid like an active one (the ceiling) |
+| 0 slots | 0 | 186,547 (26,650) | all producers share to active; bucket remains claimable |
+| 3 × 4444 but 6 active producers (`setprodcnt`) | 33,915 (11,305) | 152,632 (25,439) | no standby action taken |
+
+On a fill that finds the ORNG pool at its cap every figure is 1% higher.
 
 ## Verification
 
