@@ -40,12 +40,15 @@ for emergencies and testnets, not for routine use.
 
    | count | active bucket / day | per producer / day | standby per seat / day |
    |---|---|---|---|
-   | 6 | 154,876 | 25,813 | 11,471 |
-   | **7 (live)** | **159,006** | **22,715** | **10,095** |
-   | 8 | 162,251 | 20,281 | 9,013 |
-   | 9 | 164,867 | 18,319 | 8,141 |
+   | 5 | 147,277 | 29,455 | 13,090 |
+   | 6 | 152,632 | 25,439 | 11,305 |
+   | **7 (live)** | **156,702** | **22,386** | **9,948** |
+   | 8 | 159,900 | 19,987 | 8,882 |
+   | 9 | 162,479 | 18,053 | 8,023 |
 
-   (today's supply, RNG inert, 3 × 4444 standbys; voters and `eosio.saving` are unaffected)
+   (today's supply, 600 / 2500 / 1667 / 5833 live since 2026-10-29, RNG carve-out live, 3 × 4444
+   standbys; voters and `eosio.saving` are unaffected; 1% higher on a fill that finds the ORNG pool
+   at its cap)
 
 4. **`min_bps_voting_reward` is clamped down only.** If `min > count` after a cut, `setprodcnt`
    lowers `min` to `count`. It never raises it, and a cut that leaves `min ≤ count` leaves it alone.
@@ -121,7 +124,7 @@ Day N (repeat on day N+1, N+2, … until the target is reached; one proposal per
 | Day | Actions in the proposal | Result |
 |---|---|---|
 | 0 | read: count 7, min 5, standby #1 `alohaeosprod` | ranking shows `bp.alcor` as #7 |
-| 1 | `setprodcnt 6`, `setminbpvote 4` | schedule of 6 within minutes; `bp.alcor` → standby #1; `eosdacserver` (standby #3) deactivated, keeps 44.6% share; per-producer pay 22,715 → 25,813 WAX/day; per-seat standby pay 10,095 → 11,471 |
+| 1 | `setprodcnt 6`, `setminbpvote 4` | schedule of 6 within minutes; `bp.alcor` → standby #1; `eosdacserver` (standby #3) deactivated, keeps 45.1% share; per-producer pay 22,386 → 25,439 WAX/day; per-seat standby pay 9,948 → 11,305 |
 | 2 | `setprodcnt 5`, `setminbpvote 4` (or 3) | schedule of 5; former #6 → standby #1; tolerates 1 failure (was 2) — note the finality drop |
 
 Refusals you can hit: `count must be between 1 and 21`; `must change by exactly ±1`;
