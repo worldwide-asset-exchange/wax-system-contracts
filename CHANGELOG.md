@@ -10,6 +10,17 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+- `eosio.msig` accepts only canonically serialized proposed transactions (WBP-2086). The node
+  authorises a proposal from its packed bytes and the contract then decodes the same bytes to
+  send the actions; for some byte sequences the two did not read the same transaction, and
+  `eosio.msig` is privileged, so the node does not check authority on what it sends. `propose`
+  and `exec` now decode the transaction, encode it again and require the result to be byte for
+  byte the input ("transaction is not canonically serialized"). `exec` runs the check too, so
+  a proposal stored before the upgrade is covered: it can be cancelled, not executed. No ABI,
+  table or action change. Proposals with bytes after the transaction, which were silently
+  ignored before, are now rejected; `cleos` and the standard SDKs do not produce them. Live on
+  mainnet `eosio.msig` since 2026-11-11 (`239b0940…`, provenance in `.audit/README.md`).
+
 ## wax-3.4.0
 
 Adds the configurable inflation policy (WBP-2035). ABI change: new action `setinflation` and new

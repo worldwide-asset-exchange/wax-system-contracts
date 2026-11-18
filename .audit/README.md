@@ -152,7 +152,7 @@ second column):
 | `guilds.oig` | 2026-09-29 | OIG repo `final-remove-legacy-tables` @ `5a5f198` (= audited `718903f` + README) — the 2026-09 review's guilds remediations; replaced the pre-audit contract (`6085791`, hash `1ca0ec22…`, deployed 2026-01-28) after a 4-minute transient cleanup build (`3ea802b`, `b9f2cf2d…`) that paid out the last stored balances | `waxteam/cdt-node:ce-v1.3.1wax01-v4.1.1wax01` (cdt 4.1.1) | **yes**, bit for bit (`cca52864…`); the same artefact is pinned by `tests/eosio.guilds_tests.cpp` and is the only hash left in `global.a.guilds_code_hashes` |
 | `eosio.token` | 2019-12-10 | source identical to `wax-1.7.0-2.0.0` (`318dc57`, tagged the day after the deployment) | `waxteam/dev:wax-1.6.1-1.2.1` (eosio.cdt 1.6.1) | **yes**, bit for bit |
 | `eosio.wrap` | 2019-12-10 | source identical to `wax-1.7.0-2.0.0` (`318dc57`) | `waxteam/dev:wax-1.6.1-1.2.1` (eosio.cdt 1.6.1) | **yes**, bit for bit |
-| `eosio.msig` | 2022-12-08 | `EOSIO/eosio.contracts` branch `1.8.3-oob-patch` (`301c901`, 2020-09-14) | official `eosio.cdt` 1.6.3 package on Ubuntu 18.04, via the CDT cmake toolchain | **yes**, bit for bit |
+| `eosio.msig` | 2026-11-11 | `EOSIO/eosio.contracts` branch `1.8.3-oob-patch` (`301c901`, 2020-09-14) plus [`eosio.msig-1.8.3-oob-canonical-trx.diff`](eosio.msig-1.8.3-oob-canonical-trx.diff), the canonical-serialization check (WBP-2086); replaced the unpatched build of the same source (`055f1cd3…`, deployed 2022-12-08), reproduced the same way | official `eosio.cdt` 1.6.3 package on Ubuntu 18.04, via the CDT cmake toolchain | **yes**, bit for bit (`239b0940…`) |
 
 The three in-repo rows are re-runnable with `reproduce-deployed.sh <ref> <image>` using the
 ref and image columns as written (the older image also needs `-Dcdt_DIR=…`, see the script
@@ -167,7 +167,11 @@ out-of-band 1.8.3 patch (inline `exec`, `earliest_exec_time`), which this reposi
 onto the CDT 3 tree in October 2022 (`c3db26f`…`83985e6`). The port is the same code: the
 only differences are the patch's hand-rolled `eosio_msig_binary_extension` class, replaced
 by the library's `eosio::binary_extension`, and `std::optional` assignments replaced by
-`emplace()`. Two details mattered for the reproduction and are easy to get wrong:
+`emplace()`. The 2026-11-11 deployment adds one change to that source, the check that a
+proposed transaction is canonically serialized (WBP-2086); it was built from the same source
+with the same toolchain as the build it replaced, so the difference on chain is that change
+alone, and `contracts/eosio.msig` in this repository carries the same change. Two details
+mattered for the reproduction and are easy to get wrong:
 
 - the compiler generation is visible in the deployed ABI's `version` field (`eosio::abi/1.1`
   is eosio.cdt 1.6–1.7; `eosio::abi/1.2` is 1.8 and cdt 3+), which rules toolchains in or
@@ -181,15 +185,18 @@ Recipe for the msig row, from a stock container, no WAX image needed:
 ```bash
 # source: EOSIO/eosio.contracts @ 301c901, contracts/eosio.msig; toolchain: eosio.cdt 1.6.3
 gh release download v1.6.3 --repo EOSIO/eosio.cdt --pattern '*ubuntu-18.04_amd64.deb'
+patch -p1 -d eosio.msig < eosio.msig-1.8.3-oob-canonical-trx.diff    # omit for the 2022-12-08 build
 docker run --rm -v "$PWD":/w ubuntu:18.04 bash -c '
   apt-get update -qq && apt-get install -y -qq cmake make /w/eosio.cdt_1.6.3-1-ubuntu-18.04_amd64.deb
   mkdir /b && cd /b && cmake -DCMAKE_TOOLCHAIN_FILE=/usr/opt/eosio.cdt/1.6.3/lib/cmake/eosio.cdt/EosioWasmToolchain.cmake /w/eosio.msig
-  make && sha256sum eosio.msig.wasm'      # 055f1cd3bffc3262ccd40a0acd665a0a62e4a7cc48f34f6fc54aa74928cbac13
+  make && sha256sum eosio.msig.wasm'      # 239b0940b952eb0e5b6647122c075cd02ef12f56e2efa8d142672cbac5df3f77
+                                          # (unpatched: 055f1cd3bffc3262ccd40a0acd665a0a62e4a7cc48f34f6fc54aa74928cbac13)
 ```
 
 where `/w/eosio.msig` holds that branch's `src/`, `include/` and a `CMakeLists.txt` of
 `find_package(eosio.cdt)` + `add_contract(eosio.msig eosio.msig src/eosio.msig.cpp)` with
-`target_include_directories(eosio.msig.wasm PUBLIC include)`.
+`target_include_directories(eosio.msig.wasm PUBLIC include)`. Depending on the
+`CMakeLists.txt`, the artefact is written as `eosio.msig.wasm.wasm`; hash whichever exists.
 
 What this buys the audit: every finding against `eosio.system` applies to live code with no
 version caveat, and for the three older contracts the reviewer knows exactly which source
