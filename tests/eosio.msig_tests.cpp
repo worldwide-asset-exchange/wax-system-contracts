@@ -145,6 +145,26 @@ public:
 
    transaction reqauth( account_name from, const vector<permission_level>& auths, const fc::microseconds& max_serialization_time );
 
+   // Pushes `propose` with the action data assembled by hand, so the proposed transaction is exactly
+   // `packed_trx` rather than whatever the ABI serializer would produce from a variant.
+   transaction_trace_ptr propose_raw( name proposer, name proposal_name, const vector<permission_level>& requested, const bytes& packed_trx ) {
+      action act;
+      act.account       = "eosio.msig"_n;
+      act.name          = "propose"_n;
+      act.authorization = { permission_level{ proposer, config::active_name } };
+      for( const bytes& part : { fc::raw::pack( proposer ), fc::raw::pack( proposal_name ), fc::raw::pack( requested ), packed_trx } ) {
+         act.data.insert( act.data.end(), part.begin(), part.end() );
+      }
+
+      signed_transaction trx;
+      trx.actions.push_back( std::move(act) );
+      set_transaction_headers( trx );
+      trx.sign( get_private_key( proposer, "active" ), control->get_chain_id() );
+      auto trace = push_transaction( trx );
+      produce_block();
+      return trace;
+   }
+
    abi_serializer abi_ser;
 };
 
@@ -926,6 +946,84 @@ BOOST_FIXTURE_TEST_CASE( switch_proposal_and_fail_approve_with_hash, eosio_msig_
                             ),
                             eosio::chain::crypto_api_exception,
                             fc_exception_message_is("hash mismatch")
+   );
+} FC_LOG_AND_RETHROW()
+
+// WBP-2086: the node authorises the proposed transaction from its packed bytes and the contract then
+// decodes the same bytes to send the actions. The two must read one transaction, so the contract accepts
+// only the canonical encoding: decoding and re-encoding gives back the input, byte for byte.
+BOOST_FIXTURE_TEST_CASE( propose_requires_canonical_trx, eosio_msig_tester ) try {
+   const vector<permission_level> requested{{ "alice"_n, config::active_name }};
+   const transaction trx = reqauth( "alice"_n, requested, abi_serializer_max_time );
+   const bytes canonical = fc::raw::pack( trx );
+
+   // bytes after the end of the transaction
+   bytes trailing = canonical;
+   trailing.push_back( 0 );
+   BOOST_REQUIRE_EXCEPTION( propose_raw( "alice"_n, "trailing"_n, requested, trailing ),
+                            eosio_assert_message_exception,
+                            eosio_assert_message_is("transaction is not canonically serialized") );
+
+   // the same transaction with its last length prefix (zero transaction extensions) written in two bytes
+   BOOST_REQUIRE_EQUAL( 0, canonical.back() );
+   bytes padded( canonical.begin(), canonical.end() - 1 );
+   padded.push_back( char(0x80) );
+   padded.push_back( 0 );
+   BOOST_REQUIRE_EXCEPTION( propose_raw( "alice"_n, "padded"_n, requested, padded ),
+                            eosio_assert_message_exception,
+                            eosio_assert_message_is("transaction is not canonically serialized") );
+
+   // the canonical bytes are stored unchanged and the proposal runs as before
+   propose_raw( "alice"_n, "canonical"_n, requested, canonical );
+   push_action( "alice"_n, "approve"_n, mvo()
+                  ("proposer",      "alice")
+                  ("proposal_name", "canonical")
+                  ("level",         permission_level{ "alice"_n, config::active_name })
+   );
+   auto r = push_action( "alice"_n, "exec"_n, mvo()
+                  ("proposer",      "alice")
+                  ("proposal_name", "canonical")
+                  ("executer",      "alice")
+   );
+   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
+} FC_LOG_AND_RETHROW()
+
+// WBP-2086: `exec` applies the same rule, which covers a proposal stored by an earlier version of the
+// contract. Such a proposal cannot be executed; its proposer can still cancel it and recover the RAM.
+BOOST_FIXTURE_TEST_CASE( exec_requires_canonical_trx, eosio_msig_tester ) try {
+   const vector<permission_level> requested{{ "alice"_n, config::active_name }};
+   bytes trailing = fc::raw::pack( reqauth( "alice"_n, requested, abi_serializer_max_time ) );
+   trailing.push_back( 0 );
+
+   // the old version stores the proposal with its trailing byte
+   set_code( "eosio.msig"_n, contracts::util::msig_wasm_old() );
+   set_abi( "eosio.msig"_n, contracts::util::msig_abi_old().data() );
+   produce_blocks();
+   propose_raw( "alice"_n, "stored"_n, requested, trailing );
+
+   set_code( "eosio.msig"_n, contracts::msig_wasm() );
+   set_abi( "eosio.msig"_n, contracts::msig_abi().data() );
+   produce_blocks();
+
+   push_action( "alice"_n, "approve"_n, mvo()
+                  ("proposer",      "alice")
+                  ("proposal_name", "stored")
+                  ("level",         permission_level{ "alice"_n, config::active_name })
+   );
+   BOOST_REQUIRE_EXCEPTION( push_action( "alice"_n, "exec"_n, mvo()
+                                          ("proposer",      "alice")
+                                          ("proposal_name", "stored")
+                                          ("executer",      "alice")
+                            ),
+                            eosio_assert_message_exception,
+                            eosio_assert_message_is("transaction is not canonically serialized")
+   );
+
+   push_action( "alice"_n, "cancel"_n, mvo()
+                  ("proposer",      "alice")
+                  ("proposal_name", "stored")
+                  ("canceler",      "alice")
    );
 } FC_LOG_AND_RETHROW()
 
