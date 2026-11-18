@@ -7,6 +7,7 @@
 namespace eosio {
 
 transaction_header get_trx_header(const char* ptr, size_t sz);
+transaction unpack_canonical_trx(const char* ptr, size_t sz);
 bool trx_is_authorized(const std::vector<permission_level>& approvals, const std::vector<char>& packed_trx);
 
 template<typename Function>
@@ -50,12 +51,9 @@ void multisig::propose( name proposer,
    const char* trx_pos = ds.pos();
    size_t size = ds.remaining();
 
-   transaction_header trx_header;
-   std::vector<action> context_free_actions;
-   ds >> trx_header;
-   check( trx_header.expiration >= eosio::time_point_sec(current_time_point()), "transaction expired" );
-   ds >> context_free_actions;
-   check( context_free_actions.empty(), "not allowed to `propose` a transaction with context-free actions" );
+   const transaction proposed_trx = unpack_canonical_trx( trx_pos, size );
+   check( proposed_trx.expiration >= eosio::time_point_sec(current_time_point()), "transaction expired" );
+   check( proposed_trx.context_free_actions.empty(), "not allowed to `propose` a transaction with context-free actions" );
 
    proposals proptable( get_self(), proposer.value );
    check( proptable.find( proposal_name.value ) == proptable.end(), "proposal with the same name exists" );
@@ -211,15 +209,9 @@ void multisig::exec( name proposer, name proposal_name, name executer ) {
    proposals proptable( get_self(), proposer.value );
    auto& prop = proptable.get( proposal_name.value, "proposal not found" );
 
-   datastream<const char*> ds = {prop.packed_transaction.data(), prop.packed_transaction.size()};
-   transaction_header trx_header;
-   std::vector<action> context_free_actions;
-   std::vector<action> actions;
-   ds >> trx_header;
-   check( trx_header.expiration >= eosio::time_point_sec(current_time_point()), "transaction expired" );
-   ds >> context_free_actions;
-   check( context_free_actions.empty(), "not allowed to `exec` a transaction with context-free actions" );
-   ds >> actions;
+   const transaction trx = unpack_canonical_trx( prop.packed_transaction.data(), prop.packed_transaction.size() );
+   check( trx.expiration >= eosio::time_point_sec(current_time_point()), "transaction expired" );
+   check( trx.context_free_actions.empty(), "not allowed to `exec` a transaction with context-free actions" );
 
    auto table_op = [](auto&& table, auto&& table_iter) { table.erase(table_iter); };
    bool ok = trx_is_authorized(get_approvals_and_adjust_table(get_self(), proposer, proposal_name, table_op), prop.packed_transaction);
@@ -228,10 +220,10 @@ void multisig::exec( name proposer, name proposal_name, name executer ) {
    if ( prop.earliest_exec_time.has_value() && prop.earliest_exec_time->has_value() ) {
       check( **prop.earliest_exec_time <= current_time_point(), "too early to execute" );
    } else {
-      check( trx_header.delay_sec.value == 0, "old proposals are not allowed to have non-zero `delay_sec`; cancel and retry" );
+      check( trx.delay_sec.value == 0, "old proposals are not allowed to have non-zero `delay_sec`; cancel and retry" );
    }
 
-   for (const auto& act : actions) {
+   for (const auto& act : trx.actions) {
       act.send();
    }
 
@@ -254,11 +246,25 @@ void multisig::invalidate( name account ) {
    }
 }
 
+// Header of a stored proposal, for approve and unapprove. It is not checked for canonical form here:
+// propose stores only canonical bytes, and exec refuses anything else whatever was approved.
 transaction_header get_trx_header(const char* ptr, size_t sz) {
    datastream<const char*> ds = {ptr, sz};
    transaction_header trx_header;
    ds >> trx_header;
    return trx_header;
+}
+
+// The node authorises a proposed transaction from its packed bytes (check_transaction_authorization)
+// and this contract then decodes the same bytes to send the actions. Both must read one transaction,
+// so only the canonical encoding is accepted: decoding and re-encoding must give back the input.
+transaction unpack_canonical_trx(const char* ptr, size_t sz) {
+   datastream<const char*> ds = {ptr, sz};
+   transaction trx;
+   ds >> trx;
+   const std::vector<char> repacked = pack(trx);
+   check( repacked.size() == sz && memcmp(repacked.data(), ptr, sz) == 0, "transaction is not canonically serialized" );
+   return trx;
 }
 
 bool trx_is_authorized(const std::vector<permission_level>& approvals, const std::vector<char>& packed_trx) {

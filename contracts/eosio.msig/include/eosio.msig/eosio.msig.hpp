@@ -34,7 +34,8 @@ namespace eosio {
           * @param proposer - The account proposing a transaction
           * @param proposal_name - The name of the proposal (should be unique for proposer)
           * @param requested - Permission levels expected to approve the proposal
-          * @param trx - Proposed transaction
+          * @param trx - Proposed transaction. It must be canonically serialized: the bytes must be exactly
+          *              what encoding the decoded transaction gives, with nothing after it.
           */
          [[eosio::action]]
          void propose(name proposer, name proposal_name,
@@ -86,6 +87,7 @@ namespace eosio {
           * - `proposal_name` is found in the proposals table,
           * - all requested approvals are received,
           * - proposed transaction is not expired,
+          * - proposed transaction is canonically serialized (a stored proposal that is not can only be cancelled),
           * - and approval accounts are not found in invalidations table.
           *
           * If all preconditions are met the transaction is executed as a deferred transaction,
