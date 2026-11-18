@@ -10,6 +10,20 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+## wax-3.4.1
+
+Security fix for `eosio.msig` (WBP-2086). No ABI change. `eosio.system` is unchanged: this tag
+builds the same `eosio.system` WASM as wax-3.4.0 (`7bb732e8…`), so nothing is redeployed to
+`eosio`. The fix itself has been live on mainnet `eosio.msig` since 2026-11-11.
+
+BREAKING CHANGES:
+
+FEATURES:
+
+IMPROVEMENTS:
+
+BUG FIXES:
+
 - `eosio.msig` accepts only canonically serialized proposed transactions (WBP-2086). The node
   authorises a proposal from its packed bytes and the contract then decodes the same bytes to
   send the actions; for some byte sequences the two did not read the same transaction, and

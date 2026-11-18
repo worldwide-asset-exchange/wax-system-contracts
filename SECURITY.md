@@ -14,7 +14,8 @@ receive security fixes.
 
 | Version | Supported | Notes |
 |---|---|---|
-| `wax-3.4.0` (`1f6de95`) | Yes | Deployed on mainnet as `eosio` (`eosio.system`) since 2026-10-26: the configurable inflation policy (WBP-2035; `setinflation`, `global.c`, one validator for the rate, the split, the RNG rate and the standby split) on top of `wax-3.3.3`. A reproducible build of this tag matches the on-chain code hash bit-for-bit — see [`.audit/verify-hashes.sh`](.audit/verify-hashes.sh) and [`deploy/`](deploy/). |
+| `wax-3.4.1` | Yes | Current release. `eosio.system` is unchanged from `wax-3.4.0` and builds the same WASM (`7bb732e8…`), the code deployed on mainnet as `eosio` since 2026-10-26. Adds the `eosio.msig` canonical-serialization fix (WBP-2086) to the source; that fix has been live on mainnet `eosio.msig` since 2026-11-11, built as recorded in the provenance table in [`.audit/README.md`](.audit/README.md). |
+| `wax-3.4.0` (`1f6de95`) | No | Superseded by `wax-3.4.1` (same `eosio.system` code, without the `eosio.msig` fix in the source). Deployed on mainnet as `eosio` (`eosio.system`) since 2026-10-26: the configurable inflation policy (WBP-2035; `setinflation`, `global.c`, one validator for the rate, the split, the RNG rate and the standby split) on top of `wax-3.3.3`. A reproducible build of this tag matches the on-chain code hash bit-for-bit — see [`.audit/verify-hashes.sh`](.audit/verify-hashes.sh) and [`deploy/`](deploy/). |
 | `wax-3.3.3` (`d60af8c`) | No | Mainnet `eosio` 2026-09-28 to 2026-10-26: the 2026-09 review's remediations plus WCAP-SYS-2026-018, -019. Superseded by `wax-3.4.0`. |
 | `wax-3.3.2` (`d12f261`) | No | Deployed as `eosio` 2026-09-25 to 2026-09-28. Superseded. |
 | `wax-3.3.1` | No | Tagged 2026-09-25, superseded by `wax-3.3.2` before it was deployed (one further finding fixed). |
