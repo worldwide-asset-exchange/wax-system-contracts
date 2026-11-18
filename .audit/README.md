@@ -189,14 +189,16 @@ patch -p1 -d eosio.msig < eosio.msig-1.8.3-oob-canonical-trx.diff    # omit for 
 docker run --rm -v "$PWD":/w ubuntu:18.04 bash -c '
   apt-get update -qq && apt-get install -y -qq cmake make /w/eosio.cdt_1.6.3-1-ubuntu-18.04_amd64.deb
   mkdir /b && cd /b && cmake -DCMAKE_TOOLCHAIN_FILE=/usr/opt/eosio.cdt/1.6.3/lib/cmake/eosio.cdt/EosioWasmToolchain.cmake /w/eosio.msig
-  make && sha256sum eosio.msig.wasm'      # 239b0940b952eb0e5b6647122c075cd02ef12f56e2efa8d142672cbac5df3f77
+  make && sha256sum eosio.msig.wasm*'     # 239b0940b952eb0e5b6647122c075cd02ef12f56e2efa8d142672cbac5df3f77
                                           # (unpatched: 055f1cd3bffc3262ccd40a0acd665a0a62e4a7cc48f34f6fc54aa74928cbac13)
 ```
 
 where `/w/eosio.msig` holds that branch's `src/`, `include/` and a `CMakeLists.txt` of
 `find_package(eosio.cdt)` + `add_contract(eosio.msig eosio.msig src/eosio.msig.cpp)` with
 `target_include_directories(eosio.msig.wasm PUBLIC include)`. Depending on the
-`CMakeLists.txt`, the artefact is written as `eosio.msig.wasm.wasm`; hash whichever exists.
+`CMakeLists.txt`, the artefact is written as `eosio.msig.wasm` or `eosio.msig.wasm.wasm`.
+Both deployed builds are kept under `tests/test_contracts/deployed/eosio.msig/`, where the msig
+test suite runs the canonical-serialization cases against them.
 
 What this buys the audit: every finding against `eosio.system` applies to live code with no
 version caveat, and for the three older contracts the reviewer knows exactly which source

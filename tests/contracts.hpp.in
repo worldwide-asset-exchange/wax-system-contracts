@@ -24,6 +24,10 @@ struct contracts {
       static std::vector<char>    system_abi_old() { return read_abi("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/old_versions/v1.2.1/eosio.system/eosio.system.abi"); }
       static std::vector<uint8_t> msig_wasm_old() { return read_wasm("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/old_versions/v1.2.1/eosio.msig/eosio.msig.wasm"); }
       static std::vector<char>    msig_abi_old() { return read_abi("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/old_versions/v1.2.1/eosio.msig/eosio.msig.abi"); }
+      // the eosio.msig builds deployed on mainnet (provenance: .audit/README.md); one ABI serves both
+      static std::vector<uint8_t> msig_wasm_deployed_2022() { return read_wasm("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/deployed/eosio.msig/eosio.msig-2022-12-08.wasm"); }
+      static std::vector<uint8_t> msig_wasm_deployed_2026() { return read_wasm("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/deployed/eosio.msig/eosio.msig-2026-11-11.wasm"); }
+      static std::vector<char>    msig_abi_deployed() { return read_abi("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/deployed/eosio.msig/eosio.msig.abi"); }
       static std::vector<uint8_t> system_wasm_v3_1() { return read_wasm("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/old_versions/v3.1.0/eosio.system/eosio.system.wasm"); }
       static std::vector<char>    system_abi_v3_1() { return read_abi("${CMAKE_CURRENT_SOURCE_DIR}/test_contracts/old_versions/v3.1.0/eosio.system/eosio.system.abi"); }
 

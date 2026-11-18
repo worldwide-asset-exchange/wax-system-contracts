@@ -16,10 +16,12 @@ BUG FIXES:
   `eosio.msig` is privileged, so the node does not check authority on what it sends. `propose`
   and `exec` now decode the transaction, encode it again and require the result to be byte for
   byte the input ("transaction is not canonically serialized"). `exec` runs the check too, so
-  a proposal stored before the upgrade is covered: it can be cancelled, not executed. No ABI,
+  a non-canonical proposal stored before the upgrade is covered: it can be cancelled, not
+  executed. Canonical proposals stored before the upgrade execute as before. No ABI,
   table or action change. Proposals with bytes after the transaction, which were silently
   ignored before, are now rejected; `cleos` and the standard SDKs do not produce them. Live on
-  mainnet `eosio.msig` since 2026-11-11 (`239b0940…`, provenance in `.audit/README.md`).
+  mainnet `eosio.msig` since 2026-11-11 (`239b0940…`, provenance in `.audit/README.md`); the
+  tests run against that build as well as the build of this source.
 
 ## wax-3.4.0
 

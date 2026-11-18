@@ -246,6 +246,8 @@ void multisig::invalidate( name account ) {
    }
 }
 
+// Header of a stored proposal, for approve and unapprove. It is not checked for canonical form here:
+// propose stores only canonical bytes, and exec refuses anything else whatever was approved.
 transaction_header get_trx_header(const char* ptr, size_t sz) {
    datastream<const char*> ds = {ptr, sz};
    transaction_header trx_header;

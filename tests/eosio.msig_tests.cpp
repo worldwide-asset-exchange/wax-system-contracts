@@ -952,79 +952,136 @@ BOOST_FIXTURE_TEST_CASE( switch_proposal_and_fail_approve_with_hash, eosio_msig_
 // WBP-2086: the node authorises the proposed transaction from its packed bytes and the contract then
 // decodes the same bytes to send the actions. The two must read one transaction, so the contract accepts
 // only the canonical encoding: decoding and re-encoding gives back the input, byte for byte.
+// Each case runs against the build of this source and against the build deployed on mainnet.
 BOOST_FIXTURE_TEST_CASE( propose_requires_canonical_trx, eosio_msig_tester ) try {
    const vector<permission_level> requested{{ "alice"_n, config::active_name }};
-   const transaction trx = reqauth( "alice"_n, requested, abi_serializer_max_time );
+   transaction trx = reqauth( "alice"_n, requested, abi_serializer_max_time );
    const bytes canonical = fc::raw::pack( trx );
+   // header: expiration (4), ref_block_num (2), ref_block_prefix (4), then max_net_usage_words as a varuint
+   const size_t net_words_pos = 10;
+   BOOST_REQUIRE_EQUAL( 0, canonical[net_words_pos] );
+   BOOST_REQUIRE_EQUAL( 0, canonical.back() );   // zero transaction extensions
 
+   auto with_last_prefix = [&]( std::initializer_list<uint8_t> prefix ) {
+      bytes b( canonical.begin(), canonical.end() - 1 );
+      b.insert( b.end(), prefix.begin(), prefix.end() );
+      return b;
+   };
    // bytes after the end of the transaction
    bytes trailing = canonical;
    trailing.push_back( 0 );
-   BOOST_REQUIRE_EXCEPTION( propose_raw( "alice"_n, "trailing"_n, requested, trailing ),
-                            eosio_assert_message_exception,
-                            eosio_assert_message_is("transaction is not canonically serialized") );
+   // zero written in two bytes
+   const bytes padded = with_last_prefix({ 0x80, 0x00 });
+   // zero written in six bytes: more than a 32-bit varuint can take
+   const bytes overlong = with_last_prefix({ 0x80, 0x80, 0x80, 0x80, 0x80, 0x00 });
+   // five bytes with bits set above bit 31: the canonical form has the same length and a different last byte
+   bytes high_bits( canonical.begin(), canonical.begin() + net_words_pos );
+   for( uint8_t c : { 0xff, 0xff, 0xff, 0xff, 0x7f } ) high_bits.push_back( char(c) );
+   high_bits.insert( high_bits.end(), canonical.begin() + net_words_pos + 1, canonical.end() );
 
-   // the same transaction with its last length prefix (zero transaction extensions) written in two bytes
-   BOOST_REQUIRE_EQUAL( 0, canonical.back() );
-   bytes padded( canonical.begin(), canonical.end() - 1 );
-   padded.push_back( char(0x80) );
-   padded.push_back( 0 );
-   BOOST_REQUIRE_EXCEPTION( propose_raw( "alice"_n, "padded"_n, requested, padded ),
-                            eosio_assert_message_exception,
-                            eosio_assert_message_is("transaction is not canonically serialized") );
+   // a legitimate transaction whose header fields need multi-byte varuints
+   trx.max_net_usage_words = 0xffffffff;
+   trx.delay_sec           = 7 * 24 * 3600;
+   const bytes wide = fc::raw::pack( trx );
+   BOOST_REQUIRE( wide.size() > canonical.size() );
 
-   // the canonical bytes are stored unchanged and the proposal runs as before
-   propose_raw( "alice"_n, "canonical"_n, requested, canonical );
-   push_action( "alice"_n, "approve"_n, mvo()
-                  ("proposer",      "alice")
-                  ("proposal_name", "canonical")
-                  ("level",         permission_level{ "alice"_n, config::active_name })
-   );
-   auto r = push_action( "alice"_n, "exec"_n, mvo()
-                  ("proposer",      "alice")
-                  ("proposal_name", "canonical")
-                  ("executer",      "alice")
-   );
-   BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
-   BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
+   auto run = [&]( const char* build ) {
+      BOOST_TEST_CONTEXT( build ) {
+         for( const auto& [proposal_name, packed] : std::vector<std::pair<name, bytes>>{
+                 { "trailing"_n, trailing }, { "padded"_n, padded }, { "overlong"_n, overlong }, { "highbits"_n, high_bits } } ) {
+            BOOST_TEST_CONTEXT( proposal_name.to_string() ) {
+               BOOST_REQUIRE_EXCEPTION( propose_raw( "alice"_n, proposal_name, requested, packed ),
+                                        eosio_assert_message_exception,
+                                        eosio_assert_message_is("transaction is not canonically serialized") );
+               BOOST_REQUIRE( get_row_by_account( "eosio.msig"_n, "alice"_n, "proposal"_n, proposal_name ).empty() );
+            }
+         }
+
+         propose_raw( "alice"_n, "wide"_n, requested, wide );
+         push_action( "alice"_n, "cancel"_n, mvo()("proposer", "alice")("proposal_name", "wide")("canceler", "alice") );
+
+         // the canonical bytes are accepted and the proposal runs as before
+         propose_raw( "alice"_n, "canonical"_n, requested, canonical );
+         push_action( "alice"_n, "approve"_n, mvo()
+                        ("proposer",      "alice")
+                        ("proposal_name", "canonical")
+                        ("level",         permission_level{ "alice"_n, config::active_name })
+         );
+         auto r = push_action( "alice"_n, "exec"_n, mvo()
+                        ("proposer",      "alice")
+                        ("proposal_name", "canonical")
+                        ("executer",      "alice")
+         );
+         BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+         BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
+      }
+   };
+
+   run( "build of this source" );
+
+   set_code( "eosio.msig"_n, contracts::util::msig_wasm_deployed_2026() );
+   set_abi( "eosio.msig"_n, contracts::util::msig_abi_deployed().data() );
+   produce_blocks();
+   run( "build deployed on mainnet 2026-11-11" );
 } FC_LOG_AND_RETHROW()
 
-// WBP-2086: `exec` applies the same rule, which covers a proposal stored by an earlier version of the
-// contract. Such a proposal cannot be executed; its proposer can still cancel it and recover the RAM.
+// WBP-2086: `exec` applies the same rule, which covers a non-canonical proposal stored before the upgrade
+// (here by the build that was live on mainnet until 2026-11-11). It can still collect approvals, cannot be
+// executed, and its proposer can cancel it. A canonical proposal stored before the upgrade runs as before.
 BOOST_FIXTURE_TEST_CASE( exec_requires_canonical_trx, eosio_msig_tester ) try {
    const vector<permission_level> requested{{ "alice"_n, config::active_name }};
-   bytes trailing = fc::raw::pack( reqauth( "alice"_n, requested, abi_serializer_max_time ) );
+   const bytes canonical = fc::raw::pack( reqauth( "alice"_n, requested, abi_serializer_max_time ) );
+   bytes trailing = canonical;
    trailing.push_back( 0 );
+   bytes overlong( canonical.begin(), canonical.end() - 1 );
+   for( uint8_t c : { 0x80, 0x80, 0x80, 0x80, 0x80, 0x00 } ) overlong.push_back( char(c) );
 
-   // the old version stores the proposal with its trailing byte
-   set_code( "eosio.msig"_n, contracts::util::msig_wasm_old() );
-   set_abi( "eosio.msig"_n, contracts::util::msig_abi_old().data() );
-   produce_blocks();
-   propose_raw( "alice"_n, "stored"_n, requested, trailing );
+   auto approve_and_exec = [&]( name proposal_name ) {
+      push_action( "alice"_n, "approve"_n, mvo()
+                     ("proposer",      "alice")
+                     ("proposal_name", proposal_name)
+                     ("level",         permission_level{ "alice"_n, config::active_name })
+      );
+      return push_action( "alice"_n, "exec"_n, mvo()
+                     ("proposer",      "alice")
+                     ("proposal_name", proposal_name)
+                     ("executer",      "alice")
+      );
+   };
 
-   set_code( "eosio.msig"_n, contracts::msig_wasm() );
-   set_abi( "eosio.msig"_n, contracts::msig_abi().data() );
-   produce_blocks();
+   auto run = [&]( const char* build, const std::vector<uint8_t>& wasm, const std::vector<char>& abi ) {
+      BOOST_TEST_CONTEXT( build ) {
+         set_code( "eosio.msig"_n, contracts::util::msig_wasm_deployed_2022() );
+         set_abi( "eosio.msig"_n, contracts::util::msig_abi_deployed().data() );
+         produce_blocks();
+         propose_raw( "alice"_n, "trailing"_n,  requested, trailing );
+         propose_raw( "alice"_n, "overlong"_n,  requested, overlong );
+         propose_raw( "alice"_n, "canonical"_n, requested, canonical );
 
-   push_action( "alice"_n, "approve"_n, mvo()
-                  ("proposer",      "alice")
-                  ("proposal_name", "stored")
-                  ("level",         permission_level{ "alice"_n, config::active_name })
-   );
-   BOOST_REQUIRE_EXCEPTION( push_action( "alice"_n, "exec"_n, mvo()
-                                          ("proposer",      "alice")
-                                          ("proposal_name", "stored")
-                                          ("executer",      "alice")
-                            ),
-                            eosio_assert_message_exception,
-                            eosio_assert_message_is("transaction is not canonically serialized")
-   );
+         set_code( "eosio.msig"_n, wasm );
+         set_abi( "eosio.msig"_n, abi.data() );
+         produce_blocks();
 
-   push_action( "alice"_n, "cancel"_n, mvo()
-                  ("proposer",      "alice")
-                  ("proposal_name", "stored")
-                  ("canceler",      "alice")
-   );
+         for( name proposal_name : { "trailing"_n, "overlong"_n } ) {
+            BOOST_TEST_CONTEXT( proposal_name.to_string() ) {
+               BOOST_REQUIRE_EXCEPTION( approve_and_exec( proposal_name ),
+                                        eosio_assert_message_exception,
+                                        eosio_assert_message_is("transaction is not canonically serialized") );
+               BOOST_REQUIRE( !get_row_by_account( "eosio.msig"_n, "alice"_n, "proposal"_n, proposal_name ).empty() );
+               push_action( "alice"_n, "cancel"_n, mvo()("proposer", "alice")("proposal_name", proposal_name)("canceler", "alice") );
+               BOOST_REQUIRE( get_row_by_account( "eosio.msig"_n, "alice"_n, "proposal"_n, proposal_name ).empty() );
+               BOOST_REQUIRE( get_row_by_account( "eosio.msig"_n, "alice"_n, "approvals2"_n, proposal_name ).empty() );
+            }
+         }
+
+         auto r = approve_and_exec( "canonical"_n );
+         BOOST_REQUIRE_EQUAL( 2, r->action_traces.size() );
+         BOOST_REQUIRE_EQUAL( transaction_receipt::executed, r->receipt->status );
+      }
+   };
+
+   run( "build of this source", contracts::msig_wasm(), contracts::msig_abi() );
+   run( "build deployed on mainnet 2026-11-11", contracts::util::msig_wasm_deployed_2026(), contracts::util::msig_abi_deployed() );
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
